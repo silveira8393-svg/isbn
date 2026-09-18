@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BookInfo } from '../types';
 import { getMarketplaceLinks } from '../utils/isbn';
 import { 
@@ -19,7 +19,9 @@ import {
   ShoppingBag,
   Store,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Ruler,
+  Scale
 } from 'lucide-react';
 
 interface BookDetailsCardProps {
@@ -29,6 +31,8 @@ interface BookDetailsCardProps {
 export default function BookDetailsCard({ book }: BookDetailsCardProps) {
   const [copiedField, setCopiedField] = useState<'isbn10' | 'isbn13' | null>(null);
   const [showFullDescription, setShowFullDescription] = useState(false);
+  const [showCompleteRecord, setShowCompleteRecord] = useState(false);
+  const [coverSrc, setCoverSrc] = useState(book.thumbnailUrl);
   const [searchMode, setSearchMode] = useState<'isbn' | 'title'>('title');
 
   const links = getMarketplaceLinks({
@@ -38,6 +42,10 @@ export default function BookDetailsCard({ book }: BookDetailsCardProps) {
     authors: book.authors,
     publisher: book.publisher
   }, searchMode);
+
+  useEffect(() => {
+    setCoverSrc(book.thumbnailUrl);
+  }, [book.thumbnailUrl]);
 
   const handleCopy = (text: string, field: 'isbn10' | 'isbn13') => {
     navigator.clipboard.writeText(text);
@@ -72,6 +80,17 @@ export default function BookDetailsCard({ book }: BookDetailsCardProps) {
     return dict[lang.toLowerCase()] || lang.toUpperCase();
   };
 
+  const formatWeight = () => {
+    if (book.weight === undefined) return undefined;
+    const grams = book.weightUnit === 'kg' ? book.weight * 1000 : book.weight;
+    return `${grams.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} g`;
+  };
+
+  const formatDimensions = () => {
+    if (book.width === undefined || book.height === undefined || book.depth === undefined) return undefined;
+    return `${book.width.toLocaleString('pt-BR')} × ${book.height.toLocaleString('pt-BR')} × ${book.depth.toLocaleString('pt-BR')} ${book.dimensionsUnit || 'cm'}`;
+  };
+
   const isDescriptionLong = (book.description?.length || 0) > 280;
   const renderedDescription = showFullDescription 
     ? book.description 
@@ -88,13 +107,17 @@ export default function BookDetailsCard({ book }: BookDetailsCardProps) {
           {/* Cover Art Wrapper */}
           <div className="w-full md:w-52 flex-shrink-0 flex flex-col items-center">
             <div className="relative group w-40 md:w-48 aspect-[3/4] bg-white rounded-xl overflow-hidden transition-all duration-300 shadow-md border border-natural-border flex items-center justify-center">
-              {book.thumbnailUrl ? (
+              {coverSrc ? (
                 <img
-                  src={book.thumbnailUrl}
+                  src={coverSrc}
                   alt={`Capa do livro ${book.title}`}
                   className="w-full h-full object-cover select-none"
                   referrerPolicy="no-referrer"
                   id={`book-cover-${book.id}`}
+                  onError={() => {
+                    const fallback = book.additionalImages?.[0];
+                    setCoverSrc(fallback);
+                  }}
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center p-4 text-center text-natural-subtitle">
@@ -186,6 +209,36 @@ export default function BookDetailsCard({ book }: BookDetailsCardProps) {
                 </p>
               </div>
 
+              {book.edition && (
+                <div className="space-y-0.5">
+                  <span className="text-[10px] text-natural-subtitle uppercase tracking-widest font-mono">Edição</span>
+                  <p className="text-xs font-semibold text-natural-text flex items-center gap-1.5 truncate">
+                    <Bookmark className="w-3.5 h-3.5 text-natural-accent/60 shrink-0" />
+                    {book.edition}ª
+                  </p>
+                </div>
+              )}
+
+              {formatWeight() && (
+                <div className="space-y-0.5">
+                  <span className="text-[10px] text-natural-subtitle uppercase tracking-widest font-mono">Peso</span>
+                  <p className="text-xs font-semibold text-natural-text flex items-center gap-1.5 truncate">
+                    <Scale className="w-3.5 h-3.5 text-natural-accent/60 shrink-0" />
+                    {formatWeight()}
+                  </p>
+                </div>
+              )}
+
+              {formatDimensions() && (
+                <div className="space-y-0.5 md:col-span-2">
+                  <span className="text-[10px] text-natural-subtitle uppercase tracking-widest font-mono">Dimensões</span>
+                  <p className="text-xs font-semibold text-natural-text flex items-center gap-1.5 truncate">
+                    <Ruler className="w-3.5 h-3.5 text-natural-accent/60 shrink-0" />
+                    {formatDimensions()}
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-0.5">
                 <span className="text-[10px] text-natural-subtitle uppercase tracking-widest font-mono">Localização</span>
                 <p className="text-xs font-semibold text-natural-text flex items-center gap-1.5 truncate" title={book.location}>
@@ -237,6 +290,69 @@ export default function BookDetailsCard({ book }: BookDetailsCardProps) {
                 <p className="text-xs text-natural-subtitle italic">Nenhuma descrição ou sinopse enviada pela editora.</p>
               </div>
             )}
+
+            <div className="mt-5 border-t border-natural-border pt-4">
+              <button
+                type="button"
+                onClick={() => setShowCompleteRecord(!showCompleteRecord)}
+                className="text-xs font-bold text-natural-accent hover:text-natural-accent-hover flex items-center gap-1.5 cursor-pointer"
+                aria-expanded={showCompleteRecord}
+              >
+                <span>{showCompleteRecord ? 'Ocultar ficha completa' : 'Ver ficha completa'}</span>
+                {showCompleteRecord ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+
+              {showCompleteRecord && (
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs animate-fade-in">
+                  <div className="space-y-2 rounded-xl border border-natural-border bg-white/45 p-3">
+                    <h3 className="font-mono text-[10px] font-bold uppercase tracking-widest text-natural-subtitle">Dados bibliográficos</h3>
+                    <p><strong>Título:</strong> {book.title}</p>
+                    {book.authors?.length ? <p><strong>Autor(es):</strong> {book.authors.join(', ')}</p> : null}
+                    {book.publisher ? <p><strong>Editora:</strong> {book.publisher}</p> : null}
+                    {book.year ? <p><strong>Ano:</strong> {book.year}</p> : null}
+                    {book.edition ? <p><strong>Edição:</strong> {book.edition}</p> : null}
+                    {book.language ? <p><strong>Idioma:</strong> {formatLanguage(book.language)}</p> : null}
+                    {book.origin ? <p><strong>Origem:</strong> {book.origin}</p> : null}
+                    {book.pageCount ? <p><strong>Páginas:</strong> {book.pageCount}</p> : null}
+                  </div>
+
+                  <div className="space-y-2 rounded-xl border border-natural-border bg-white/45 p-3">
+                    <h3 className="font-mono text-[10px] font-bold uppercase tracking-widest text-natural-subtitle">Características físicas</h3>
+                    {book.format ? <p><strong>Formato:</strong> {book.format}</p> : null}
+                    {formatWeight() ? <p><strong>Peso:</strong> {formatWeight()}</p> : null}
+                    {book.width !== undefined ? <p><strong>Largura:</strong> {book.width.toLocaleString('pt-BR')} cm</p> : null}
+                    {book.height !== undefined ? <p><strong>Altura:</strong> {book.height.toLocaleString('pt-BR')} cm</p> : null}
+                    {book.depth !== undefined ? <p><strong>Profundidade:</strong> {book.depth.toLocaleString('pt-BR')} cm</p> : null}
+                    {formatDimensions() ? <p><strong>Dimensões:</strong> {formatDimensions()}</p> : null}
+                  </div>
+
+                  <div className="space-y-2 rounded-xl border border-natural-border bg-white/45 p-3">
+                    <h3 className="font-mono text-[10px] font-bold uppercase tracking-widest text-natural-subtitle">Identificação</h3>
+                    {book.isbn13 ? <p><strong>ISBN-13:</strong> {book.isbn13}</p> : null}
+                    {book.isbn10 ? <p><strong>ISBN-10:</strong> {book.isbn10}</p> : null}
+                    {book.reference ? <p><strong>Referência:</strong> {book.reference}</p> : null}
+                    {book.productCategory ? <p><strong>Categoria:</strong> {book.productCategory}</p> : null}
+                    {book.department ? <p><strong>Departamento:</strong> {book.department}</p> : null}
+                  </div>
+
+                  <div className="space-y-2 rounded-xl border border-natural-border bg-white/45 p-3">
+                    <h3 className="font-mono text-[10px] font-bold uppercase tracking-widest text-natural-subtitle">Conteúdo e imagens</h3>
+                    {book.synopsis ? <p><strong>Sinopse:</strong> disponível</p> : null}
+                    {book.coverUrl ? <p><strong>Capa:</strong> disponível</p> : null}
+                    {book.additionalImages?.length ? (
+                      <div>
+                        <strong>Imagens adicionais:</strong>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {book.additionalImages.map((image, index) => (
+                            <img key={image} src={image} alt={`Imagem adicional ${index + 1}`} className="h-16 w-12 rounded border border-natural-border object-cover" loading="lazy" />
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* ISBNs Badges with Copy To Clipboard support */}
             <div className="mt-5 pt-4 border-t border-natural-border flex flex-col sm:flex-row sm:items-center gap-4">

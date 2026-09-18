@@ -3,14 +3,26 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Barcode, DollarSign, Sparkles, RefreshCw, Smartphone } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { BarcodeFormat, BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
+import { Barcode, DollarSign, Sparkles, RefreshCw, Smartphone, Camera, X } from 'lucide-react';
+import { cleanIsbn, isValidIsbnFormat } from '../utils/isbn';
 
 interface FutureExpansionsProps {
   onSelectPresetIsbn: (isbn: string) => void;
+  onScanIsbn: (isbn: string) => void;
 }
 
-export default function FutureExpansions({ onSelectPresetIsbn }: FutureExpansionsProps) {
-  // Useful presets for easy testing
+export default function FutureExpansions({ onSelectPresetIsbn, onScanIsbn }: FutureExpansionsProps) {
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
+  const scannerControlsRef = useRef<IScannerControls | null>(null);
+  const scanLockedRef = useRef(false);
+
   const presets = [
     { name: 'O Alquimista (Paulo Coelho)', isbn: '9788575427583' },
     { name: 'Blue Lock (Mangá - Fallback CBL)', isbn: '9786559824793' },
@@ -18,6 +30,125 @@ export default function FutureExpansions({ onSelectPresetIsbn }: FutureExpansion
     { name: '1984 (George Orwell)', isbn: '9788535914849' },
     { name: 'A Hora da Estrela (Clarice Lispector)', isbn: '9788532531582' },
   ];
+
+  const cleanupCamera = () => {
+    scanLockedRef.current = false;
+
+    if (scannerControlsRef.current) {
+      scannerControlsRef.current.stop();
+      scannerControlsRef.current = null;
+    }
+
+    if (readerRef.current) {
+      try {
+        readerRef.current.reset();
+      } catch (error) {
+        console.warn('Failed to reset barcode reader:', error);
+      }
+      readerRef.current = null;
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+
+    setIsScanning(false);
+  };
+
+  const closeCamera = () => {
+    cleanupCamera();
+    setIsCameraOpen(false);
+    setCameraError(null);
+  };
+
+  const startCamera = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setCameraError('Seu navegador não oferece suporte para câmera.');
+      return;
+    }
+
+    setCameraError(null);
+    setIsCameraOpen(true);
+    setIsScanning(true);
+    scanLockedRef.current = false;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+
+      const reader = new BrowserMultiFormatReader();
+      reader.possibleFormats = [BarcodeFormat.EAN_13];
+      readerRef.current = reader;
+
+      if (!videoRef.current) {
+        throw new Error('Video element is unavailable.');
+      }
+
+      scannerControlsRef.current = await reader.decodeFromStream(stream, videoRef.current, (result, error) => {
+        if (error && error.name !== 'NotFoundException') {
+          console.debug('[ISBN scanner] ZXing error:', error.name);
+        }
+
+        if (scanLockedRef.current || !result) {
+          return;
+        }
+
+        const rawValue = result.getText();
+        const decoded = cleanIsbn(rawValue);
+        console.debug('[ISBN scanner] result:', {
+          format: result.getBarcodeFormat(),
+          rawValue,
+          cleanedValue: decoded,
+          validIsbn: isValidIsbnFormat(decoded),
+        });
+
+        if (!decoded || !isValidIsbnFormat(decoded)) {
+          setCameraError('Código detectado não corresponde a um ISBN válido.');
+          return;
+        }
+
+        scanLockedRef.current = true;
+        closeCamera();
+        onScanIsbn(decoded);
+      });
+    } catch (error: any) {
+      console.error('Camera initialization failed:', error);
+
+      if (error?.name === 'NotAllowedError') {
+        setCameraError('Permissão de câmera negada.');
+      } else if (error?.name === 'NotFoundError' || error?.name === 'OverconstrainedError') {
+        setCameraError('Nenhuma câmera disponível ou compatível com este dispositivo.');
+      } else {
+        setCameraError('Não foi possível iniciar a câmera.');
+      }
+
+      closeCamera();
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      cleanupCamera();
+    };
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -45,27 +176,63 @@ export default function FutureExpansions({ onSelectPresetIsbn }: FutureExpansion
         </div>
       </div>
 
-      {/* Camera Barcode Scanner Architecture Placeholder */}
+      {/* Camera Barcode Scanner */}
       <div className="bg-[#E5DACE]/15 border border-natural-border/80 rounded-2xl p-4 shadow-2xs relative overflow-hidden">
         <div className="absolute top-2 right-2 bg-natural-badge/80 text-natural-accent text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-sm uppercase tracking-wider border border-natural-border/40">
-          Estrutura Preparada
+          {isCameraOpen ? 'Ativo' : 'Pronto'}
         </div>
-        
+
         <div className="flex items-start gap-3">
           <div className="p-2 bg-white/70 rounded-xl text-natural-accent shrink-0 border border-natural-border/20">
             <Smartphone className="w-5 h-5 stroke-[1.8]" />
           </div>
-          <div className="min-w-0">
+
+          <div className="min-w-0 flex-1">
             <h3 className="text-xs font-semibold text-natural-title flex items-center gap-2">
               Leitura de Código pela Câmera
             </h3>
-            <p className="text-xs text-natural-subtitle mt-1 leading-relaxed">
-              Pronto para ativar via stream de vídeo do dispositivo. O escopo de câmera usará a permissão já pré-autorizada na infraestrutura para decodificar códigos Tipo EAN/ISBN usando a webcam ou smartphone do balcão.
-            </p>
-            <div className="mt-2 text-[10px] text-natural-accent/80 font-mono flex items-center gap-1.5">
-              <span className="inline-block w-1.5 h-1.5 bg-natural-accent/60 rounded-full animate-pulse"></span>
-              <span>Hooks & Permissões Câmera Autorizados</span>
-            </div>
+
+            {isCameraOpen ? (
+              <div className="mt-3 space-y-3">
+                <div className="relative overflow-hidden rounded-xl border border-natural-border bg-black">
+                  <video ref={videoRef} autoPlay muted playsInline className="w-full h-56 object-cover" />
+                  <div className="absolute inset-0 border-2 border-natural-accent/80 pointer-events-none" />
+                  <div className="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] font-mono px-2 py-1 rounded-md">
+                    {isScanning ? 'Procurando ISBN...' : 'Câmera pronta'}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeCamera}
+                  className="w-full px-3 py-2 bg-white border border-natural-border rounded-lg text-natural-title text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer hover:bg-natural-badge/40 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Cancelar leitura
+                </button>
+              </div>
+            ) : (
+              <div className="mt-3 space-y-3">
+                <p className="text-xs text-natural-subtitle leading-relaxed">
+                  Use a câmera do dispositivo para identificar um código de barras ISBN e enviar o resultado direto para a consulta já existente.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={startCamera}
+                  className="w-full px-3 py-2 bg-natural-accent text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer hover:bg-natural-accent-hover transition-colors"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  Ler ISBN pela câmera
+                </button>
+              </div>
+            )}
+
+            {cameraError && (
+              <p className="mt-3 text-[10px] text-red-700 bg-red-50 border border-red-200 rounded-md px-2 py-1.5">
+                {cameraError}
+              </p>
+            )}
           </div>
         </div>
       </div>

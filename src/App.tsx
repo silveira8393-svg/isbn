@@ -11,7 +11,8 @@ import SearchHistoryGroup from './components/SearchHistoryGroup';
 import FutureExpansions from './components/FutureExpansions';
 import { BookInfo, SearchHistoryItem } from './types';
 import { searchBookByIsbnBrasilApi } from './services/brasilApi';
-import { cleanIsbn } from './utils/isbn';
+import { mergeBookWithDistribuidora, searchBookByIsbnDistribuidoraCuritiba, DistribuidoraDiagnostic } from './services/distribuidoraCuritiba';
+import { cleanIsbn, isValidIsbnFormat } from './utils/isbn';
 import { 
   BookMarked, 
   AlertCircle, 
@@ -41,6 +42,7 @@ export default function App() {
     authorsCount: number;
     categoriesCount: number;
     apiErrorMessage?: string;
+    distribuidora?: DistribuidoraDiagnostic;
   } | null>(null);
 
   // Connection Status Indicator helper
@@ -81,17 +83,22 @@ export default function App() {
 
     try {
       const result = await searchBookByIsbnBrasilApi(cleaned);
-      setLastDiagnostic(result.diagnostic);
 
       if (result.book) {
-        setFoundBook(result.book);
+        const distribuidoraResult = await searchBookByIsbnDistribuidoraCuritiba(cleaned);
+        const enrichedBook = distribuidoraResult.book
+          ? mergeBookWithDistribuidora(result.book, distribuidoraResult.book)
+          : result.book;
+
+        setLastDiagnostic({ ...result.diagnostic, distribuidora: distribuidoraResult.diagnostic });
+        setFoundBook(enrichedBook);
         
         // Add item to history (limit to 12 items to prevent bloat)
         const newItem: SearchHistoryItem = {
           timestamp: Date.now(),
           isbn: cleaned,
-          title: result.book.title,
-          authors: result.book.authors,
+          title: enrichedBook.title,
+          authors: enrichedBook.authors,
           success: true
         };
         
@@ -99,6 +106,7 @@ export default function App() {
         setHistory(updatedHistory);
         localStorage.setItem('sebo_isbn_history_v1', JSON.stringify(updatedHistory));
       } else {
+        setLastDiagnostic(result.diagnostic);
         // Handle specific errors based on API status
         let localError = 'ISBN não encontrado na BrasilAPI.';
         if (result.diagnostic.status === 404) {
@@ -136,6 +144,16 @@ export default function App() {
   const handleSelectPresetOrHistory = (targetIsbn: string) => {
     setIsbnValue(targetIsbn);
     handleSearch(targetIsbn);
+  };
+
+  const handleScanIsbn = (targetIsbn: string) => {
+    const cleaned = cleanIsbn(targetIsbn);
+    if (!cleaned || !isValidIsbnFormat(cleaned)) {
+      return;
+    }
+
+    setIsbnValue(cleaned);
+    void handleSearch(cleaned);
   };
 
   const handleClearHistory = () => {
@@ -401,7 +419,20 @@ export default function App() {
 
             {/* Success Book details visual state */}
             {foundBook && !isLoading && (
-              <BookDetailsCard book={foundBook} />
+              <>
+                <BookDetailsCard book={foundBook} />
+                {lastDiagnostic?.distribuidora && (
+                  <div className="bg-white/70 border border-natural-border rounded-xl px-4 py-3 text-xs text-natural-text shadow-3xs animate-fade-in">
+                    <span className="font-semibold">Diagnóstico das fontes:</span>{' '}
+                    BrasilAPI: sucesso · Distribuidora Curitiba:{' '}
+                    {lastDiagnostic.distribuidora.state === 'success'
+                      ? 'sucesso'
+                      : lastDiagnostic.distribuidora.state === 'not_found'
+                        ? 'não encontrado'
+                        : 'indisponível'}
+                  </div>
+                )}
+              </>
             )}
 
             {/* Warm, pristine default visual welcome state */}
@@ -454,6 +485,7 @@ export default function App() {
             {/* Preset testing & upcoming system expansions placeholders */}
             <FutureExpansions 
               onSelectPresetIsbn={handleSelectPresetOrHistory}
+              onScanIsbn={handleScanIsbn}
             />
 
           </div>
