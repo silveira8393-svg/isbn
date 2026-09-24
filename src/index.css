@@ -1,48 +1,38 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Playfair Display", Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  
-  --color-natural-bg: #FAF7F2;
-  --color-natural-text: #3E362E;
-  --color-natural-title: #2D2823;
-  --color-natural-border: #E8E2D9;
-  --color-natural-accent: #5A5A40;
-  --color-natural-accent-hover: #4A4A35;
-  --color-natural-subtitle: #8A8172;
-  --color-natural-badge: #E5DACE;
 }
 
-/* Custom fade transitions and animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #E8E2D9;
-  border-radius: 10px;
+  background: #CBD5E1;
+  border-radius: 9999px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #D8D2C9;
+  background: #94A3B8;
 }
 
 body {
-  background-color: var(--color-natural-bg);
-  color: var(--color-natural-text);
+  background-color: #F8FAFC;
+  color: #0F172A;
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
-

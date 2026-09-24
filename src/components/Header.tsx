@@ -3,35 +3,72 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BookOpen, Search, Layers } from 'lucide-react';
+import { BookOpen, Search, History } from 'lucide-react';
 
-export default function Header() {
+interface HeaderProps {
+  activeTab?: 'consultar' | 'historico';
+  onTabChange?: (tab: 'consultar' | 'historico') => void;
+  historyCount?: number;
+}
+
+export default function Header({ activeTab = 'consultar', onTabChange, historyCount = 0 }: HeaderProps) {
   return (
-    <header className="bg-white/60 backdrop-blur-md border-b border-natural-border shadow-xs py-4 px-6 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+    <header className="bg-blue-600 border-b border-blue-700 shadow-sm text-white sticky top-0 z-40">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+        {/* Identity */}
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-natural-accent text-white rounded-xl flex items-center justify-center shadow-xs">
-            <BookOpen className="w-6 h-6 stroke-[1.8]" />
+          <div className="w-10 h-10 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center text-white shrink-0 shadow-xs">
+            <BookOpen className="w-5 h-5 stroke-[2]" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-semibold bg-natural-badge text-natural-text px-2 py-0.5 rounded-full border border-natural-border uppercase tracking-wider">
-                Módulo Balcão
-              </span>
-              <span className="text-[10px] font-semibold bg-stone-100 text-natural-subtitle px-2 py-0.5 rounded-full border border-stone-200 uppercase tracking-wider">
-                Sebos & Livrarias
-              </span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-serif font-bold text-natural-title tracking-tight mt-0.5 animate-fade-in">
-              Consulta ISBN <span className="font-normal text-natural-subtitle">para Sebos</span>
+            <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white leading-tight">
+              Consulta ISBN para Sebos
             </h1>
+            <p className="text-xs text-blue-100 hidden sm:block">
+              Balcão de Atendimento & Catalogação
+            </p>
           </div>
         </div>
-        
-        <div className="flex items-center gap-2 text-natural-subtitle text-xs font-mono bg-white/80 border border-natural-border px-3 py-1.5 rounded-lg select-none shadow-3xs">
-          <Layers className="w-3.5 h-3.5 text-natural-accent/60" />
-          <span>v1.0.4 · Localizador Rápido</span>
-        </div>
+
+        {/* Simple Navigation: Consultar | Histórico */}
+        <nav className="flex items-center gap-1.5 p-1 bg-blue-700/70 border border-blue-500/40 rounded-lg text-xs font-medium">
+          <button
+            type="button"
+            onClick={() => onTabChange?.('consultar')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md transition-all cursor-pointer ${
+              activeTab === 'consultar'
+                ? 'bg-white text-blue-700 font-semibold shadow-xs'
+                : 'text-blue-100 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <Search className="w-3.5 h-3.5 shrink-0" />
+            <span>Consultar</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onTabChange?.('historico')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md transition-all cursor-pointer ${
+              activeTab === 'historico'
+                ? 'bg-white text-blue-700 font-semibold shadow-xs'
+                : 'text-blue-100 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <History className="w-3.5 h-3.5 shrink-0" />
+            <span>Histórico</span>
+            {historyCount > 0 && (
+              <span
+                className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold tabular-nums ${
+                  activeTab === 'historico'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'bg-blue-800 text-blue-100'
+                }`}
+              >
+                {historyCount}
+              </span>
+            )}
+          </button>
+        </nav>
       </div>
     </header>
   );

@@ -53,6 +53,7 @@ export interface SearchHistoryItem {
   title: string;
   authors?: string[];
   success: boolean;
+  thumbnailUrl?: string;
 }
 
 export interface PriceComparisonItem {
