@@ -3,15 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BookOpen, Search, History } from 'lucide-react';
+import { BookOpen, Search, History, Sparkles } from 'lucide-react';
 
 interface HeaderProps {
-  activeTab?: 'consultar' | 'historico';
-  onTabChange?: (tab: 'consultar' | 'historico') => void;
+  activeTab?: 'consultar' | 'cadastro' | 'historico';
+  onTabChange?: (tab: 'consultar' | 'cadastro' | 'historico') => void;
   historyCount?: number;
+  hasActiveDraft?: boolean;
 }
 
-export default function Header({ activeTab = 'consultar', onTabChange, historyCount = 0 }: HeaderProps) {
+export default function Header({
+  activeTab = 'consultar',
+  onTabChange,
+  historyCount = 0,
+  hasActiveDraft = false,
+}: HeaderProps) {
   return (
     <header className="bg-blue-600 border-b border-blue-700 shadow-sm text-white sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
@@ -25,12 +31,12 @@ export default function Header({ activeTab = 'consultar', onTabChange, historyCo
               Consulta ISBN para Sebos
             </h1>
             <p className="text-xs text-blue-100 hidden sm:block">
-              Balcão de Atendimento & Catalogação
+              Balcão de Atendimento & Catalogação Magazord
             </p>
           </div>
         </div>
 
-        {/* Simple Navigation: Consultar | Histórico */}
+        {/* Navigation: Consultar | Cadastro | Histórico */}
         <nav className="flex items-center gap-1.5 p-1 bg-blue-700/70 border border-blue-500/40 rounded-lg text-xs font-medium">
           <button
             type="button"
@@ -43,6 +49,22 @@ export default function Header({ activeTab = 'consultar', onTabChange, historyCo
           >
             <Search className="w-3.5 h-3.5 shrink-0" />
             <span>Consultar</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onTabChange?.('cadastro')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md transition-all cursor-pointer ${
+              activeTab === 'cadastro'
+                ? 'bg-white text-blue-700 font-semibold shadow-xs'
+                : 'text-blue-100 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 shrink-0" />
+            <span>Cadastro</span>
+            {hasActiveDraft && (
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            )}
           </button>
 
           <button

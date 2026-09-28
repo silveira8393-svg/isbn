@@ -121,6 +121,32 @@ export default function SearchHistoryGroup({
                 </p>
               )}
 
+              {/* Status Magazord no Histórico */}
+              {item.magazordStatus && (
+                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                  {item.magazordStatus === 'cadastrado_simulado' && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Cadastrado Magazord
+                    </span>
+                  )}
+                  {item.magazordStatus === 'localizado' && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                      Localizado Magazord
+                    </span>
+                  )}
+                  {item.condition && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase bg-slate-100 text-slate-700">
+                      {item.condition}
+                    </span>
+                  )}
+                  {item.parentCode && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-600">
+                      Pai: {item.parentCode}
+                    </span>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400 font-mono">
                 <span className="text-blue-700 font-medium">ISBN {item.isbn}</span>
                 <span className="flex items-center gap-1">

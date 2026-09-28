@@ -11,6 +11,10 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
-    server: {},
+    server: {
+      host: '0.0.0.0',
+      port: 3000,
+      allowedHosts: true as const,
+    },
   };
 });

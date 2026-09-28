@@ -1,0 +1,9 @@
+{
+  "name": "Consulta ISBN",
+  "description": "Consulta de livros por código ISBN via BrasilAPI e Distribuidora Curitiba, com leitor de código de barras por câmera e histórico de buscas.",
+  "prompt": "Consulta de livros por código ISBN via BrasilAPI e Distribuidora Curitiba, com leitor de código de barras por câmera e histórico de buscas.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

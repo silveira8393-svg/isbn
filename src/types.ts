@@ -47,6 +47,75 @@ export interface BookInfo {
   synopsis?: string;
 }
 
+export type BookCondition = 'novo' | 'usado';
+
+export interface RegistrationDraft {
+  // Identificação e códigos
+  condition: BookCondition;
+  parentCode: string; // Código Pai (ex.: LV26579-P), obrigatório no cadastro
+  childCode: string; // Código Filho (automático com ISBN-13 se novo, manual se usado)
+  ean: string; // EAN = ISBN-13
+  isbn13: string;
+  isbn10: string;
+
+  // Categorização e Marcas
+  category: string;
+  brand: string; // Marca (ex.: Pão Diário)
+  publisher: string; // Editora (ex.: Publicações Pão Diário)
+
+  // Dados Bibliográficos
+  title: string;
+  subtitle?: string;
+  authors: string[];
+  year?: string;
+  edition?: string;
+  language?: string;
+  pageCount?: number;
+  format?: string;
+
+  // Medidas e Peso
+  weight?: number; // em gramas
+  weightUnit: 'g' | 'kg';
+  width?: number; // em cm
+  height?: number; // em cm
+  depth?: number; // em cm (espessura)
+
+  // Conteúdo
+  synopsis: string;
+  usedBookConditionNotes?: string; // Observações físicas do exemplar quando Usado
+
+  // Comercial e Estoque
+  price: string; // Preço de venda em R$ (começa vazio)
+  quantity: number; // Estoque inicial (default 1)
+  location: string; // Localização fixa: "Sebo Livraria Sul"
+
+  // Imagens
+  mainImageUrl?: string;
+  additionalImageUrls: string[];
+
+  // Configurações Fiscais e Avançadas
+  ncm: string;
+  fiscalOrigin: string;
+  unit: string;
+}
+
+export interface MagazordProductCheck {
+  exists: boolean;
+  parentCode?: string;
+  childCode?: string;
+  title?: string;
+  statusMessage?: string;
+  sku?: string;
+}
+
+export interface MagazordRegistrationResult {
+  success: boolean;
+  parentCode: string;
+  childCode: string;
+  message: string;
+  registeredAt: number;
+}
+
 export interface SearchHistoryItem {
   timestamp: number;
   isbn: string;
@@ -54,6 +123,10 @@ export interface SearchHistoryItem {
   authors?: string[];
   success: boolean;
   thumbnailUrl?: string;
+  magazordStatus?: 'localizado' | 'cadastrado_simulado' | 'nao_cadastrado';
+  parentCode?: string;
+  childCode?: string;
+  condition?: BookCondition;
 }
 
 export interface PriceComparisonItem {

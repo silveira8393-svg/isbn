@@ -3,28 +3,34 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Header from './components/Header';
 import SearchForm from './components/SearchForm';
 import BookDetailsCard from './components/BookDetailsCard';
 import SearchHistoryGroup from './components/SearchHistoryGroup';
 import CameraScannerModal from './components/CameraScannerModal';
-import { BookInfo, SearchHistoryItem } from './types';
+import MagazordStatusCard from './components/magazord/MagazordStatusCard';
+import ProductRegistrationForm from './components/magazord/ProductRegistrationForm';
+import {
+  BookInfo,
+  SearchHistoryItem,
+  RegistrationDraft,
+  MagazordProductCheck,
+  MagazordRegistrationResult,
+} from './types';
 import { searchBookByIsbnBrasilApi } from './services/brasilApi';
 import {
   mergeBookWithDistribuidora,
   searchBookByIsbnDistribuidoraCuritiba,
-  DistribuidoraDiagnostic,
 } from './services/distribuidoraCuritiba';
 import { cleanIsbn } from './utils/isbn';
+import { createRegistrationDraft } from './utils/draft';
+import { magazordMockService } from './services/magazordMockService';
 import {
   BookOpen,
   AlertCircle,
-  ExternalLink,
-  ShoppingBag,
-  Store,
-  Building2,
-  RefreshCw,
+  Sparkles,
+  ArrowRight,
   Search,
 } from 'lucide-react';
 
@@ -36,8 +42,14 @@ export default function App() {
   const [searchedTerm, setSearchedTerm] = useState<string>('');
   const [rawSearchedTerm, setRawSearchedTerm] = useState<string>('');
   const [history, setHistory] = useState<SearchHistoryItem[]>([]);
-  const [activeTab, setActiveTab] = useState<'consultar' | 'historico'>('consultar');
+  const [activeTab, setActiveTab] = useState<'consultar' | 'cadastro' | 'historico'>('consultar');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+  // Estados de integração e rascunho Magazord
+  const [registrationDraft, setRegistrationDraft] = useState<RegistrationDraft | null>(null);
+  const [magazordCheckResult, setMagazordCheckResult] = useState<MagazordProductCheck | null>(null);
+  const [isCheckingMagazord, setIsCheckingMagazord] = useState(false);
+  const [magazordCheckError, setMagazordCheckError] = useState<string | null>(null);
 
   // Load history from localStorage on startup
   useEffect(() => {
@@ -51,6 +63,43 @@ export default function App() {
     }
   }, []);
 
+  // Realiza checagem simulada na API Magazord para o livro encontrado
+  const runMagazordCheck = async (cleanedIsbn: string, book: BookInfo) => {
+    setIsCheckingMagazord(true);
+    setMagazordCheckError(null);
+
+    try {
+      const check = await magazordMockService.checkProductByEan(cleanedIsbn, book.title);
+      setMagazordCheckResult(check);
+
+      // Atualiza o registro no histórico com status da Magazord
+      setHistory((prevHistory) => {
+        const updated = prevHistory.map((item) => {
+          if (item.isbn === cleanedIsbn) {
+            return {
+              ...item,
+              magazordStatus: check.exists ? ('localizado' as const) : ('nao_cadastrado' as const),
+              parentCode: check.parentCode,
+              childCode: check.childCode,
+            };
+          }
+          return item;
+        });
+        try {
+          localStorage.setItem('sebo_isbn_history_v1', JSON.stringify(updated));
+        } catch {
+          // ignora
+        }
+        return updated;
+      });
+    } catch (err: any) {
+      console.error('Erro na checagem Magazord simulada:', err);
+      setMagazordCheckError(err.message || 'Falha de comunicação simulada com a Magazord.');
+    } finally {
+      setIsCheckingMagazord(false);
+    }
+  };
+
   // Handler to carry out lookup
   const handleSearch = async (targetIsbn: string) => {
     const cleaned = cleanIsbn(targetIsbn);
@@ -62,6 +111,9 @@ export default function App() {
     setIsLoading(true);
     setErrorText(null);
     setFoundBook(null);
+    setRegistrationDraft(null);
+    setMagazordCheckResult(null);
+    setMagazordCheckError(null);
     setSearchedTerm(cleaned);
     setRawSearchedTerm(targetIsbn);
     setActiveTab('consultar');
@@ -77,6 +129,10 @@ export default function App() {
 
         setFoundBook(enrichedBook);
 
+        // Prepara automaticamente o rascunho de cadastro com os dados reais
+        const draft = createRegistrationDraft(enrichedBook);
+        setRegistrationDraft(draft);
+
         // Add item to history with thumbnail support
         const newItem: SearchHistoryItem = {
           timestamp: Date.now(),
@@ -85,11 +141,15 @@ export default function App() {
           authors: enrichedBook.authors,
           success: true,
           thumbnailUrl: enrichedBook.thumbnailUrl || enrichedBook.coverUrl,
+          magazordStatus: 'nao_cadastrado',
         };
 
         const updatedHistory = [newItem, ...history.filter((h) => h.isbn !== cleaned)].slice(0, 15);
         setHistory(updatedHistory);
         localStorage.setItem('sebo_isbn_history_v1', JSON.stringify(updatedHistory));
+
+        // Executa a checagem simulada da Magazord
+        void runMagazordCheck(cleaned, enrichedBook);
       } else {
         let localError = 'ISBN não encontrado na base de dados.';
         if (result.diagnostic.status === 404) {
@@ -139,6 +199,61 @@ export default function App() {
     localStorage.removeItem('sebo_isbn_history_v1');
   };
 
+  // Sucesso no cadastro Magazord simulado
+  const handleSuccessRegistration = (
+    result: MagazordRegistrationResult,
+    savedDraft: RegistrationDraft
+  ) => {
+    // Atualiza o histórico local
+    const currentIsbn = searchedTerm || savedDraft.isbn13 || savedDraft.ean;
+    setHistory((prevHistory) => {
+      const updated = prevHistory.map((item) => {
+        if (item.isbn === currentIsbn || (savedDraft.isbn13 && item.isbn === savedDraft.isbn13)) {
+          return {
+            ...item,
+            magazordStatus: 'cadastrado_simulado' as const,
+            parentCode: result.parentCode,
+            childCode: result.childCode,
+            condition: savedDraft.condition,
+          };
+        }
+        return item;
+      });
+      try {
+        localStorage.setItem('sebo_isbn_history_v1', JSON.stringify(updated));
+      } catch {
+        // ignora
+      }
+      return updated;
+    });
+
+    // Atualiza estado de checagem para mostrar como existente
+    setMagazordCheckResult({
+      exists: true,
+      parentCode: result.parentCode,
+      childCode: result.childCode,
+      title: savedDraft.title,
+      statusMessage: 'Produto cadastrado com sucesso nesta sessão.',
+    });
+  };
+
+  // Prepara interface para o próximo livro
+  const handleProcessNextBook = () => {
+    setFoundBook(null);
+    setRegistrationDraft(null);
+    setMagazordCheckResult(null);
+    setMagazordCheckError(null);
+    setIsbnValue('');
+    setErrorText(null);
+    setActiveTab('consultar');
+
+    // Foca suavemente no input de ISBN
+    setTimeout(() => {
+      const inputEl = document.querySelector('input[type="text"]') as HTMLInputElement | null;
+      inputEl?.focus();
+    }, 150);
+  };
+
   const escapeCsvValue = (value: string | number | undefined): string => {
     const normalized = String(value ?? '').replace(/\r?\n/g, ' ');
     const escaped = normalized.replace(/"/g, '""');
@@ -148,16 +263,49 @@ export default function App() {
   const handleExportHistoryCsv = () => {
     if (history.length === 0) return;
 
-    const headers = ['ISBN', 'Título', 'Autor(es)', 'Data/Hora', 'Status'];
+    const headers = [
+      'ISBN',
+      'Título',
+      'Autor(es)',
+      'Condição',
+      'Código Pai',
+      'Código Filho',
+      'Status Magazord',
+      'Data/Hora',
+      'Status Consulta',
+    ];
+
     const rows = history.map((item) => {
       const authors = Array.isArray(item.authors) && item.authors.length > 0 ? item.authors.join(' | ') : '';
+      const condition = item.condition ? (item.condition === 'novo' ? 'Novo' : 'Usado') : '';
+      const parentCode = item.parentCode || '';
+      const childCode = item.childCode || '';
+      const magazordStatus =
+        item.magazordStatus === 'cadastrado_simulado'
+          ? 'Cadastrado Simulado'
+          : item.magazordStatus === 'localizado'
+          ? 'Localizado Magazord'
+          : item.success
+          ? 'Não Cadastrado'
+          : '–';
+
       const timestamp = new Date(item.timestamp).toLocaleString('pt-BR', {
         dateStyle: 'short',
         timeStyle: 'medium',
       });
       const status = item.success ? 'Sucesso' : 'Falha';
 
-      return [item.isbn, item.title, authors, timestamp, status]
+      return [
+        item.isbn,
+        item.title,
+        authors,
+        condition,
+        parentCode,
+        childCode,
+        magazordStatus,
+        timestamp,
+        status,
+      ]
         .map((value) => escapeCsvValue(value))
         .join(';');
     });
@@ -176,121 +324,183 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  const fallbackLinks = {
-    amazon: `https://www.amazon.com.br/s?k=${encodeURIComponent(searchedTerm)}`,
-    mercadoLivre: `https://lista.mercadolivre.com.br/${encodeURIComponent(searchedTerm)}`,
-    estanteVirtual: `https://www.estantevirtual.com.br/busca?q=${encodeURIComponent(searchedTerm)}`,
-    cbl: `https://cblservicos.org.br/isbn/pesquisa/?q=${encodeURIComponent(searchedTerm)}`,
-  };
-
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col selection:bg-blue-100 selection:text-blue-800">
-      {/* 1. Header azul profissional */}
+      {/* 1. Header azul profissional com navegação Consultar | Cadastro | Histórico */}
       <Header
         activeTab={activeTab}
         onTabChange={(tab) => setActiveTab(tab)}
         historyCount={history.length}
+        hasActiveDraft={Boolean(registrationDraft)}
       />
 
       {/* 2. Main Content Viewport */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 flex-1 w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Main Area: Pesquisa e Resultado (8 cols no desktop) */}
-          <div
-            className={`space-y-6 ${
-              activeTab === 'historico' ? 'hidden lg:block lg:col-span-8' : 'lg:col-span-8'
-            }`}
-          >
-            {/* Search Input Card */}
-            <SearchForm
-              onSearch={handleSearch}
-              isLoading={isLoading}
-              isbnValue={isbnValue}
-              setIsbnValue={setIsbnValue}
-              onOpenScanner={() => setIsScannerOpen(true)}
-            />
+        {/* ABA 1: CONSULTAR */}
+        {activeTab === 'consultar' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Main Area: Pesquisa e Resultado (8 cols no desktop) */}
+            <div className="space-y-6 lg:col-span-8">
+              {/* Search Input Card */}
+              <SearchForm
+                onSearch={handleSearch}
+                isLoading={isLoading}
+                isbnValue={isbnValue}
+                setIsbnValue={setIsbnValue}
+                onOpenScanner={() => setIsScannerOpen(true)}
+              />
 
-            {/* Loading State */}
-            {isLoading && (
-              <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-xs flex flex-col items-center justify-center min-h-[320px] animate-fade-in">
-                <div className="w-12 h-12 rounded-full border-3 border-slate-100 border-t-blue-600 animate-spin mb-4" />
-                <h3 className="text-slate-900 font-bold text-base">
-                  Consultando registro bibliográfico...
-                </h3>
-                <p className="text-slate-500 text-xs mt-1">
-                  Buscando dados para o ISBN <span className="font-mono font-semibold text-slate-800">{cleanIsbn(isbnValue)}</span>
-                </p>
-              </div>
-            )}
+              {/* Loading State */}
+              {isLoading && (
+                <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-xs flex flex-col items-center justify-center min-h-[320px] animate-fade-in">
+                  <div className="w-12 h-12 rounded-full border-3 border-slate-100 border-t-blue-600 animate-spin mb-4" />
+                  <h3 className="text-slate-900 font-bold text-base">
+                    Consultando registro bibliográfico...
+                  </h3>
+                  <p className="text-slate-500 text-xs mt-1">
+                    Buscando dados para o ISBN{' '}
+                    <span className="font-mono font-semibold text-slate-800">
+                      {cleanIsbn(isbnValue)}
+                    </span>
+                  </p>
+                </div>
+              )}
 
-            {/* Error State */}
-            {errorText && !isLoading && (
-              <div className="bg-white rounded-xl border border-red-200 shadow-xs p-6 animate-fade-in">
-                <div className="flex items-start gap-3.5">
-                  <div className="p-2.5 bg-red-50 text-red-600 rounded-lg border border-red-100 shrink-0">
-                    <AlertCircle className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-bold text-slate-900">
-                      Obra não localizada
-                    </h3>
-                    <p className="text-sm text-slate-600 mt-1 leading-relaxed">
-                      {errorText}
-                    </p>
+              {/* Error State */}
+              {errorText && !isLoading && (
+                <div className="bg-white rounded-xl border border-red-200 shadow-xs p-6 animate-fade-in">
+                  <div className="flex items-start gap-3.5">
+                    <div className="p-2.5 bg-red-50 text-red-600 rounded-lg border border-red-100 shrink-0">
+                      <AlertCircle className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-base font-bold text-slate-900">
+                        Obra não localizada
+                      </h3>
+                      <p className="text-sm text-slate-600 mt-1 leading-relaxed">
+                        {errorText}
+                      </p>
 
-                    <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-600 flex flex-wrap gap-4">
-                      <span>ISBN Consultado: <strong className="text-slate-900">{searchedTerm}</strong></span>
+                      <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-600 flex flex-wrap gap-4">
+                        <span>
+                          ISBN Consultado:{' '}
+                          <strong className="text-slate-900">{searchedTerm}</strong>
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Found Book: Shows ALL info automatically */}
-            {foundBook && !isLoading && (
-              <BookDetailsCard book={foundBook} />
-            )}
+              {/* Found Book: Status Magazord + Ficha Técnica Completa */}
+              {foundBook && !isLoading && (
+                <div className="space-y-6 animate-fade-in">
+                  {/* Card de Status e Ação Magazord (Regras 2, 3 e 4) */}
+                  <MagazordStatusCard
+                    checkResult={magazordCheckResult}
+                    isChecking={isCheckingMagazord}
+                    checkError={magazordCheckError}
+                    book={foundBook}
+                    onOpenRegistration={() => setActiveTab('cadastro')}
+                    onRetryCheck={() => runMagazordCheck(searchedTerm, foundBook)}
+                    onResetForNextBook={handleProcessNextBook}
+                  />
 
-            {/* Empty / Counter Welcome State */}
-            {!foundBook && !errorText && !isLoading && (
-              <div className="bg-white rounded-xl border border-slate-200 p-8 sm:p-12 text-center shadow-xs flex flex-col items-center justify-center min-h-[360px] animate-fade-in">
-                <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4 border border-blue-100">
-                  <BookOpen className="w-7 h-7 stroke-[1.7]" />
+                  {/* Ficha Bibliográfica Completa (Preservada do projeto original) */}
+                  <BookDetailsCard book={foundBook} />
                 </div>
-                <h3 className="text-lg font-bold text-slate-900 tracking-tight">
-                  Pronto para consulta no balcão
+              )}
+
+              {/* Empty / Counter Welcome State */}
+              {!foundBook && !errorText && !isLoading && (
+                <div className="bg-white rounded-xl border border-slate-200 p-8 sm:p-12 text-center shadow-xs flex flex-col items-center justify-center min-h-[360px] animate-fade-in">
+                  <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4 border border-blue-100">
+                    <BookOpen className="w-7 h-7 stroke-[1.7]" />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-900 tracking-tight">
+                    Pronto para consulta e catalogação no balcão
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-500 mt-1.5 max-w-[440px] leading-relaxed">
+                    Digite ou leia o código de barras ISBN para carregar a ficha técnica nacional e preparar instantaneamente o cadastro na Magazord.
+                  </p>
+                  <div className="mt-6 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-mono text-slate-600">
+                    <span>Dica: Use um leitor USB ou clique em</span>
+                    <strong className="text-blue-700">Câmera</strong>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Sidebar Area: Histórico Recente (4 cols no desktop) */}
+            <div className="hidden lg:block lg:col-span-4 space-y-6">
+              <SearchHistoryGroup
+                items={history}
+                onSelect={handleSelectHistoryItem}
+                onClear={handleClearHistory}
+                onExport={handleExportHistoryCsv}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ABA 2: CADASTRO MAGAZORD EM TELA ÚNICA */}
+        {activeTab === 'cadastro' && (
+          <div className="w-full max-w-5xl mx-auto">
+            {registrationDraft && foundBook ? (
+              <ProductRegistrationForm
+                draft={registrationDraft}
+                originalBook={foundBook}
+                onUpdateDraft={(updates) =>
+                  setRegistrationDraft((prev) => (prev ? { ...prev, ...updates } : null))
+                }
+                onBackToSearch={() => setActiveTab('consultar')}
+                onSuccessRegistration={handleSuccessRegistration}
+                onProcessNextBook={handleProcessNextBook}
+              />
+            ) : (
+              <div className="bg-white rounded-2xl border border-slate-200 p-8 sm:p-14 text-center shadow-xs flex flex-col items-center justify-center min-h-[380px] animate-fade-in max-w-2xl mx-auto">
+                <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4 border border-blue-100">
+                  <Sparkles className="w-8 h-8 stroke-[1.7]" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 tracking-tight">
+                  Nenhum livro carregado para cadastro
                 </h3>
-                <p className="text-xs sm:text-sm text-slate-500 mt-1.5 max-w-[420px] leading-relaxed">
-                  Digite ou leia o código de barras ISBN para carregar instantaneamente a ficha técnica, medidas físicas e links de consulta comercial.
+                <p className="text-sm text-slate-500 mt-2 max-w-md leading-relaxed">
+                  O fluxo operacional do sistema começa pela consulta de ISBN para pré-preencher todos os dados bibliográficos automaticamente.
                 </p>
-                <div className="mt-6 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-mono text-slate-600">
-                  <span>Dica: Use um leitor USB ou clique em</span>
-                  <strong className="text-blue-700">Câmera</strong>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('consultar')}
+                  className="mt-6 inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition-all cursor-pointer"
+                >
+                  <Search className="w-4 h-4" />
+                  <span>Iniciar Consulta de ISBN</span>
+                </button>
               </div>
             )}
           </div>
+        )}
 
-          {/* Sidebar Area: Histórico Recente (4 cols no desktop) */}
-          <div
-            className={`space-y-6 ${
-              activeTab === 'consultar' ? 'hidden lg:block lg:col-span-4' : 'lg:col-span-4'
-            }`}
-          >
+        {/* ABA 3: HISTÓRICO */}
+        {activeTab === 'historico' && (
+          <div className="max-w-3xl mx-auto">
             <SearchHistoryGroup
               items={history}
-              onSelect={handleSelectHistoryItem}
+              onSelect={(isbn) => {
+                handleSelectHistoryItem(isbn);
+                setActiveTab('consultar');
+              }}
               onClear={handleClearHistory}
               onExport={handleExportHistoryCsv}
             />
           </div>
-        </div>
+        )}
       </main>
 
       {/* Footer discreto e limpo */}
       <footer className="border-t border-slate-200/80 bg-white py-4 px-6 mt-12 text-center text-xs text-slate-500">
         <p className="font-medium text-slate-600">
-          Consulta ISBN para Sebos e Livrarias · Balcão de Catalogação
+          Consulta ISBN para Sebos e Livrarias · Balcão de Catalogação Magazord
         </p>
       </footer>
 
