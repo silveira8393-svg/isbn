@@ -217,7 +217,35 @@ export default function App() {
   ) => {
     if (!foundBook) throw new Error('Nenhum livro selecionado');
     const ean = targetItem?.childCode || foundBook.isbn13 || foundBook.isbn10 || searchedTerm;
-    const result = await magazordMockService.addStockToExistingProduct(ean, quantityToAdd);
+    const targetChildCode =
+      targetItem?.childCode ||
+      (magazordCheckResult?.existingCondition === 'novo' ? magazordCheckResult?.childCode : undefined);
+
+    const result = await magazordMockService.addStockToExistingProduct(
+      ean,
+      quantityToAdd,
+      targetChildCode
+    );
+
+    // Atualiza imediatamente o estado de checagem em tela para refletir o novo saldo de estoque
+    setMagazordCheckResult((prev) => {
+      if (!prev) return null;
+      const updatedMatches = prev.matches?.map((m) => {
+        if (
+          m.condition === 'novo' ||
+          (targetItem && m.id === targetItem.id) ||
+          (targetChildCode && m.childCode === targetChildCode)
+        ) {
+          return { ...m, stock: result.newStock };
+        }
+        return m;
+      });
+      return {
+        ...prev,
+        currentStock: result.newStock,
+        matches: updatedMatches,
+      };
+    });
 
     // Atualiza o histórico com o tipo de operação correto
     setHistory((prevHistory) => {
@@ -279,16 +307,9 @@ export default function App() {
       return updated;
     });
 
-    // Atualiza estado de checagem para mostrar como existente
-    setMagazordCheckResult({
-      exists: true,
-      status: savedDraft.condition === 'novo' ? 'NEW_PRODUCT_FOUND' : 'USED_EDITION_FOUND',
-      catalogMatch: true,
-      canReuseCommercialRegistration: savedDraft.condition === 'novo',
-      parentCode: result.parentCode,
-      childCode: result.childCode,
-      title: savedDraft.title,
-      statusMessage: 'Produto cadastrado com sucesso nesta sessão.',
+    // Atualiza estado de checagem consultando o banco simulado atualizado
+    void magazordMockService.checkProductByEan(currentIsbn, savedDraft.title).then((freshCheck) => {
+      setMagazordCheckResult(freshCheck);
     });
   };
 

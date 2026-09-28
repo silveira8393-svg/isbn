@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   MagazordProductCheck,
   BookInfo,
@@ -28,7 +28,6 @@ import {
   PackageCheck,
   Info,
   CopyCheck,
-  ExternalLink,
 } from 'lucide-react';
 
 interface MagazordStatusCardProps {
@@ -60,6 +59,11 @@ export default function MagazordStatusCard({
     magazordMockService.getSimulationConfig().mode
   );
 
+  // Sincroniza sempre o modo da simulação caso haja atualizações externas ou navegação entre abas
+  useEffect(() => {
+    setCurrentMode(magazordMockService.getSimulationConfig().mode);
+  }, [checkResult]);
+
   // Estado para vinculação de estoque ao produto NOVO existente
   const [stockQuantityToAdd, setStockQuantityToAdd] = useState(1);
   const [isLinkingStock, setIsLinkingStock] = useState(false);
@@ -86,7 +90,8 @@ export default function MagazordStatusCard({
         const ean = book.isbn13 || book.isbn10 || '';
         const res = await magazordMockService.addStockToExistingProduct(
           ean,
-          stockQuantityToAdd
+          stockQuantityToAdd,
+          targetItem?.childCode
         );
         setStockLinkSuccess(res);
       }
@@ -97,24 +102,53 @@ export default function MagazordStatusCard({
     }
   };
 
+  const getModeLabel = (mode: MagazordSimulationMode): string => {
+    switch (mode) {
+      case 'auto':
+        return 'Padrão (Auto)';
+      case 'force_new_found':
+      case 'force_existing':
+        return 'Novo Encontrado';
+      case 'force_new_not_found':
+      case 'force_not_found':
+        return 'Novo Não Encontrado';
+      case 'force_used_known':
+        return 'Usado / Edição Conhecida';
+      case 'force_multiple_matches':
+        return 'Múltiplos Resultados';
+      case 'force_error':
+        return 'Simular Erro';
+      default:
+        return mode;
+    }
+  };
+
   const isbnDisplay = book.isbn13 || book.isbn10 || '–';
 
   // Identificação do cenário de resultado
+  const isMultipleMatches =
+    checkResult && checkResult.status === 'MULTIPLE_MATCHES';
+
   const isNewProductFound =
+    !isMultipleMatches &&
     checkResult &&
     (checkResult.status === 'NEW_PRODUCT_FOUND' ||
       (checkResult.exists &&
         checkResult.canReuseCommercialRegistration &&
-        checkResult.existingCondition !== 'usado'));
+        checkResult.existingCondition === 'novo'));
 
   const isUsedEditionFound =
-    checkResult && checkResult.status === 'USED_EDITION_FOUND';
-
-  const isMultipleMatches =
-    checkResult && checkResult.status === 'MULTIPLE_MATCHES';
+    !isMultipleMatches &&
+    checkResult &&
+    (checkResult.status === 'USED_EDITION_FOUND' ||
+      (checkResult.exists && !checkResult.canReuseCommercialRegistration));
 
   const isNotFound =
     checkResult && !checkResult.exists && checkResult.status === 'NOT_FOUND';
+
+  // Extração dos itens quando há múltiplos registros
+  const novoMatch = checkResult?.matches?.find((m) => m.condition === 'novo');
+  const usedMatches = checkResult?.matches?.filter((m) => m.condition === 'usado') || [];
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-fade-in">
@@ -129,9 +163,15 @@ export default function MagazordStatusCard({
               <span className="text-xs font-bold tracking-wide uppercase text-blue-300">
                 Integração Magazord
               </span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-400/20 text-amber-300 border border-amber-400/30 font-semibold">
-                Simulação Ativa
-              </span>
+              {currentMode === 'auto' ? (
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 font-semibold">
+                  Modo Padrão (Auto)
+                </span>
+              ) : (
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-bold border border-amber-300">
+                  Modo Forçado: {getModeLabel(currentMode)}
+                </span>
+              )}
             </div>
             <p className="text-[11px] text-slate-400">
               Verificação de catálogo: reaproveitamento comercial (Novo) vs novo exemplar (Usado)
@@ -143,13 +183,37 @@ export default function MagazordStatusCard({
         <button
           type="button"
           onClick={() => setShowConfig(!showConfig)}
-          className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-1.5 text-xs cursor-pointer"
+          className={`px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-xs cursor-pointer ${
+            showConfig || currentMode !== 'auto'
+              ? 'bg-slate-800 text-white border border-slate-700'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800'
+          }`}
           title="Configurar modo de teste da simulação"
         >
           <Settings2 className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Modo Teste</span>
         </button>
       </div>
+
+      {/* Alerta de Modo de Teste Forçado ativo caso o usuário tenha esquecido ligado */}
+      {currentMode !== 'auto' && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-5 py-2.5 flex items-center justify-between gap-3 text-xs text-amber-900">
+          <span className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              Atenção: O modo de teste <strong>{getModeLabel(currentMode)}</strong> está forçado.
+              Para consultar os dados reais salvos na sessão, retorne para o modo Padrão.
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={() => handleModeChange('auto')}
+            className="px-3 py-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shrink-0 cursor-pointer shadow-xs transition-colors"
+          >
+            Voltar para Padrão (Auto)
+          </button>
+        </div>
+      )}
 
       {/* Painel de controle de teste com todos os cenários da regra de negócio */}
       {showConfig && (
@@ -161,7 +225,7 @@ export default function MagazordStatusCard({
                   Simulação de Cenários Magazord:
                 </span>
                 <p className="text-[11px] text-slate-500">
-                  Valide como o sistema lida com reaproveitamento comercial de Novos e criação de Usados.
+                  Alterne entre o comportamento real do banco simulado ou force cenários específicos de teste.
                 </p>
               </div>
             </div>
@@ -171,62 +235,62 @@ export default function MagazordStatusCard({
                 onClick={() => handleModeChange('auto')}
                 className={`px-2.5 py-1 rounded text-xs font-medium cursor-pointer border transition-colors ${
                   currentMode === 'auto'
-                    ? 'bg-blue-600 text-white border-blue-600'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                     : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
                 }`}
               >
-                Padrão (Auto)
+                Padrão (Auto - Banco Real)
               </button>
               <button
                 type="button"
                 onClick={() => handleModeChange('force_new_found')}
                 className={`px-2.5 py-1 rounded text-xs font-medium cursor-pointer border transition-colors ${
                   currentMode === 'force_new_found' || currentMode === 'force_existing'
-                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
                     : 'bg-white text-emerald-800 border-emerald-300 hover:bg-emerald-50'
                 }`}
               >
-                Novo Encontrado (Reaproveitar)
+                Forçar: Novo Encontrado
               </button>
               <button
                 type="button"
                 onClick={() => handleModeChange('force_new_not_found')}
                 className={`px-2.5 py-1 rounded text-xs font-medium cursor-pointer border transition-colors ${
                   currentMode === 'force_new_not_found' || currentMode === 'force_not_found'
-                    ? 'bg-blue-600 text-white border-blue-600'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                     : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
                 }`}
               >
-                Novo Não Encontrado
+                Forçar: Novo Não Encontrado
               </button>
               <button
                 type="button"
                 onClick={() => handleModeChange('force_used_known')}
                 className={`px-2.5 py-1 rounded text-xs font-medium cursor-pointer border transition-colors ${
                   currentMode === 'force_used_known'
-                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
                     : 'bg-white text-indigo-800 border-indigo-300 hover:bg-indigo-50'
                 }`}
               >
-                Usado / Edição Conhecida
+                Forçar: Usado / Edição Conhecida
               </button>
               <button
                 type="button"
                 onClick={() => handleModeChange('force_multiple_matches')}
                 className={`px-2.5 py-1 rounded text-xs font-medium cursor-pointer border transition-colors ${
                   currentMode === 'force_multiple_matches'
-                    ? 'bg-amber-600 text-white border-amber-600'
+                    ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
                     : 'bg-white text-amber-800 border-amber-300 hover:bg-amber-50'
                 }`}
               >
-                Múltiplos Resultados
+                Forçar: Múltiplos Resultados
               </button>
               <button
                 type="button"
                 onClick={() => handleModeChange('force_error')}
                 className={`px-2.5 py-1 rounded text-xs font-medium cursor-pointer border transition-colors ${
                   currentMode === 'force_error'
-                    ? 'bg-red-600 text-white border-red-600'
+                    ? 'bg-red-600 text-white border-red-600 shadow-xs'
                     : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
                 }`}
               >
@@ -248,7 +312,7 @@ export default function MagazordStatusCard({
                 Consultando catálogo Magazord...
               </p>
               <p className="text-xs text-slate-500">
-                Verificando existência de cadastro comercial NOVO compatível ou dados bibliográficos de edição.
+                Verificando existência de cadastro comercial NOVO compatível ou exemplares USADOS da edição.
               </p>
             </div>
           </div>
@@ -279,7 +343,7 @@ export default function MagazordStatusCard({
           </div>
         )}
 
-        {/* 3. CENÁRIO A: PRODUTO NOVO ENCONTRADO (Reaproveitamento Comercial) */}
+        {/* 3. CENÁRIO A: APENAS PRODUTO NOVO ENCONTRADO (Reaproveitamento Comercial Puro) */}
         {!isChecking && !checkError && isNewProductFound && (
           <div className="space-y-4">
             <div className="flex items-start gap-3.5">
@@ -442,7 +506,7 @@ export default function MagazordStatusCard({
           </div>
         )}
 
-        {/* 4. CENÁRIO B: EDIÇÃO CONHECIDA NO CATÁLOGO (USADO) */}
+        {/* 4. CENÁRIO B: APENAS EDIÇÃO CONHECIDA NO CATÁLOGO (APENAS USADO) */}
         {!isChecking && !checkError && isUsedEditionFound && (
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -483,7 +547,7 @@ export default function MagazordStatusCard({
               </div>
             </div>
 
-            {/* Detalhes bibliográficos reaproveitados */}
+            {/* Detalhes bibliográficos reaproveitados e alternativa para Novo */}
             <div className="bg-indigo-50/50 border border-indigo-100 rounded-lg p-3 text-xs text-indigo-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
               <span className="flex items-center gap-1.5">
                 <CopyCheck className="w-4 h-4 text-indigo-600 shrink-0" />
@@ -491,166 +555,331 @@ export default function MagazordStatusCard({
                   <strong>Dados reaproveitados:</strong> Título, autores, editora, medidas, peso, capa e sinopse da obra.
                 </span>
               </span>
-              <span className="text-[11px] text-slate-500 font-mono">
-                ISBN: {isbnDisplay}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-500 font-mono">
+                  ISBN: {isbnDisplay}
+                </span>
+                <span className="text-slate-300">|</span>
+                <button
+                  type="button"
+                  onClick={() => onOpenRegistration('novo')}
+                  className="text-indigo-700 hover:text-indigo-900 font-semibold underline text-xs cursor-pointer"
+                >
+                  Cadastrar como Produto Novo
+                </button>
+              </div>
             </div>
           </div>
         )}
 
-        {/* 5. CENÁRIO C: MÚLTIPLOS CADASTROS ENCONTRADOS */}
+        {/* 5. CENÁRIO C: MÚLTIPLOS CADASTROS ENCONTRADOS (NOVO + USADO(S) OU MÚLTIPLOS USADOS) */}
         {!isChecking && !checkError && isMultipleMatches && (
-          <div className="space-y-4">
-            <div className="flex items-start gap-3.5">
+          <div className="space-y-5">
+            {/* Header explicativo do resultado com múltiplos registros */}
+            <div className="flex items-start gap-3.5 pb-1">
               <div className="p-2.5 bg-amber-50 text-amber-700 rounded-lg border border-amber-200 shrink-0">
                 <Layers className="w-5 h-5 text-amber-600" />
               </div>
               <div className="flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h4 className="text-base font-bold text-slate-900">
                     Múltiplos cadastros vinculados a este ISBN
                   </h4>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                    {checkResult.matches?.length || 0} cadastros
+                    {checkResult.matches?.length || 0} cadastros localizados
                   </span>
+                  {novoMatch && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      1 Novo Compatível
+                    </span>
+                  )}
+                  {usedMatches.length > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                      {usedMatches.length} Exemplar(es) Usado(s)
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs sm:text-sm text-slate-600 mt-1">
-                  Existem cadastros anteriores vinculados a este ISBN na Magazord. Selecione se deseja dar entrada em um cadastro existente ou criar um novo exemplar.
+                  {novoMatch
+                    ? 'Identificamos cadastro comercial NOVO existente e exemplar(es) USADO(S) anteriores. A existência de usados não oculta o cadastro Novo.'
+                    : 'Identificamos múltiplos exemplares USADOS anteriores vinculados a esta edição.'}
                 </p>
               </div>
             </div>
 
-            {/* Lista dos registros encontrados */}
-            <div className="divide-y divide-slate-200 border border-slate-200 rounded-xl overflow-hidden bg-slate-50 text-xs">
-              {checkResult.matches?.map((match) => (
-                <div
-                  key={match.id}
-                  className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white hover:bg-slate-50/80 transition-colors"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`px-2 py-0.2 rounded text-[10px] font-bold uppercase ${
-                          match.condition === 'novo'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-indigo-100 text-indigo-800'
-                        }`}
-                      >
-                        {match.condition === 'novo' ? 'Novo' : 'Exemplar Usado'}
-                      </span>
-                      <span className="font-semibold text-slate-900">{match.title}</span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-500 text-[11px] font-mono">
-                      <span>Pai: <strong className="text-slate-700">{match.parentCode}</strong></span>
-                      <span>Filho: <strong className="text-slate-700">{match.childCode}</strong></span>
-                      {match.price && <span>Preço: R$ {match.price}</span>}
-                      {match.stock !== undefined && <span>Estoque: {match.stock} UN</span>}
-                    </div>
+            {/* SEÇÃO 1: CADASTRO COMERCIAL NOVO EXISTENTE (se houver) */}
+            {novoMatch && (
+              <div className="bg-emerald-50/40 border-2 border-emerald-200 rounded-xl p-4 sm:p-5 space-y-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200/60 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-600 text-white tracking-wide">
+                      Produto Novo Compatível
+                    </span>
+                    <h5 className="font-bold text-emerald-950 text-sm">
+                      Cadastro Comercial Novo Localizado
+                    </h5>
                   </div>
+                  <span className="text-xs font-semibold text-emerald-800">
+                    Estoque Atual: <strong className="font-mono text-sm">{novoMatch.stock ?? checkResult.currentStock ?? 3} UN</strong>
+                  </span>
+                </div>
 
-                  <div className="shrink-0 flex items-center gap-2">
-                    {match.condition === 'novo' ? (
-                      <button
-                        type="button"
-                        onClick={() => handleLinkStockSubmit(match)}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                      >
-                        <PackageCheck className="w-3.5 h-3.5" />
-                        <span>Vincular Entrada (+1)</span>
-                      </button>
-                    ) : (
-                      <span className="text-[11px] text-slate-400 italic">
-                        Exemplar Usado independente
-                      </span>
-                    )}
+                {/* Dados do produto Novo */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-white/80 p-3 rounded-lg border border-emerald-100">
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">Título</span>
+                    <span className="font-semibold text-slate-900 line-clamp-1">
+                      {novoMatch.title || book.title}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">Código Pai</span>
+                    <span className="font-mono font-bold text-slate-900">
+                      {novoMatch.parentCode}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">Código Filho (EAN)</span>
+                    <span className="font-mono font-bold text-slate-900">
+                      {novoMatch.childCode}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">Preço Registrado</span>
+                    <span className="font-semibold text-emerald-700">
+                      {novoMatch.price ? `R$ ${novoMatch.price}` : 'Padrão da loja'}
+                    </span>
                   </div>
                 </div>
-              ))}
-            </div>
 
-            {/* Ação para novo exemplar usado */}
-            <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <span className="text-xs text-slate-500">
-                Deseja catalogar um novo exemplar físico que acabou de chegar?
-              </span>
-              <button
-                type="button"
-                onClick={() => onOpenRegistration('usado')}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs inline-flex items-center justify-center gap-2 cursor-pointer shadow-xs"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Cadastrar Novo Exemplar Usado</span>
-              </button>
+                {/* Ação de Vinculação de Entrada de Estoque no Novo */}
+                {!stockLinkSuccess ? (
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-bold text-emerald-950">
+                        Quantidade a dar entrada no Novo:
+                      </span>
+                      <div className="inline-flex items-center border border-emerald-300 rounded-lg bg-white overflow-hidden shadow-2xs">
+                        <button
+                          type="button"
+                          onClick={() => setStockQuantityToAdd(Math.max(1, stockQuantityToAdd - 1))}
+                          className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="px-3 py-1 font-mono font-bold text-xs text-slate-900 min-w-8 text-center">
+                          {stockQuantityToAdd}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setStockQuantityToAdd(stockQuantityToAdd + 1)}
+                          className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleLinkStockSubmit(novoMatch)}
+                      disabled={isLinkingStock}
+                      id="btn-link-stock-multiple"
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer disabled:opacity-60"
+                    >
+                      {isLinkingStock ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Vinculando entrada...</span>
+                        </>
+                      ) : (
+                        <>
+                          <PackageCheck className="w-4 h-4" />
+                          <span>Vincular Entrada ao Cadastro Existente</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bg-emerald-100 border border-emerald-300 rounded-lg p-3 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-emerald-900 font-medium">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                      <span>{stockLinkSuccess.message} (Saldo: {stockLinkSuccess.newStock} UN).</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={onResetForNextBook}
+                      className="px-3 py-1.5 rounded-md bg-emerald-800 hover:bg-emerald-900 text-white font-semibold cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+                    >
+                      <span>Próximo Produto</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* SEÇÃO 2: EXEMPLAR(ES) USADO(S) ANTERIORES E AÇÃO PARA CADASTRAR OUTRO USADO */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 sm:p-5 space-y-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-600 text-white tracking-wide">
+                    Exemplares Usados ({usedMatches.length})
+                  </span>
+                  <h5 className="font-bold text-slate-900 text-sm">
+                    {usedMatches.length > 0
+                      ? 'Exemplar(es) Usado(s) Anteriores Cadastrados nesta Edição'
+                      : 'Nenhum exemplar usado cadastrado ainda'}
+                  </h5>
+                </div>
+                <span className="text-xs text-slate-500">
+                  Cada usado possui etiqueta e estado físico próprio
+                </span>
+              </div>
+
+              {/* Lista dos Usados anteriores se houver */}
+              {usedMatches.length > 0 && (
+                <div className="divide-y divide-slate-200 border border-slate-200 rounded-lg overflow-hidden bg-white text-xs">
+                  {usedMatches.map((used) => (
+                    <div
+                      key={used.id}
+                      className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-slate-50/80 transition-colors"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 font-mono text-xs">
+                            Pai: {used.parentCode}
+                          </span>
+                          <span className="text-slate-300">·</span>
+                          <span className="font-mono text-slate-600 text-xs">
+                            Filho: {used.childCode}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 line-clamp-1">{used.title}</p>
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] font-mono text-slate-700 shrink-0">
+                        {used.price && <span>Preço: R$ {used.price}</span>}
+                        <span className="px-1.5 py-0.5 rounded bg-slate-100 font-semibold">
+                          Estoque: {used.stock ?? 1} UN
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Ação em destaque: Cadastrar Novo Exemplar Usado */}
+              <div className="pt-1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-indigo-50/70 border border-indigo-100 rounded-xl p-3.5">
+                <div>
+                  <span className="font-bold text-indigo-950 text-xs block">
+                    Deseja catalogar um novo exemplar físico USADO?
+                  </span>
+                  <p className="text-[11px] text-indigo-800 mt-0.5">
+                    Os dados bibliográficos da obra serão reaproveitados. Você informará a nova etiqueta (Código Pai) e o estado físico deste exemplar.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => onOpenRegistration('usado')}
+                  id="btn-create-another-used"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer shrink-0"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Cadastrar Novo Exemplar Usado</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Opção secundária se não houver Novo cadastrado ainda */}
+              {!novoMatch && (
+                <div className="pt-1 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+                  <span>Não existe cadastro de Produto Novo para esta edição.</span>
+                  <button
+                    type="button"
+                    onClick={() => onOpenRegistration('novo')}
+                    className="text-blue-700 hover:text-blue-800 font-semibold underline cursor-pointer"
+                  >
+                    Criar Cadastro como Produto Novo →
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {/* 6. CENÁRIO D: PRODUTO NÃO EXISTENTE (Nem Novo, Nem Edição) */}
-        {!isChecking && !checkError && (isNotFound || (!isNewProductFound && !isUsedEditionFound && !isMultipleMatches && !checkResult?.exists)) && (
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-start gap-3.5">
-                <div className="p-2.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-200 shrink-0">
-                  <Sparkles className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-base font-bold text-slate-900">
-                      Produto não encontrado na Magazord
-                    </h4>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                      Pendente de Cadastro
-                    </span>
+        {!isChecking &&
+          !checkError &&
+          (isNotFound ||
+            (!isNewProductFound &&
+              !isUsedEditionFound &&
+              !isMultipleMatches &&
+              !checkResult?.exists)) && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div className="p-2.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-200 shrink-0">
+                    <Sparkles className="w-5 h-5 text-blue-600" />
                   </div>
-                  <p className="text-xs sm:text-sm text-slate-600 mt-1">
-                    Os dados bibliográficos foram pré-carregados automaticamente. Revise e cadastre em tela única.
-                  </p>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-base font-bold text-slate-900">
+                        Produto não encontrado na Magazord
+                      </h4>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                        Pendente de Cadastro
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-slate-600 mt-1">
+                      Os dados bibliográficos foram pré-carregados automaticamente. Revise e cadastre em tela única.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Botão em destaque "CRIAR NOVO CADASTRO" */}
+                <div className="shrink-0 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onOpenRegistration('novo')}
+                    id="btn-open-magazord-registration"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm shadow-md hover:shadow-lg transition-all cursor-pointer transform hover:-translate-y-0.5"
+                  >
+                    <Sparkles className="w-4 h-4 fill-white/20" />
+                    <span>CRIAR NOVO CADASTRO</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
 
-              {/* Botão em destaque "CRIAR NOVO CADASTRO" */}
-              <div className="shrink-0 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => onOpenRegistration('novo')}
-                  id="btn-open-magazord-registration"
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm shadow-md hover:shadow-lg transition-all cursor-pointer transform hover:-translate-y-0.5"
-                >
-                  <Sparkles className="w-4 h-4 fill-white/20" />
-                  <span>CRIAR NOVO CADASTRO</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Opções rápidas de condição inicial */}
-            <div className="bg-blue-50/70 border border-blue-100 rounded-lg p-3 text-xs text-blue-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-              <span className="flex items-center gap-1.5">
-                <BookOpen className="w-3.5 h-3.5 text-blue-700 shrink-0" />
-                <span>
-                  Título, autores, medidas, peso, capa e descrição já foram pré-preenchidos a partir da pesquisa ISBN.
+              {/* Opções rápidas de condição inicial */}
+              <div className="bg-blue-50/70 border border-blue-100 rounded-lg p-3 text-xs text-blue-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+                  <span>
+                    Título, autores, medidas, peso, capa e descrição já foram pré-preenchidos a partir da pesquisa ISBN.
+                  </span>
                 </span>
-              </span>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-slate-500 text-[11px]">Abrir como:</span>
-                <button
-                  type="button"
-                  onClick={() => onOpenRegistration('novo')}
-                  className="px-2.5 py-1 rounded bg-white border border-blue-200 text-blue-700 font-semibold hover:bg-blue-50 transition-colors cursor-pointer text-xs"
-                >
-                  Novo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onOpenRegistration('usado')}
-                  className="px-2.5 py-1 rounded bg-white border border-indigo-200 text-indigo-700 font-semibold hover:bg-indigo-50 transition-colors cursor-pointer text-xs"
-                >
-                  Usado
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-slate-500 text-[11px]">Abrir como:</span>
+                  <button
+                    type="button"
+                    onClick={() => onOpenRegistration('novo')}
+                    className="px-2.5 py-1 rounded bg-white border border-blue-200 text-blue-700 font-semibold hover:bg-blue-50 transition-colors cursor-pointer text-xs"
+                  >
+                    Novo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onOpenRegistration('usado')}
+                    className="px-2.5 py-1 rounded bg-white border border-indigo-200 text-indigo-700 font-semibold hover:bg-indigo-50 transition-colors cursor-pointer text-xs"
+                  >
+                    Usado
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
       </div>
     </div>
   );

@@ -256,5 +256,56 @@ Nenhuma outra regra de negócio (busca, ISBN, câmera, códigos Pai/Filho, EAN, 
 - `npm run lint` (`tsc --noEmit`): **0 erros**.
 - `npm run build`: **compilado com sucesso**.
 
+---
+
+## 11. Correção da Consulta Magazord para Convivência de Produtos Novos e Exemplares Usados
+
+**Data da Correção**: 2026-09-28  
+**Contexto**: Ocorrência onde o cadastro de um exemplar Usado sobrepunha o cadastro comercial Novo do mesmo ISBN no banco simulado local, fazendo desaparecer a opção de vinculação de entrada de estoque no Produto Novo em Modo Padrão (Auto).
+
+### 1. Diagnóstico e Causa Raiz:
+1. **Estrutura de Armazenamento Chave-Valor Único**: O serviço `magazordMockService` gravava no `localStorage` sob o formato `db[ean] = data`. Ao cadastrar um exemplar Usado do mesmo ISBN, o objeto do Produto Novo era sobrescrito pelo registro do Usado.
+2. **Priorização em Modo Auto**: Ao consultar em modo Auto, o sistema lia apenas o último registro salvo. Como este continha `condition: 'usado'`, o status retornado era `USED_EDITION_FOUND`, omitindo a existência do cadastro Novo e impossibilitando novas entradas de estoque.
+3. **Modos Forçados vs Modo Auto**: Para evitar qualquer ambiguidade visual durante os testes, foi adicionado um indicador explícito com botão de retorno imediato caso algum modo forçado esteja ativado.
+
+### 2. Solução Implementada:
+1. **Estrutura Multi-Registros por ISBN**:
+   - `db[cleanEan]` agora armazena uma lista (`SimulatedRecord[]`).
+   - O cadastro de Produto Novo atualiza ou insere o registro comercial Novo daquela edição.
+   - Cada cadastro de Exemplar Usado adiciona um exemplar independente (`id` próprio, etiqueta física/Código Pai própria, preço e observações próprias), **preservando o Produto Novo e todos os Usados anteriores**.
+2. **Classificação Determinística de Múltiplos Registros (`MULTIPLE_MATCHES`)**:
+   - Quando um ISBN possui um Produto Novo cadastrado e um ou mais Exemplares Usados, a consulta classifica o resultado obrigatoriamente como `MULTIPLE_MATCHES`.
+   - A existência de um Usado **nunca oculta** o cadastro comercial Novo compatível.
+   - Exibe a ficha do Produto Novo com seu estoque atual e o botão **"Vincular Entrada ao Cadastro Existente"**.
+   - Exibe separadamente a lista dos Usados anteriores e mantém o botão em destaque **"Cadastrar Novo Exemplar Usado"**.
+3. **Isolamento da Ação de Entrada de Estoque**:
+   - A vinculação de estoque incrementa exclusivamente o estoque do Produto Novo correspondente, sem alterar os exemplares Usados.
+4. **Sincronização do Modo de Teste**:
+   - `MagazordStatusCard` sincroniza dinamicamente o estado com `magazordMockService.getSimulationConfig().mode` e exibe aviso com botão de ação rápida caso o modo forçado esteja ligado.
+
+### 3. Arquivos e Linhas Alteradas:
+- **`src/services/magazordMockService.ts`**:
+  - Linhas 35-120: Implementação do banco simulado multi-registros (`Record<string, SimulatedRecord[]>`), migração transparente de `v2` e normalização de chaves via `cleanIsbn`.
+  - Linhas 215-320: Lógica de classificação em modo `auto`, detecção de `MULTIPLE_MATCHES` com Novo + Usados, preservação de itens em `createProduct` e direcionamento de estoque em `addStockToExistingProduct`.
+- **`src/components/magazord/MagazordStatusCard.tsx`**:
+  - Linhas 48-115: Sincronização do modo de teste via `useEffect`, labels amigáveis e alerta visual de modo forçado.
+  - Linhas 450-590: Renderização estruturada de `MULTIPLE_MATCHES` com Seção 1 (Produto Novo Existente com seletor de entrada de estoque) e Seção 2 (Exemplares Usados Anteriores com botão para cadastrar novo exemplar).
+- **`src/App.tsx`**:
+  - Linhas 214-250: Atualização de `handleLinkStock` para sincronizar o estoque no estado local imediatamente e suporte a `targetChildCode`.
+  - Linhas 260-290: Em `handleSuccessRegistration`, consulta imediata do banco simulado atualizado para refletir o estado de múltiplos registros.
+
+### 4. Resultados do Teste da Sequência Completa:
+Executado script automatizado com simulação de ponta a ponta:
+- **Passo 1 (Novo)**: Cadastro do Produto Novo (Pai: `LV26579-P`, Filho: `9788553131303`, Qtd: 1). → **OK**
+- **Passo 2 (Consultar)**: Retorna `NEW_PRODUCT_FOUND`, `canReuseCommercialRegistration: true`, estoque 1 UN. → **OK**
+- **Passo 3 (Entrada no Novo)**: Entrada de +2 unidades vinculada com sucesso (novo estoque: 3 UN). → **OK**
+- **Passo 4 (Cadastrar Usado)**: Cadastro do Exemplar Usado 1 (Pai: `LV10100-P`, Filho: `LV10100`, Preço: R$ 25,00, Qtd: 1). → **OK**
+- **Passo 5 (Consultar novamente)**: Retorna `MULTIPLE_MATCHES` com 2 registros (Novo com estoque 3 UN e Usado 1 com estoque 1 UN). O Usado não ocultou o Novo. Ambas as ações disponíveis. → **OK**
+- **Passo 6 (Entrada no Novo)**: Entrada de +1 unidade vinculada ao Produto Novo (novo estoque: 4 UN; Usado 1 mantido em 1 UN). → **OK**
+- **Passo 7 (Cadastrar outro Usado)**: Cadastro do Exemplar Usado 2 (Pai: `LV10105-P`, Filho: `LV10105`, Preço: R$ 19,90, Qtd: 1). → **OK**
+- **Passo 8 (Consultar novamente)**: Retorna `MULTIPLE_MATCHES` com 3 registros (1 Novo com estoque 4 UN e 2 Usados independentes com 1 UN cada). → **OK**
+- **Testes Técnicos**: `npm run lint` (`tsc --noEmit`): **0 erros**. `npm run build`: **compilado com sucesso**.
+
+
 
 
