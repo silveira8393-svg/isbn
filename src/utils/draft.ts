@@ -134,6 +134,7 @@ export function createRegistrationDraft(
 
     synopsis: sanitizeSynopsis(book.synopsis || book.description || ''),
     usedBookConditionNotes: '',
+    description: sanitizeSynopsis(book.synopsis || book.description || ''),
 
     price: '', // Regra: começa vazio
     quantity: 1, // Regra: padrão 1
@@ -146,4 +147,38 @@ export function createRegistrationDraft(
     fiscalOrigin: '0 - Nacional',
     unit: 'UN',
   };
+}
+
+/**
+ * Compõe o texto final do campo único de descrição para a Magazord:
+ *
+ * LIVRO NOVO:
+ * - Apenas a sinopse / resumo da obra.
+ *
+ * LIVRO USADO:
+ * - Se houver estado do exemplar: [estado do exemplar] + \n\n + [sinopse]
+ * - Se o estado do exemplar estiver vazio: apenas a [sinopse] (sem quebras inúteis).
+ */
+export function buildFinalDescription(draft: {
+  condition: BookCondition;
+  usedBookConditionNotes?: string;
+  synopsis?: string;
+}): string {
+  const synopsis = (draft.synopsis || '').trim();
+
+  if (draft.condition === 'novo') {
+    return synopsis;
+  }
+
+  const conditionNotes = (draft.usedBookConditionNotes || '').trim();
+
+  if (conditionNotes && synopsis) {
+    return `${conditionNotes}\n\n${synopsis}`;
+  }
+
+  if (conditionNotes) {
+    return conditionNotes;
+  }
+
+  return synopsis;
 }

@@ -83,6 +83,7 @@ export interface RegistrationDraft {
   // Conteúdo
   synopsis: string;
   usedBookConditionNotes?: string; // Observações físicas do exemplar quando Usado
+  description?: string; // Descrição final composta (para envio à Magazord)
 
   // Comercial e Estoque
   price: string; // Preço de venda em R$ (começa vazio)

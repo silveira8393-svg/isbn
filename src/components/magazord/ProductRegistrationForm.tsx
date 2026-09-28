@@ -10,12 +10,12 @@ import {
   BookInfo,
 } from '../../types';
 import { magazordMockService } from '../../services/magazordMockService';
+import { buildFinalDescription } from '../../utils/draft';
 import ProductIdentitySection from './ProductIdentitySection';
 import CategoryAndBrandSection from './CategoryAndBrandSection';
 import CommercialSection from './CommercialSection';
 import BibliographicSection from './BibliographicSection';
 import PhysicalAttributesSection from './PhysicalAttributesSection';
-import UsedBookConditionSection from './UsedBookConditionSection';
 import ImagesSection from './ImagesSection';
 import SynopsisSection from './SynopsisSection';
 import AdvancedFiscalSection from './AdvancedFiscalSection';
@@ -111,9 +111,14 @@ export default function ProductRegistrationForm({
     setIsSubmitting(true);
 
     try {
-      const result = await magazordMockService.createProduct(draft);
+      const finalDescription = buildFinalDescription(draft);
+      const draftToSubmit: RegistrationDraft = {
+        ...draft,
+        description: finalDescription,
+      };
+      const result = await magazordMockService.createProduct(draftToSubmit);
       setSuccessResult(result);
-      onSuccessRegistration(result, draft);
+      onSuccessRegistration(result, draftToSubmit);
     } catch (err: any) {
       console.error('Falha no cadastro simulado Magazord', err);
       setSubmitError(
@@ -126,6 +131,8 @@ export default function ProductRegistrationForm({
 
   // Se o cadastro foi concluído com sucesso, exibir a tela de confirmação
   if (successResult) {
+    const sentDescription = draft.description || buildFinalDescription(draft);
+
     return (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-md p-6 sm:p-10 max-w-3xl mx-auto my-6 animate-fade-in text-center space-y-6">
         <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center mx-auto shadow-sm">
@@ -176,6 +183,18 @@ export default function ProductRegistrationForm({
             <span className="text-slate-500 block">Estoque Inicial</span>
             <span className="font-bold text-slate-900 text-sm">{draft.quantity} UN</span>
           </div>
+
+          {/* Descrição Final Composta enviada ao Magazord */}
+          {sentDescription && (
+            <div className="col-span-1 sm:col-span-2 pt-2 border-t border-slate-200">
+              <span className="text-slate-500 block font-semibold mb-1">
+                Descrição Enviada ao Magazord (Campo Único)
+              </span>
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-slate-700 whitespace-pre-line text-[11px] leading-relaxed max-h-32 overflow-y-auto">
+                {sentDescription}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Ação principal: Próximo livro */}
@@ -314,19 +333,13 @@ export default function ProductRegistrationForm({
         onChange={onUpdateDraft}
       />
 
-      {/* Seção Especial: Estado do Exemplar Usado (quando Usado) */}
-      <UsedBookConditionSection
-        draft={draft}
-        onChange={onUpdateDraft}
-      />
-
       {/* Seção 6: Galeria de Imagens */}
       <ImagesSection
         draft={draft}
         onChange={onUpdateDraft}
       />
 
-      {/* Seção 7: Descrição & Sinopse */}
+      {/* Seção 7: Descrição Única (Sinopse e, se Usado, Estado do Exemplar) */}
       <SynopsisSection
         draft={draft}
         onChange={onUpdateDraft}

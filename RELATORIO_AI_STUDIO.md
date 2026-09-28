@@ -148,3 +148,69 @@ Quando a API oficial da Magazord estiver disponível:
 3. **Zero Overflow**:
    - Eliminado qualquer risco de rolagem horizontal através de `min-w-0`, `truncate` e classes fluidas de flexbox/grid sem travas de `min-width` arbitrárias.
 
+---
+
+## 9. Ajuste da Descrição para Livros Novos e Usados (Campo Único Magazord)
+
+**Data da Correção**: 2026-09-28  
+**Escopo Restrito**: Unificação do campo de descrição conforme regra de negócio oficial do proprietário.
+
+### Regra Implementada:
+O Magazord utiliza um campo único de descrição tanto para livros novos quanto para usados:
+- **Livro Novo**: O campo de descrição contém exclusivamente a **sinopse / resumo bibliográfico** editado. A área de estado do exemplar não é exibida.
+- **Livro Usado**: O mesmo campo contém, no início, o **estado físico manual do exemplar**, seguido de uma **linha em branco (`\n\n`)**, e em seguida a **sinopse / resumo bibliográfico**. Se o estado estiver vazio, o texto final conterá apenas a sinopse (sem linhas em branco inúteis).
+
+### Função Centralizada de Composição:
+Implementada em `src/utils/draft.ts`:
+```typescript
+export function buildFinalDescription(draft: {
+  condition: BookCondition;
+  usedBookConditionNotes?: string;
+  synopsis?: string;
+}): string {
+  const synopsis = (draft.synopsis || '').trim();
+
+  if (draft.condition === 'novo') {
+    return synopsis;
+  }
+
+  const conditionNotes = (draft.usedBookConditionNotes || '').trim();
+
+  if (conditionNotes && synopsis) {
+    return `${conditionNotes}\n\n${synopsis}`;
+  }
+
+  if (conditionNotes) {
+    return conditionNotes;
+  }
+
+  return synopsis;
+}
+```
+
+### Arquivos Alterados:
+1. **`src/types.ts`**: Adicionado campo opcional `description?: string` em `RegistrationDraft` para armazenar a descrição final composta.
+2. **`src/utils/draft.ts`**: Criada e exportada a função `buildFinalDescription` e inicializado `description` em `createRegistrationDraft`.
+3. **`src/components/magazord/SynopsisSection.tsx`**:
+   - Para **Novo**: Exibe apenas a área de sinopse/resumo da obra com botão de sanitização e contagem de caracteres.
+   - Para **Usado**: Exibe aviso destacado ("Essas informações serão unidas na descrição final do produto"), área manual livre para o "Estado do exemplar" (inicia vazia, com chips de sugestões rápidas opcionais) e a área de "Sinopse / resumo", além de botão de prévia do texto final composto para o Magazord.
+4. **`src/components/magazord/ProductRegistrationForm.tsx`**:
+   - Integrada a chamada de `buildFinalDescription` no momento de submissão do formulário (`handleSubmit`), enviando `description: finalDescription`.
+   - Removida a renderização isolada de `UsedBookConditionSection`, eliminando a aparência confusa de dois campos de destino independentes.
+   - Exibição da descrição final composta no card de confirmação de cadastro concluído com sucesso.
+
+### Testes Realizados:
+- **Cenário 1 — Novo**: Sinopse `"Resumo do livro"` -> Resultado final: `"Resumo do livro"`. (Aprovado)
+- **Cenário 2 — Usado com observação**: Estado `"Livro em bom estado, com leves sinais de uso."` + Sinopse `"Resumo do livro"` -> Resultado final: `"Livro em bom estado, com leves sinais de uso.\n\nResumo do livro"`. (Aprovado)
+- **Cenário 3 — Usado sem observação**: Estado vazio + Sinopse `"Resumo do livro"` -> Resultado final: `"Resumo do livro"`. (Aprovado)
+- **Cenário 4 — Troca de condição (Novo → Usado → Novo → Usado)**:
+  - Ao alternar para Novo: oculta o estado do exemplar e gera descrição apenas com a sinopse.
+  - Ao retornar para Usado: preserva o texto digitado anteriormente sem nenhuma duplicação de texto. (Aprovado)
+- **Testes Técnicos**:
+  - `npm run lint` (`tsc --noEmit`): 0 erros.
+  - `npm run build`: compilação executada com sucesso.
+
+### Confirmação de Integridade:
+Nenhuma outra regra de negócio (busca, ISBN, câmera, códigos Pai/Filho, EAN, categorias, preços, dimensões, estoque, fiscal ou histórico) foi modificada.
+
+
