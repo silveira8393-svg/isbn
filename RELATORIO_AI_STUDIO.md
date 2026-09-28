@@ -125,3 +125,26 @@ Quando a API oficial da Magazord estiver disponível:
 2. **Segurança de credenciais**: O frontend não conterá chaves ou tokens; as requisições serão autenticadas via backend.
 3. **Mapeamento de Categorias**: O array `CATEGORIES_BY_CONDITION` em `src/utils/draft.ts` poderá ser carregado dinamicamente a partir de um endpoint de categorias da Magazord.
 4. **Leitura por Câmera da Etiqueta Física**: A interface do campo Código Pai já possui o espaço e estilização visual preparados para disparar o leitor de código de barras físico.
+
+---
+
+## 8. Ajuste Exclusivo de Responsividade do Cabeçalho e Navegação
+
+**Data da Correção**: 2026-09-27  
+**Escopo Restrito**: Exclusivamente em `src/components/Header.tsx`, sem alterações em outros componentes, lógica ou serviços.
+
+### Diagnóstico do Problema Anterior:
+- **No Desktop**: O container usava `flex justify-between`, empurrando a barra de navegação para a extremidade direita (1280px), deixando-a distante e desequilibrada em relação ao conteúdo central.
+- **No Mobile**: A linha única causava aperto de espaço e transbordamento horizontal (*overflow-x*), espremendo o logo e cortando os botões de navegação.
+
+### Solução Aplicada:
+1. **Desktop / Tablet (`md:` e superior)**:
+   - Estrutura em grid `md:grid-cols-[1fr_auto_1fr]` dentro do mesmo container `max-w-7xl mx-auto px-4 sm:px-6` do corpo da aplicação.
+   - Identidade visual mantida à esquerda, navegação centralizada de forma equilibrada, e coluna espelho à direita para garantir alinhamento perfeito sem colar na borda.
+2. **Mobile (`< md`)**:
+   - Layout organizado em duas linhas limpas:
+     - **Linha 1**: Logo/ícone + título compacto ("Consulta ISBN" com suporte a `truncate`) + subtítulo reduzido.
+     - **Linha 2**: Navegação com `grid grid-cols-3` (`repeat(3, minmax(0, 1fr))`), ocupando 100% da largura com áreas de toque confortáveis, textos truncados de segurança, ícones proporcionais, indicador ativo destacado e badges de rascunho/histórico intactos.
+3. **Zero Overflow**:
+   - Eliminado qualquer risco de rolagem horizontal através de `min-w-0`, `truncate` e classes fluidas de flexbox/grid sem travas de `min-width` arbitrárias.
+
