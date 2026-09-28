@@ -49,9 +49,15 @@ export interface BookInfo {
 
 export type BookCondition = 'novo' | 'usado';
 
+export type RegistrationMode =
+  | 'new_product'
+  | 'reuse_existing_new'
+  | 'new_used_from_known_edition';
+
 export interface RegistrationDraft {
   // Identificação e códigos
   condition: BookCondition;
+  registrationMode?: RegistrationMode;
   parentCode: string; // Código Pai (ex.: LV26579-P), obrigatório no cadastro
   childCode: string; // Código Filho (automático com ISBN-13 se novo, manual se usado)
   ean: string; // EAN = ISBN-13
@@ -100,13 +106,38 @@ export interface RegistrationDraft {
   unit: string;
 }
 
+export type MagazordMatchStatus =
+  | 'NOT_FOUND'
+  | 'NEW_PRODUCT_FOUND'
+  | 'USED_EDITION_FOUND'
+  | 'NEW_AND_USED_FOUND'
+  | 'MULTIPLE_MATCHES'
+  | 'ERROR';
+
+export interface MagazordMatchItem {
+  id: string;
+  parentCode: string;
+  childCode: string;
+  condition: BookCondition;
+  title: string;
+  sku?: string;
+  stock?: number;
+  price?: string;
+}
+
 export interface MagazordProductCheck {
   exists: boolean;
+  status: MagazordMatchStatus;
+  catalogMatch: boolean; // Se a edição ou ISBN consta no catálogo Magazord
+  canReuseCommercialRegistration: boolean; // Se pode reaproveitar o cadastro comercial existente (apenas para Novo)
   parentCode?: string;
   childCode?: string;
   title?: string;
   statusMessage?: string;
   sku?: string;
+  existingCondition?: BookCondition;
+  currentStock?: number;
+  matches?: MagazordMatchItem[];
 }
 
 export interface MagazordRegistrationResult {
@@ -128,6 +159,11 @@ export interface SearchHistoryItem {
   parentCode?: string;
   childCode?: string;
   condition?: BookCondition;
+  operationType?:
+    | 'novo_cadastro'
+    | 'reaproveitamento_produto_novo'
+    | 'novo_usado_com_edicao_conhecida'
+    | 'consulta_apenas';
 }
 
 export interface PriceComparisonItem {

@@ -124,16 +124,24 @@ export default function SearchHistoryGroup({
               {/* Status Magazord no Histórico */}
               {item.magazordStatus && (
                 <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                  {item.magazordStatus === 'cadastrado_simulado' && (
+                  {item.operationType === 'reaproveitamento_produto_novo' ? (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Entrada Vinculada (Novo)
+                    </span>
+                  ) : item.operationType === 'novo_usado_com_edicao_conhecida' ? (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                      Novo Usado Cadastrado
+                    </span>
+                  ) : item.magazordStatus === 'cadastrado_simulado' ? (
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                       Cadastrado Magazord
                     </span>
-                  )}
-                  {item.magazordStatus === 'localizado' && (
+                  ) : item.magazordStatus === 'localizado' ? (
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
                       Localizado Magazord
                     </span>
-                  )}
+                  ) : null}
+
                   {item.condition && (
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase bg-slate-100 text-slate-700">
                       {item.condition}

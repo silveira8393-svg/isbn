@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BookInfo, BookCondition, RegistrationDraft } from '../types';
+import { BookInfo, BookCondition, RegistrationDraft, RegistrationMode } from '../types';
 import { sanitizeSynopsis } from './sanitizer';
 import { cleanIsbn } from './isbn';
 
@@ -56,7 +56,8 @@ function normalizeWeightToGrams(book: BookInfo): number | undefined {
  */
 export function createRegistrationDraft(
   book: BookInfo,
-  initialCondition: BookCondition = 'novo'
+  initialCondition: BookCondition = 'novo',
+  registrationMode: RegistrationMode = 'new_product'
 ): RegistrationDraft {
   const isbn13 = cleanIsbn(book.isbn13 || '');
   const isbn10 = cleanIsbn(book.isbn10 || '');
@@ -64,7 +65,7 @@ export function createRegistrationDraft(
 
   // Determina Código Filho conforme regra:
   // Se NOVO: pré-preenchido com ISBN-13
-  // Se USADO: campo manual vazio
+  // Se USADO: campo manual VAZIO (Código Filho NÃO é o EAN/ISBN)
   const childCode = initialCondition === 'novo' ? (isbn13 || ean) : '';
 
   // Lista de imagens sem duplicatas
@@ -89,7 +90,7 @@ export function createRegistrationDraft(
     if (match) year = match[1];
   }
 
-  // Categoria inicial
+  // Categoria inicial conforme a condição
   const availableCategories = CATEGORIES_BY_CONDITION[initialCondition];
   const initialCategory = availableCategories[0];
 
@@ -107,11 +108,12 @@ export function createRegistrationDraft(
 
   return {
     condition: initialCondition,
-    parentCode: '', // Obrigatório manual (etiqueta física da loja, ex: LV26579-P)
-    childCode,
-    ean,
-    isbn13,
-    isbn10,
+    registrationMode,
+    parentCode: '', // Sempre manual (etiqueta física da loja, ex: LV26579-P)
+    childCode, // Vazio se usado, ISBN-13 se novo
+    ean, // Preservado
+    isbn13, // Preservado
+    isbn10, // Preservado
 
     category: initialCategory,
     brand,
@@ -133,12 +135,12 @@ export function createRegistrationDraft(
     depth,
 
     synopsis: sanitizeSynopsis(book.synopsis || book.description || ''),
-    usedBookConditionNotes: '',
+    usedBookConditionNotes: '', // Sempre vazio no início
     description: sanitizeSynopsis(book.synopsis || book.description || ''),
 
-    price: '', // Regra: começa vazio
-    quantity: 1, // Regra: padrão 1
-    location: 'Sebo Livraria Sul', // Regra: fixo da loja
+    price: '', // Sempre começa vazio
+    quantity: 1, // Padrão 1
+    location: 'Sebo Livraria Sul', // Fixo da loja
 
     mainImageUrl,
     additionalImageUrls,

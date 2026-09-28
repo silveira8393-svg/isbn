@@ -13,10 +13,12 @@ import MagazordStatusCard from './components/magazord/MagazordStatusCard';
 import ProductRegistrationForm from './components/magazord/ProductRegistrationForm';
 import {
   BookInfo,
+  BookCondition,
   SearchHistoryItem,
   RegistrationDraft,
   MagazordProductCheck,
   MagazordRegistrationResult,
+  MagazordMatchItem,
 } from './types';
 import { searchBookByIsbnBrasilApi } from './services/brasilApi';
 import {
@@ -199,6 +201,50 @@ export default function App() {
     localStorage.removeItem('sebo_isbn_history_v1');
   };
 
+  // Abre a tela única de cadastro garantindo a condição desejada (Novo ou Usado)
+  const handleOpenRegistration = (condition?: BookCondition) => {
+    if (!foundBook) return;
+    const targetCondition = condition || (registrationDraft?.condition || 'novo');
+    const draft = createRegistrationDraft(foundBook, targetCondition);
+    setRegistrationDraft(draft);
+    setActiveTab('cadastro');
+  };
+
+  // Vincula entrada de estoque a um produto NOVO existente simulado
+  const handleLinkStock = async (
+    quantityToAdd: number,
+    targetItem?: MagazordMatchItem
+  ) => {
+    if (!foundBook) throw new Error('Nenhum livro selecionado');
+    const ean = targetItem?.childCode || foundBook.isbn13 || foundBook.isbn10 || searchedTerm;
+    const result = await magazordMockService.addStockToExistingProduct(ean, quantityToAdd);
+
+    // Atualiza o histórico com o tipo de operação correto
+    setHistory((prevHistory) => {
+      const updated = prevHistory.map((item) => {
+        if (item.isbn === searchedTerm || item.isbn === ean) {
+          return {
+            ...item,
+            magazordStatus: 'localizado' as const,
+            condition: 'novo' as const,
+            operationType: 'reaproveitamento_produto_novo' as const,
+            parentCode: targetItem?.parentCode || magazordCheckResult?.parentCode,
+            childCode: targetItem?.childCode || magazordCheckResult?.childCode,
+          };
+        }
+        return item;
+      });
+      try {
+        localStorage.setItem('sebo_isbn_history_v1', JSON.stringify(updated));
+      } catch {
+        // ignora
+      }
+      return updated;
+    });
+
+    return result;
+  };
+
   // Sucesso no cadastro Magazord simulado
   const handleSuccessRegistration = (
     result: MagazordRegistrationResult,
@@ -206,6 +252,11 @@ export default function App() {
   ) => {
     // Atualiza o histórico local
     const currentIsbn = searchedTerm || savedDraft.isbn13 || savedDraft.ean;
+    const opType =
+      savedDraft.condition === 'usado'
+        ? ('novo_usado_com_edicao_conhecida' as const)
+        : ('novo_cadastro' as const);
+
     setHistory((prevHistory) => {
       const updated = prevHistory.map((item) => {
         if (item.isbn === currentIsbn || (savedDraft.isbn13 && item.isbn === savedDraft.isbn13)) {
@@ -215,6 +266,7 @@ export default function App() {
             parentCode: result.parentCode,
             childCode: result.childCode,
             condition: savedDraft.condition,
+            operationType: opType,
           };
         }
         return item;
@@ -230,6 +282,9 @@ export default function App() {
     // Atualiza estado de checagem para mostrar como existente
     setMagazordCheckResult({
       exists: true,
+      status: savedDraft.condition === 'novo' ? 'NEW_PRODUCT_FOUND' : 'USED_EDITION_FOUND',
+      catalogMatch: true,
+      canReuseCommercialRegistration: savedDraft.condition === 'novo',
       parentCode: result.parentCode,
       childCode: result.childCode,
       title: savedDraft.title,
@@ -268,6 +323,7 @@ export default function App() {
       'Título',
       'Autor(es)',
       'Condição',
+      'Tipo de Operação',
       'Código Pai',
       'Código Filho',
       'Status Magazord',
@@ -278,6 +334,14 @@ export default function App() {
     const rows = history.map((item) => {
       const authors = Array.isArray(item.authors) && item.authors.length > 0 ? item.authors.join(' | ') : '';
       const condition = item.condition ? (item.condition === 'novo' ? 'Novo' : 'Usado') : '';
+      const operationType =
+        item.operationType === 'reaproveitamento_produto_novo'
+          ? 'Reaproveitamento Comercial (Novo)'
+          : item.operationType === 'novo_usado_com_edicao_conhecida'
+          ? 'Novo Usado (Edição Conhecida)'
+          : item.operationType === 'novo_cadastro'
+          ? 'Novo Cadastro Completo'
+          : 'Consulta';
       const parentCode = item.parentCode || '';
       const childCode = item.childCode || '';
       const magazordStatus =
@@ -300,6 +364,7 @@ export default function App() {
         item.title,
         authors,
         condition,
+        operationType,
         parentCode,
         childCode,
         magazordStatus,
@@ -395,15 +460,16 @@ export default function App() {
               {/* Found Book: Status Magazord + Ficha Técnica Completa */}
               {foundBook && !isLoading && (
                 <div className="space-y-6 animate-fade-in">
-                  {/* Card de Status e Ação Magazord (Regras 2, 3 e 4) */}
+                  {/* Card de Status e Ação Magazord (Regras de Novos e Usados) */}
                   <MagazordStatusCard
                     checkResult={magazordCheckResult}
                     isChecking={isCheckingMagazord}
                     checkError={magazordCheckError}
                     book={foundBook}
-                    onOpenRegistration={() => setActiveTab('cadastro')}
+                    onOpenRegistration={handleOpenRegistration}
                     onRetryCheck={() => runMagazordCheck(searchedTerm, foundBook)}
                     onResetForNextBook={handleProcessNextBook}
+                    onLinkStock={handleLinkStock}
                   />
 
                   {/* Ficha Bibliográfica Completa (Preservada do projeto original) */}

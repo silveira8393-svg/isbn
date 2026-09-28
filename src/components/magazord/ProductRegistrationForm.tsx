@@ -299,6 +299,19 @@ export default function ProductRegistrationForm({
         </div>
       )}
 
+      {/* Banner de Contexto Operacional para Livros Usados (Edição Conhecida) */}
+      {draft.condition === 'usado' && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3.5 px-4 text-xs text-indigo-900 flex items-start gap-3">
+          <BookOpen className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-bold">Cadastro de Novo Exemplar Usado:</span>
+            <p className="mt-0.5 text-indigo-800">
+              Os dados bibliográficos da edição foram reaproveitados. Por ser um exemplar usado, insira a etiqueta física deste livro (Código Pai), Código Filho manual e as observações de conservação física.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Seção 1: Identificação & Condição */}
       <ProductIdentitySection
         draft={draft}

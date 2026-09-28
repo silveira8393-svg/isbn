@@ -213,4 +213,48 @@ export function buildFinalDescription(draft: {
 ### Confirmação de Integridade:
 Nenhuma outra regra de negócio (busca, ISBN, câmera, códigos Pai/Filho, EAN, categorias, preços, dimensões, estoque, fiscal ou histórico) foi modificada.
 
+---
+
+## 10. Regra de Negócio: Diferenciação entre Produtos NOVOS e USADOS na Magazord
+
+**Data da Implementação**: 2026-09-28  
+**Objetivo**: Distinguir com precisão entre o reaproveitamento de um **cadastro comercial existente** (exclusivo para livros Novos) e o reaproveitamento apenas dos **dados bibliográficos de uma edição** (para criação de um novo exemplar Usado).
+
+### 1. Diretriz Operacional Implementada:
+1. **Produto NOVO Encontrado**:
+   - Reconhece que o cadastro comercial já existe na Magazord.
+   - **Não** abre o formulário completo de criação de produto, **não** gera novo Código Filho e **não** solicita novo Código Pai.
+   - Exibe a mensagem: *"Cadastro existente localizado — Este produto novo já possui cadastro compatível na Magazord. Uma nova entrada poderá ser vinculada ao cadastro existente."*
+   - Permite informar a quantidade a dar entrada e acionar **"Vincular Entrada ao Cadastro Existente"** (simulado).
+   - Oferece opção rápida para o balcão caso o livro em mãos seja Usado: *"O exemplar físico em mãos é Usado? Cadastrar como Novo Exemplar Usado"*.
+
+2. **Edição Conhecida / Exemplar USADO**:
+   - Mesmo quando o ISBN/EAN já for conhecido na base da Magazord, o sistema reconhece que cada livro usado é um exemplar físico único.
+   - Reaproveita integralmente todos os **dados bibliográficos** (título, autores, editora, medidas, peso, capa e sinopse).
+   - Direciona o operador para **"CADASTRAR NOVO EXEMPLAR USADO"**, abrindo a tela de cadastro com:
+     - Condição: `Usado`
+     - Código Pai: vazio (obrigatório digitar a etiqueta física daquele exemplar)
+     - Código Filho: vazio (manual, não coincide com o ISBN)
+     - Preço próprio e estoque inicial = 1
+     - Campo de estado do exemplar + sinopse conforme a regra do campo único de descrição.
+
+3. **Produto NOVO Não Encontrado**:
+   - Apresenta o botão **"CRIAR NOVO CADASTRO"**, pré-preenchendo Código Filho com ISBN-13, exigindo Código Pai da nova etiqueta, categoria de Novo e descrição com sinopse.
+
+4. **Múltiplos Cadastros Localizados**:
+   - Apresenta visualmente a listagem dos cadastros encontrados (com status de Novo e Usados anteriores), permitindo vincular entrada ao item Novo ou criar um novo exemplar Usado independente.
+
+### 2. Arquivos Modificados / Criados:
+- **`src/types.ts`**: Adicionados os status `MagazordMatchStatus` (`NEW_PRODUCT_FOUND`, `USED_EDITION_FOUND`, `MULTIPLE_MATCHES`, etc.) e tipos para `MagazordMatchItem` e `operationType` no histórico.
+- **`src/services/magazordMockService.ts`**: Implementados os cenários `force_new_found`, `force_new_not_found`, `force_used_known`, `force_multiple_matches`, `addStockToExistingProduct` e persistência em banco de dados simulado local.
+- **`src/components/magazord/MagazordStatusCard.tsx`**: Interface completa com tratamento para todos os cenários (reaproveitamento comercial para novos, preparação para usados, múltiplos resultados e botões de teste).
+- **`src/components/magazord/ProductRegistrationForm.tsx`**: Banner contextual quando aberto para cadastro de exemplar usado a partir de edição conhecida.
+- **`src/components/SearchHistoryGroup.tsx`**: Badges informativas de tipo de operação (`Entrada Vinculada (Novo)`, `Novo Usado Cadastrado`).
+- **`src/App.tsx`**: Orquestração dos fluxos de abertura condicional (`handleOpenRegistration`) e vinculação de estoque (`handleLinkStock`). Exportação CSV atualizada com coluna `Tipo de Operação`.
+
+### 3. Validação Técnica:
+- `npm run lint` (`tsc --noEmit`): **0 erros**.
+- `npm run build`: **compilado com sucesso**.
+
+
 
