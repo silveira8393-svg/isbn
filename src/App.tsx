@@ -4,13 +4,16 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import Header from './components/Header';
+import Header, { NavigationTab } from './components/Header';
 import SearchForm from './components/SearchForm';
 import BookDetailsCard from './components/BookDetailsCard';
 import SearchHistoryGroup from './components/SearchHistoryGroup';
 import CameraScannerModal from './components/CameraScannerModal';
 import MagazordStatusCard from './components/magazord/MagazordStatusCard';
 import ProductRegistrationForm from './components/magazord/ProductRegistrationForm';
+import ProductionView from './components/ProductionView';
+import SettingsView from './components/SettingsView';
+import { useUser } from './contexts/UserContext';
 import {
   BookInfo,
   BookCondition,
@@ -19,6 +22,7 @@ import {
   MagazordProductCheck,
   MagazordRegistrationResult,
   MagazordMatchItem,
+  OperationType,
 } from './types';
 import { searchBookByIsbnBrasilApi } from './services/brasilApi';
 import {
@@ -27,6 +31,7 @@ import {
 } from './services/distribuidoraCuritiba';
 import { cleanIsbn } from './utils/isbn';
 import { createRegistrationDraft } from './utils/draft';
+import { CANONICAL_CSV_DATASET } from './utils/metrics';
 import { magazordMockService } from './services/magazordMockService';
 import {
   BookOpen,
@@ -37,6 +42,7 @@ import {
 } from 'lucide-react';
 
 export default function App() {
+  const { currentUser, canViewProduction, canViewSettings, operationEnvironment } = useUser();
   const [isbnValue, setIsbnValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [foundBook, setFoundBook] = useState<BookInfo | null>(null);
@@ -44,8 +50,18 @@ export default function App() {
   const [searchedTerm, setSearchedTerm] = useState<string>('');
   const [rawSearchedTerm, setRawSearchedTerm] = useState<string>('');
   const [history, setHistory] = useState<SearchHistoryItem[]>([]);
-  const [activeTab, setActiveTab] = useState<'consultar' | 'cadastro' | 'historico'>('consultar');
+  const [activeTab, setActiveTab] = useState<NavigationTab>('consultar');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+  // Redireciona para consulta caso o perfil atual não tenha permissão na aba ativa
+  useEffect(() => {
+    if (activeTab === 'producao' && !canViewProduction) {
+      setActiveTab('consultar');
+    }
+    if (activeTab === 'configuracoes' && !canViewSettings) {
+      setActiveTab('consultar');
+    }
+  }, [activeTab, canViewProduction, canViewSettings]);
 
   // Estados de integração e rascunho Magazord
   const [registrationDraft, setRegistrationDraft] = useState<RegistrationDraft | null>(null);
@@ -53,12 +69,15 @@ export default function App() {
   const [isCheckingMagazord, setIsCheckingMagazord] = useState(false);
   const [magazordCheckError, setMagazordCheckError] = useState<string | null>(null);
 
-  // Load history from localStorage on startup
+  // Load history from localStorage on startup (ou popula com o dataset canônico real se vazio)
   useEffect(() => {
     try {
       const saved = localStorage.getItem('sebo_isbn_history_v1');
       if (saved) {
         setHistory(JSON.parse(saved));
+      } else {
+        setHistory(CANONICAL_CSV_DATASET);
+        localStorage.setItem('sebo_isbn_history_v1', JSON.stringify(CANONICAL_CSV_DATASET));
       }
     } catch (e) {
       console.error('Failed to load search history', e);
@@ -74,15 +93,18 @@ export default function App() {
       const check = await magazordMockService.checkProductByEan(cleanedIsbn, book.title);
       setMagazordCheckResult(check);
 
-      // Atualiza o registro no histórico com status da Magazord
+      // Atualiza o registro no histórico com status da Magazord (apenas em consultas pendentes)
       setHistory((prevHistory) => {
         const updated = prevHistory.map((item) => {
-          if (item.isbn === cleanedIsbn) {
+          if (
+            item.isbn === cleanedIsbn &&
+            (!item.operationType || item.operationType === 'pesquisa_isbn')
+          ) {
             return {
               ...item,
               magazordStatus: check.exists ? ('localizado' as const) : ('nao_cadastrado' as const),
-              parentCode: check.parentCode,
-              childCode: check.childCode,
+              parentCode: check.parentCode || item.parentCode,
+              childCode: check.childCode || item.childCode,
             };
           }
           return item;
@@ -135,7 +157,7 @@ export default function App() {
         const draft = createRegistrationDraft(enrichedBook);
         setRegistrationDraft(draft);
 
-        // Add item to history with thumbnail support
+        // Add item to history with thumbnail support and audit info
         const newItem: SearchHistoryItem = {
           timestamp: Date.now(),
           isbn: cleaned,
@@ -144,11 +166,31 @@ export default function App() {
           success: true,
           thumbnailUrl: enrichedBook.thumbnailUrl || enrichedBook.coverUrl,
           magazordStatus: 'nao_cadastrado',
+          operationType: 'pesquisa_isbn',
+          userId: currentUser.id,
+          userName: currentUser.name,
+          userRole: currentUser.role,
+          operationEnvironment: operationEnvironment,
         };
 
-        const updatedHistory = [newItem, ...history.filter((h) => h.isbn !== cleaned)].slice(0, 15);
-        setHistory(updatedHistory);
-        localStorage.setItem('sebo_isbn_history_v1', JSON.stringify(updatedHistory));
+        setHistory((prevHistory) => {
+          // Evita duplicar busca idêntica imediata se for a mesma consulta nos últimos 3 segundos
+          if (
+            prevHistory.length > 0 &&
+            prevHistory[0].isbn === cleaned &&
+            prevHistory[0].operationType === 'pesquisa_isbn' &&
+            Date.now() - prevHistory[0].timestamp < 3000
+          ) {
+            return prevHistory;
+          }
+          const updated = [newItem, ...prevHistory].slice(0, 50);
+          try {
+            localStorage.setItem('sebo_isbn_history_v1', JSON.stringify(updated));
+          } catch {
+            // ignora
+          }
+          return updated;
+        });
 
         // Executa a checagem simulada da Magazord
         void runMagazordCheck(cleaned, enrichedBook);
@@ -171,10 +213,21 @@ export default function App() {
           title: `Não localizado (${cleaned})`,
           authors: undefined,
           success: false,
+          operationType: 'erro_consulta',
+          userId: currentUser.id,
+          userName: currentUser.name,
+          userRole: currentUser.role,
+          operationEnvironment: operationEnvironment,
         };
-        const updatedHistory = [newItem, ...history.filter((h) => h.isbn !== cleaned)].slice(0, 15);
-        setHistory(updatedHistory);
-        localStorage.setItem('sebo_isbn_history_v1', JSON.stringify(updatedHistory));
+        setHistory((prevHistory) => {
+          const updated = [newItem, ...prevHistory].slice(0, 50);
+          try {
+            localStorage.setItem('sebo_isbn_history_v1', JSON.stringify(updated));
+          } catch {
+            // ignora
+          }
+          return updated;
+        });
       }
     } catch (err: any) {
       console.error('Unhandled search exception:', err);
@@ -204,13 +257,16 @@ export default function App() {
   // Abre a tela única de cadastro garantindo a condição desejada (Novo ou Usado)
   const handleOpenRegistration = (condition?: BookCondition) => {
     if (!foundBook) return;
-    const targetCondition = condition || (registrationDraft?.condition || 'novo');
+    const targetCondition =
+      condition ||
+      magazordCheckResult?.existingCondition ||
+      'novo';
     const draft = createRegistrationDraft(foundBook, targetCondition);
     setRegistrationDraft(draft);
     setActiveTab('cadastro');
   };
 
-  // Vincula entrada de estoque a um produto NOVO existente simulado
+  // Vincula entrada de estoque a um produto NOVO existente simulado (Reaproveitamento de Produto Novo)
   const handleLinkStock = async (
     quantityToAdd: number,
     targetItem?: MagazordMatchItem
@@ -247,21 +303,27 @@ export default function App() {
       };
     });
 
-    // Atualiza o histórico com o tipo de operação correto
+    // Registra evento de auditoria operacional: Reaproveitamento Comercial de Produto Novo
+    const auditItem: SearchHistoryItem = {
+      timestamp: Date.now(),
+      isbn: searchedTerm || ean,
+      title: foundBook.title,
+      authors: foundBook.authors,
+      thumbnailUrl: foundBook.thumbnailUrl || foundBook.coverUrl,
+      success: true,
+      magazordStatus: 'localizado',
+      condition: 'novo',
+      operationType: 'reaproveitamento_produto_novo',
+      parentCode: targetItem?.parentCode || magazordCheckResult?.parentCode,
+      childCode: targetItem?.childCode || magazordCheckResult?.childCode,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userRole: currentUser.role,
+      operationEnvironment: operationEnvironment,
+    };
+
     setHistory((prevHistory) => {
-      const updated = prevHistory.map((item) => {
-        if (item.isbn === searchedTerm || item.isbn === ean) {
-          return {
-            ...item,
-            magazordStatus: 'localizado' as const,
-            condition: 'novo' as const,
-            operationType: 'reaproveitamento_produto_novo' as const,
-            parentCode: targetItem?.parentCode || magazordCheckResult?.parentCode,
-            childCode: targetItem?.childCode || magazordCheckResult?.childCode,
-          };
-        }
-        return item;
-      });
+      const updated = [auditItem, ...prevHistory].slice(0, 50);
       try {
         localStorage.setItem('sebo_isbn_history_v1', JSON.stringify(updated));
       } catch {
@@ -278,27 +340,33 @@ export default function App() {
     result: MagazordRegistrationResult,
     savedDraft: RegistrationDraft
   ) => {
-    // Atualiza o histórico local
+    // Registra evento de auditoria operacional do cadastro concluído
     const currentIsbn = searchedTerm || savedDraft.isbn13 || savedDraft.ean;
-    const opType =
+    const opType: OperationType =
       savedDraft.condition === 'usado'
-        ? ('novo_usado_com_edicao_conhecida' as const)
-        : ('novo_cadastro' as const);
+        ? 'novo_usado_com_edicao_conhecida'
+        : 'novo_cadastro';
+
+    const auditItem: SearchHistoryItem = {
+      timestamp: Date.now(),
+      isbn: currentIsbn,
+      title: savedDraft.title,
+      authors: foundBook?.authors || [],
+      thumbnailUrl: savedDraft.mainImageUrl || foundBook?.thumbnailUrl,
+      success: true,
+      magazordStatus: 'cadastrado_simulado',
+      parentCode: result.parentCode,
+      childCode: result.childCode,
+      condition: savedDraft.condition,
+      operationType: opType,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userRole: currentUser.role,
+      operationEnvironment: operationEnvironment,
+    };
 
     setHistory((prevHistory) => {
-      const updated = prevHistory.map((item) => {
-        if (item.isbn === currentIsbn || (savedDraft.isbn13 && item.isbn === savedDraft.isbn13)) {
-          return {
-            ...item,
-            magazordStatus: 'cadastrado_simulado' as const,
-            parentCode: result.parentCode,
-            childCode: result.childCode,
-            condition: savedDraft.condition,
-            operationType: opType,
-          };
-        }
-        return item;
-      });
+      const updated = [auditItem, ...prevHistory].slice(0, 50);
       try {
         localStorage.setItem('sebo_isbn_history_v1', JSON.stringify(updated));
       } catch {
@@ -348,6 +416,9 @@ export default function App() {
       'Código Pai',
       'Código Filho',
       'Status Magazord',
+      'Usuário',
+      'Perfil',
+      'Ambiente',
       'Data/Hora',
       'Status Consulta',
     ];
@@ -358,10 +429,12 @@ export default function App() {
       const operationType =
         item.operationType === 'reaproveitamento_produto_novo'
           ? 'Reaproveitamento Comercial (Novo)'
-          : item.operationType === 'novo_usado_com_edicao_conhecida'
+          : item.operationType === 'novo_usado_com_edicao_conhecida' || item.operationType === 'novo_exemplar_usado'
           ? 'Novo Usado (Edição Conhecida)'
           : item.operationType === 'novo_cadastro'
           ? 'Novo Cadastro Completo'
+          : item.operationType === 'erro_consulta' || item.operationType === 'erro_cadastro'
+          ? 'Erro Operacional'
           : 'Consulta';
       const parentCode = item.parentCode || '';
       const childCode = item.childCode || '';
@@ -372,6 +445,22 @@ export default function App() {
           ? 'Localizado Magazord'
           : item.success
           ? 'Não Cadastrado'
+          : '–';
+
+      const userName = item.userName || '–';
+      const userRole =
+        item.userRole === 'admin'
+          ? 'Administrador'
+          : item.userRole === 'developer'
+          ? 'Desenvolvedor'
+          : item.userRole === 'operator'
+          ? 'Operador'
+          : '–';
+      const environment =
+        item.operationEnvironment === 'development'
+          ? 'Desenvolvimento'
+          : item.operationEnvironment === 'production'
+          ? 'Produção'
           : '–';
 
       const timestamp = new Date(item.timestamp).toLocaleString('pt-BR', {
@@ -389,6 +478,9 @@ export default function App() {
         parentCode,
         childCode,
         magazordStatus,
+        userName,
+        userRole,
+        environment,
         timestamp,
         status,
       ]
@@ -581,6 +673,16 @@ export default function App() {
               onExport={handleExportHistoryCsv}
             />
           </div>
+        )}
+
+        {/* ABA 4: PRODUÇÃO & MÉTRICAS (Admin e Dev) */}
+        {activeTab === 'producao' && canViewProduction && (
+          <ProductionView history={history} />
+        )}
+
+        {/* ABA 5: CONFIGURAÇÕES DA LOJA & INTEGRAÇÕES (Admin e Dev) */}
+        {activeTab === 'configuracoes' && canViewSettings && (
+          <SettingsView />
         )}
       </main>
 

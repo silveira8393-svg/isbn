@@ -148,6 +148,29 @@ export interface MagazordRegistrationResult {
   registeredAt: number;
 }
 
+export type UserRole = 'admin' | 'operator' | 'developer';
+
+export interface User {
+  id: string;
+  name: string;
+  role: UserRole;
+  active: boolean;
+  avatarColor?: string;
+}
+
+export type OperationEnvironment = 'production' | 'development';
+
+export type OperationType =
+  | 'pesquisa_isbn'
+  | 'novo_cadastro'
+  | 'reaproveitamento_produto_novo'
+  | 'novo_exemplar_usado'
+  | 'novo_usado_com_edicao_conhecida'
+  | 'erro_consulta'
+  | 'erro_cadastro'
+  | 'cadastro_simulado'
+  | 'consulta_apenas';
+
 export interface SearchHistoryItem {
   timestamp: number;
   isbn: string;
@@ -159,11 +182,12 @@ export interface SearchHistoryItem {
   parentCode?: string;
   childCode?: string;
   condition?: BookCondition;
-  operationType?:
-    | 'novo_cadastro'
-    | 'reaproveitamento_produto_novo'
-    | 'novo_usado_com_edicao_conhecida'
-    | 'consulta_apenas';
+  operationType?: OperationType | string;
+  // Auditoria de usuário e ambiente
+  userId?: string;
+  userName?: string;
+  userRole?: UserRole;
+  operationEnvironment?: OperationEnvironment;
 }
 
 export interface PriceComparisonItem {

@@ -4,7 +4,7 @@
  */
 
 import { SearchHistoryItem } from '../types';
-import { History, Trash2, Download, BookOpen, Clock, AlertCircle } from 'lucide-react';
+import { History, Trash2, Download, BookOpen, Clock, AlertCircle, User as UserIcon } from 'lucide-react';
 
 interface SearchHistoryGroupProps {
   items: SearchHistoryItem[];
@@ -121,16 +121,24 @@ export default function SearchHistoryGroup({
                 </p>
               )}
 
-              {/* Status Magazord no Histórico */}
+              {/* Status Magazord e Operação no Histórico */}
               {item.magazordStatus && (
                 <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                   {item.operationType === 'reaproveitamento_produto_novo' ? (
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                       Entrada Vinculada (Novo)
                     </span>
-                  ) : item.operationType === 'novo_usado_com_edicao_conhecida' ? (
+                  ) : item.operationType === 'novo_cadastro' ? (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Novo Produto Cadastrado
+                    </span>
+                  ) : item.operationType === 'novo_usado_com_edicao_conhecida' || item.operationType === 'novo_exemplar_usado' ? (
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
                       Novo Usado Cadastrado
+                    </span>
+                  ) : item.operationType === 'pesquisa_isbn' || item.operationType === 'Consulta' || item.operationType === 'consulta_apenas' ? (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                      Consulta Realizada
                     </span>
                   ) : item.magazordStatus === 'cadastrado_simulado' ? (
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
@@ -143,13 +151,34 @@ export default function SearchHistoryGroup({
                   ) : null}
 
                   {item.condition && (
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase bg-slate-100 text-slate-700">
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase border ${
+                        item.condition === 'novo'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                      }`}
+                    >
                       {item.condition}
                     </span>
                   )}
                   {item.parentCode && (
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-600">
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-600 border border-slate-200">
                       Pai: {item.parentCode}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Auditoria de Usuário & Ambiente */}
+              {item.userName && (
+                <div className="flex items-center gap-1.5 mt-1 text-[10px]">
+                  <span className="inline-flex items-center gap-1 text-slate-500 font-medium">
+                    <UserIcon className="w-2.5 h-2.5 text-slate-400" />
+                    <span className="text-slate-700 font-semibold">{item.userName}</span>
+                  </span>
+                  {item.operationEnvironment === 'development' && (
+                    <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                      Dev Mock
                     </span>
                   )}
                 </div>

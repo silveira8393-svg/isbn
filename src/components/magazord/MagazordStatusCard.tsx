@@ -14,6 +14,7 @@ import {
   magazordMockService,
   MagazordSimulationMode,
 } from '../../services/magazordMockService';
+import { useUser } from '../../contexts/UserContext';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -54,6 +55,7 @@ export default function MagazordStatusCard({
   onResetForNextBook,
   onLinkStock,
 }: MagazordStatusCardProps) {
+  const { isDeveloper } = useUser();
   const [showConfig, setShowConfig] = useState(false);
   const [currentMode, setCurrentMode] = useState<MagazordSimulationMode>(
     magazordMockService.getSimulationConfig().mode
@@ -63,6 +65,14 @@ export default function MagazordStatusCard({
   useEffect(() => {
     setCurrentMode(magazordMockService.getSimulationConfig().mode);
   }, [checkResult]);
+
+  // Se o usuário atual não for Desenvolvedor, garante que modos forçados sejam desativados para não afetar o balcão
+  useEffect(() => {
+    if (!isDeveloper && magazordMockService.getSimulationConfig().mode !== 'auto') {
+      magazordMockService.resetModeToAuto();
+      setCurrentMode('auto');
+    }
+  }, [isDeveloper]);
 
   // Estado para vinculação de estoque ao produto NOVO existente
   const [stockQuantityToAdd, setStockQuantityToAdd] = useState(1);
