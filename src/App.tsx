@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+
 import { useState, useEffect, useRef } from 'react';
 import Header, { NavigationTab } from './components/Header';
 import SearchForm from './components/SearchForm';

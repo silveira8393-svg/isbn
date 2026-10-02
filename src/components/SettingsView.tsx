@@ -42,7 +42,7 @@ export default function SettingsView() {
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Estrutura de parâmetros operacionais e preparação para integração Magazord, Amazon e autenticação real.
+              Estrutura de parâmetros operacionais e preparação para integração Magazord e Amazon.
             </p>
           </div>
         </div>
@@ -239,10 +239,10 @@ export default function SettingsView() {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Usuários & Perfis do Sistema</h3>
-                <p className="text-xs text-slate-500">Usuários conceituais para testes de auditoria e permissões.</p>
+                <p className="text-xs text-slate-500">Identidade autenticada nesta sessão.</p>
               </div>
               <span className="text-xs text-slate-500 font-medium">
-                {users.length} usuários cadastrados
+                {users.length} usuário autenticado
               </span>
             </div>
 
@@ -283,7 +283,7 @@ export default function SettingsView() {
             </div>
 
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900">
-              <strong>Preparação para Supabase Auth:</strong> Esta camada provisória foi modelada de forma que, ao integrar a autenticação real, os IDs dos usuários serão mapeados diretamente para a tabela de auditoria sem refazer as telas ou regras de negócio da loja.
+              <strong>Supabase Auth:</strong> Perfil e vínculo com a loja carregados do Supabase. A gestão de outros usuários será implementada em uma etapa futura.
             </div>
           </div>
         )}

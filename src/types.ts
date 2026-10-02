@@ -156,6 +156,11 @@ export interface User {
   role: UserRole;
   active: boolean;
   avatarColor?: string;
+  displayName?: string;
+  storeId?: string;
+  storeName?: string;
+  storeSlug?: string;
+  environment?: OperationEnvironment;
 }
 
 export type OperationEnvironment = 'production' | 'development';

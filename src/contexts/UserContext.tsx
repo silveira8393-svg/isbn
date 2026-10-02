@@ -3,81 +3,61 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, UserRole, OperationEnvironment } from '../types';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import type { Session } from '@supabase/supabase-js';
+import { User, OperationEnvironment } from '../types';
+import { supabase } from '../lib/supabase';
+import Login from '../components/Login';
+import ResetPassword from '../components/ResetPassword';
 
-export const MOCK_USERS: User[] = [
-  {
-    id: 'usr_proprietario_admin',
-    name: 'Proprietário',
-    role: 'admin',
-    active: true,
-    avatarColor: 'bg-emerald-600',
-  },
-  {
-    id: 'usr_joao_operador',
-    name: 'João',
-    role: 'operator',
-    active: true,
-    avatarColor: 'bg-blue-600',
-  },
-  {
-    id: 'usr_desenvolvimento',
-    name: 'Desenvolvimento',
-    role: 'developer',
-    active: true,
-    avatarColor: 'bg-amber-600',
-  },
-];
+type AuthState = 'initializing' | 'unauthenticated' | 'authenticated' | 'recovery';
 
-const STORAGE_KEY_CURRENT_USER = 'sebo_mock_current_user_id';
+function hasRecoveryIntent() {
+  const url = new URL(window.location.href);
+  const fragment = new URLSearchParams(url.hash.slice(1));
+  return url.searchParams.get('auth') === 'recovery' || fragment.get('type') === 'recovery'
+    || fragment.has('error') || fragment.has('error_code')
+    || url.searchParams.has('error') || url.searchParams.has('error_code');
+}
 
-/**
- * Helpers centralizados de permissão:
- * Evita ifs soltos com strings pelos componentes e prepara para RBAC futuro.
- */
-export const canViewProduction = (user?: User | null): boolean => {
-  if (!user || !user.active) return false;
-  return user.role === 'admin' || user.role === 'developer';
-};
+function hasRecoveryError() {
+  const url = new URL(window.location.href);
+  const fragment = new URLSearchParams(url.hash.slice(1));
+  return fragment.has('error') || fragment.has('error_code')
+    || url.searchParams.has('error') || url.searchParams.has('error_code');
+}
 
-export const canViewSettings = (user?: User | null): boolean => {
-  if (!user || !user.active) return false;
-  return user.role === 'admin' || user.role === 'developer';
-};
+function markRecoveryUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.set('auth', 'recovery');
+  window.history.replaceState(window.history.state, '', url);
+}
 
-export const canViewDeveloperTools = (user?: User | null): boolean => {
-  if (!user || !user.active) return false;
-  return user.role === 'developer';
-};
+function clearRecoveryUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('auth');
+  url.searchParams.delete('code');
+  url.searchParams.delete('error');
+  url.searchParams.delete('error_code');
+  url.searchParams.delete('error_description');
+  url.hash = '';
+  window.history.replaceState(window.history.state, '', url);
+}
 
-export const canViewAllHistory = (user?: User | null): boolean => {
-  if (!user || !user.active) return false;
-  return user.role === 'admin' || user.role === 'developer';
-};
+export const canViewProduction = (user?: User | null) => !!user?.active && (user.role === 'admin' || user.role === 'developer');
+export const canViewSettings = canViewProduction;
+export const canViewAllHistory = canViewProduction;
+export const canViewDeveloperTools = (user?: User | null) => !!user?.active && user.role === 'developer';
+export const isOperator = (user?: User | null) => user?.role === 'operator';
+export const isAdmin = (user?: User | null) => user?.role === 'admin';
+export const isDeveloper = (user?: User | null) => user?.role === 'developer';
+export const getOperationEnvironment = (user?: User | null): OperationEnvironment => user?.role === 'developer' ? 'development' : 'production';
 
-export const isOperator = (user?: User | null): boolean => {
-  return user?.role === 'operator';
-};
-
-export const isAdmin = (user?: User | null): boolean => {
-  return user?.role === 'admin';
-};
-
-export const isDeveloper = (user?: User | null): boolean => {
-  return user?.role === 'developer';
-};
-
-export const getOperationEnvironment = (user?: User | null): OperationEnvironment => {
-  return user?.role === 'developer' ? 'development' : 'production';
-};
 
 export interface UserContextType {
   currentUser: User;
   users: User[];
-  setCurrentUser: (user: User) => void;
-  setCurrentUserId: (id: string) => void;
-  // Permissões diretas para o usuário ativo atual
+  signOut: () => Promise<void>;
   canViewProduction: boolean;
   canViewSettings: boolean;
   canViewDeveloperTools: boolean;
@@ -87,58 +67,192 @@ export interface UserContextType {
   isDeveloper: boolean;
   operationEnvironment: OperationEnvironment;
 }
-
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [users] = useState<User[]>(MOCK_USERS);
-  const [currentUserId, setCurrentUserIdState] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_CURRENT_USER);
-      if (saved && MOCK_USERS.some((u) => u.id === saved)) {
-        return saved;
+  const [session, setSession] = useState<Session | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [authState, setAuthState] = useState<AuthState>('initializing');
+  // The URL marker keeps recovery exclusive even after the SDK consumes the hash or on F5.
+  const recoveryMode = useRef(hasRecoveryIntent());
+  const recoveryLinkInvalid = useRef(hasRecoveryError());
+  const generation = useRef(0);
+  const intentionalLogout = useRef(false);
+  const latestSession = useRef<Session | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    let receivedEvent = false;
+    const applySession = (next: Session | null) => {
+      if (!mounted) return;
+      if (recoveryMode.current) {
+        generation.current += 1;
+        latestSession.current = next;
+        setCurrentUser(null);
+        setSession(next && !recoveryLinkInvalid.current ? { ...next } : null);
+        setLoading(false);
+        setAuthState('recovery');
+        return;
       }
-    } catch {}
-    // Padrão inicial: João (Operador) para validar o fluxo padrão de balcão
-    return 'usr_joao_operador';
-  });
+      if (next && latestSession.current?.access_token === next.access_token) return;
+      const sameIdentity = next && latestSession.current?.user.id === next.user.id;
+      latestSession.current = next;
+      generation.current += 1;
+      if (!sameIdentity) setCurrentUser(null);
+      setLoading(previous => next ? (previous || !sameIdentity) : false);
+      setSession(next ? { ...next } : null);
+      if (!next) setAuthState('unauthenticated');
+      else if (!sameIdentity) setAuthState('initializing');
+    };
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, next) => {
+      if (!mounted) return;
+      receivedEvent = true;
+      if (event === 'PASSWORD_RECOVERY') {
+        recoveryMode.current = true;
+        recoveryLinkInvalid.current = false;
+        markRecoveryUrl();
+      }
+      if (event === 'SIGNED_OUT' && !intentionalLogout.current) {
+        setError(previous => previous ?? 'Sua sessão foi encerrada ou expirou. Entre novamente.');
+      }
+      if (next) setError(null);
+      // Database queries run in a separate effect, outside the auth callback.
+      applySession(next);
+    });
+    void supabase.auth.getSession().then(({ data, error: sessionError }) => {
+      if (!mounted || receivedEvent) return;
+      if (sessionError) setError('Não foi possível recuperar sua sessão. Entre novamente.');
+      applySession(sessionError ? null : data.session);
+    }).catch(() => {
+      if (!mounted || receivedEvent) return;
+      setError('Não foi possível recuperar sua sessão. Verifique sua conexão.');
+      applySession(null);
+    });
+    return () => {
+      mounted = false;
+      latestSession.current = null;
+      generation.current += 1;
+      subscription.unsubscribe();
+    };
+  }, []);
 
-  const currentUser =
-    users.find((u) => u.id === currentUserId && u.active) || users[0];
+  useEffect(() => {
+    if (!session || recoveryMode.current || authState === 'recovery') return;
+    let cancelled = false;
+    const request = generation.current;
+    const isCurrent = () => !cancelled && !recoveryMode.current && request === generation.current;
+    const loadIdentity = async () => {
+      let message = 'Não foi possível consultar seus dados. Verifique sua conexão e entre novamente.';
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles').select('id, display_name, active').eq('id', session.user.id).maybeSingle();
+        if (!isCurrent()) return;
+        if (profileError) throw profileError;
+        if (!profile) { message = 'Seu usuário não possui um perfil. Entre em contato com o administrador.'; throw new Error(); }
+        if (profile.active !== true) { message = 'Seu usuário está inativo. Entre em contato com o administrador.'; throw new Error(); }
+        const { data: memberships, error: membershipError } = await supabase
+          .from('store_users').select('store_id, role, active')
+          .eq('user_id', session.user.id).eq('active', true).order('store_id');
+        if (!isCurrent()) return;
+        if (membershipError) throw membershipError;
+        if (!memberships?.length) { message = 'Seu usuário não possui vínculo ativo com uma loja. Contate o administrador.'; throw new Error(); }
+        // A list allows a future store selector to choose the active membership.
+        const membership = memberships[0];
+        if (!['admin', 'operator', 'developer'].includes(membership.role)) {
+          message = 'Seu perfil de acesso não é reconhecido. Contate o administrador.'; throw new Error();
+        }
+        const { data: store, error: storeError } = await supabase
+          .from('stores').select('id, name, slug').eq('id', membership.store_id).maybeSingle();
+        if (storeError) throw storeError;
+        if (!store) { message = 'A loja vinculada não está disponível. Contate o administrador.'; throw new Error(); }
+        if (!isCurrent()) return;
+        const displayName = profile.display_name?.trim() || 'Usuário';
+        setCurrentUser({
+          id: profile.id, name: displayName, displayName, role: membership.role,
+          active: true, storeId: store.id, storeName: store.name, storeSlug: store.slug,
+          environment: membership.role === 'developer' ? 'development' : 'production',
+        });
+        setLoading(false);
+        setAuthState('authenticated');
+      } catch {
+        if (!isCurrent()) return;
+        setError(message);
+        setCurrentUser(null);
+        intentionalLogout.current = true;
+        try {
+          const { error: logoutError } = await supabase.auth.signOut({ scope: 'local' });
+          if (logoutError && isCurrent()) setError(message + ' Não foi possível encerrar a sessão. Tente novamente.');
+        } catch {
+          if (isCurrent()) setError(message + ' Não foi possível encerrar a sessão. Tente novamente.');
+        } finally {
+          intentionalLogout.current = false;
+          if (isCurrent()) { setSession(null); setLoading(false); setAuthState('unauthenticated'); }
+        }
+      }
+    };
+    void loadIdentity();
+    return () => { cancelled = true; };
+  }, [session, authState === 'recovery']);
 
-  const setCurrentUserId = (id: string) => {
-    setCurrentUserIdState(id);
+  const leaveRecovery = async (completed: boolean) => {
+    intentionalLogout.current = true;
+    generation.current += 1;
     try {
-      localStorage.setItem(STORAGE_KEY_CURRENT_USER, id);
-    } catch {}
+      const { error: logoutError } = await supabase.auth.signOut({ scope: 'local' });
+      if (logoutError) throw logoutError;
+      // Leave recovery only after logout succeeds. On failure the reset screen allows retry.
+      recoveryMode.current = false;
+      latestSession.current = null;
+      clearRecoveryUrl();
+      setSession(null);
+      setCurrentUser(null);
+      setError(null);
+      setNotice(completed ? 'Senha alterada com sucesso. Entre novamente.' : null);
+      setAuthState('unauthenticated');
+      setLoading(false);
+    } finally {
+      intentionalLogout.current = false;
+    }
   };
 
-  const setCurrentUser = (user: User) => {
-    setCurrentUserId(user.id);
+  const signOut = async () => {
+    intentionalLogout.current = true;
+    generation.current += 1;
+    latestSession.current = null;
+    setCurrentUser(null);
+    setSession(null);
+    setLoading(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const { error: logoutError } = await supabase.auth.signOut({ scope: 'local' });
+      if (logoutError) setError('Não foi possível encerrar sua sessão. Tente sair novamente antes de entrar.');
+    } catch {
+      setError('Não foi possível encerrar sua sessão. Verifique sua conexão.');
+    } finally {
+      intentionalLogout.current = false;
+      setLoading(false);
+      setAuthState('unauthenticated');
+    }
   };
 
+  if (authState === 'recovery') return <ResetPassword sessionValid={Boolean(session)} onComplete={() => leaveRecovery(true)} onCancel={() => leaveRecovery(false)} />;
+  if (loading || authState === 'initializing') return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-600" role="status">Carregando Projeto ISBN...</div>;
+  if (!currentUser || authState !== 'authenticated') return <Login message={error} notice={notice} />;
   const value: UserContextType = {
-    currentUser,
-    users,
-    setCurrentUser,
-    setCurrentUserId,
-    canViewProduction: canViewProduction(currentUser),
-    canViewSettings: canViewSettings(currentUser),
-    canViewDeveloperTools: canViewDeveloperTools(currentUser),
-    canViewAllHistory: canViewAllHistory(currentUser),
-    isOperator: isOperator(currentUser),
-    isAdmin: isAdmin(currentUser),
-    isDeveloper: isDeveloper(currentUser),
+    currentUser, users: [currentUser], signOut,
+    canViewProduction: canViewProduction(currentUser), canViewSettings: canViewSettings(currentUser),
+    canViewDeveloperTools: canViewDeveloperTools(currentUser), canViewAllHistory: canViewAllHistory(currentUser),
+    isOperator: isOperator(currentUser), isAdmin: isAdmin(currentUser), isDeveloper: isDeveloper(currentUser),
     operationEnvironment: getOperationEnvironment(currentUser),
   };
-
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 }
-
 export function useUser(): UserContextType {
   const context = useContext(UserContext);
-  if (!context) {
-    throw new Error('useUser deve ser utilizado dentro de um UserProvider');
-  }
+  if (!context) throw new Error('useUser deve ser utilizado dentro de um UserProvider');
   return context;
 }
