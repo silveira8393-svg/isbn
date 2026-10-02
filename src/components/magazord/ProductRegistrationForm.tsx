@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   RegistrationDraft,
   MagazordRegistrationResult,
@@ -36,6 +36,7 @@ interface ProductRegistrationFormProps {
   onUpdateDraft: (updates: Partial<RegistrationDraft>) => void;
   onBackToSearch: () => void;
   onSuccessRegistration: (result: MagazordRegistrationResult, draft: RegistrationDraft) => void;
+  onRegistrationError?: (draft: RegistrationDraft) => void;
   onProcessNextBook: () => void;
 }
 
@@ -45,12 +46,15 @@ export default function ProductRegistrationForm({
   onUpdateDraft,
   onBackToSearch,
   onSuccessRegistration,
+  onRegistrationError,
   onProcessNextBook,
 }: ProductRegistrationFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successResult, setSuccessResult] = useState<MagazordRegistrationResult | null>(null);
+  const submissionInFlight = useRef(false);
+  const submissionCompleted = useRef(false);
 
   // Validações antes do envio
   const validateForm = (): boolean => {
@@ -97,6 +101,7 @@ export default function ProductRegistrationForm({
   };
 
   const handleSubmit = async () => {
+    if (submissionInFlight.current || submissionCompleted.current || successResult) return;
     setSubmitError(null);
 
     if (!validateForm()) {
@@ -108,6 +113,7 @@ export default function ProductRegistrationForm({
       return;
     }
 
+    submissionInFlight.current = true;
     setIsSubmitting(true);
 
     try {
@@ -117,6 +123,7 @@ export default function ProductRegistrationForm({
         description: finalDescription,
       };
       const result = await magazordMockService.createProduct(draftToSubmit);
+      submissionCompleted.current = true;
       setSuccessResult(result);
       onSuccessRegistration(result, draftToSubmit);
     } catch (err: any) {
@@ -124,7 +131,9 @@ export default function ProductRegistrationForm({
       setSubmitError(
         err.message || 'Falha ao processar cadastro na API Magazord simulada.'
       );
+      onRegistrationError?.(draft);
     } finally {
+      submissionInFlight.current = false;
       setIsSubmitting(false);
     }
   };

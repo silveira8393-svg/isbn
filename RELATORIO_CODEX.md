@@ -130,3 +130,64 @@ Referências consultadas: [Supabase — recuperação de senha](https://supabase
 - Conferir link expirado/inválido e rate limit reais. Os testes locais simulam essas respostas; nenhum e-mail real foi enviado nem senha de conta real foi alterada.
 
 Permissões, métricas, histórico, auditoria, operations, integrações, câmera, banco, RLS e migrations não foram alterados nesta etapa.
+
+## Gravação de operações no Supabase — 02/10/2026
+
+Implementada somente a escrita das novas operações em `public.operations`, em paralelo ao comportamento local existente. A autenticação e a recuperação de senha já homologadas não foram alteradas. Nenhuma tabela, migration, política RLS, trigger ou configuração externa foi modificada.
+
+### Arquivos desta etapa
+
+| Arquivo | Situação e alteração | Linhas aproximadas finais |
+| --- | --- | --- |
+| `src/services/operationsService.ts` | Criado: tipos, validação de contexto, conversão para campos da tabela e INSERT centralizado | 1–54 |
+| `src/App.tsx` | Alterado: integração nos eventos finais de pesquisa, vinculação e cadastro; erros operacionais; aviso de gravação | 33–34, 57–65, 139–148, 209–218, 252–276, 320–336, 387–397, 439–451, 587–590, 711–719 |
+| `src/components/magazord/ProductRegistrationForm.tsx` | Alterado: callback opcional para falha fatal e proteção síncrona contra envio duplicado | 6, 39, 49, 56–57, 104, 116, 126, 134–136 |
+| `tests/operations.test.mjs` | Criado: 13 testes isolados do serviço e eventos reais dos componentes | 1–225 |
+| `RELATORIO_CODEX.md` | Alterado: esta seção | Final do documento |
+
+### Serviço, campos e identidade
+
+`recordOperation(input, expectedActorId)` faz uma única tentativa de INSERT e retorna um booleano; não lança falhas de rede/banco ao fluxo operacional. O `storeId` vem do `currentUser` autenticado. Ausência de loja, UUID inválido, sessão ausente ou conta diferente daquela que iniciou o evento impedem o INSERT e resultam em aviso. A comparação de `expectedActorId` serve somente para evitar atribuir uma conclusão atrasada a outra conta; esse ID não é enviado ao banco.
+
+Campos enviados: `store_id`, `isbn`, `title`, `condition`, `operation_type`, `status`, `parent_code`, `child_code`, `error_message`, `metadata` e `completed_at`. Campos opcionais ausentes são enviados como null; metadata ausente usa objeto vazio. Todas as operações desta etapa já estão concluídas: status success/error e completed_at capturado no evento final. Não há ciclo pending/update.
+
+Campos deliberadamente **não enviados**: `user_id`, `environment`, `id`, `created_at` e `legacy_operator_name`. Identidade e ambiente continuam determinados por `operations_set_actor_defaults`, `auth.uid()`, vínculos da loja e RLS. O frontend não força production/development, mesmo para developer.
+
+### Pontos de conclusão analisados e utilizados
+
+| Tipo no banco | Evento exato |
+| --- | --- |
+| `isbn_search` / success | `handleSearch`: fim do fluxo bibliográfico, depois do enriquecimento e da preparação local; uma linha por consulta válida em formato ISBN-10/13. HTTP 404 ou resposta normal sem livro também é success, com resultFound=false. |
+| `new_product_created` / success | `handleSuccessRegistration`: callback já existente após retorno bem-sucedido de `createProduct`, somente para condição novo. |
+| `new_product_reused` / success | `handleLinkStock`: confirmação efetiva após retorno bem-sucedido de `addStockToExistingProduct`. Encontrar cadastro existente não grava esse evento. |
+| `used_copy_created` / success | Mesmo callback final de cadastro, para condição usado, inclusive quando a bibliografia vem de uma edição conhecida. |
+| `operation_error` / error | Pesquisa sem resultado causada por falha do serviço (não por 404), exceção fatal da pesquisa, falha de vinculação ou callback de falha fatal do cadastro. Validações de formulário, clique concorrente rejeitado e falha isolada do enriquecimento de uma consulta encontrada não geram esse tipo. |
+
+Metadata é compacta: resultFound, status/resultados das fontes realmente consultadas, flow, mock, quantidade, modo de cadastro e origem bibliográfica, conforme o evento. Não são enviados objetos completos, tokens, chaves, sessões ou stack traces. Error_message usa descrições fixas e seguras, sem copiar erros externos.
+
+O fluxo bibliográfico existente foi preservado: a Distribuidora Curitiba só é chamada quando a BrasilAPI retorna um livro; não foi acrescentado fallback nesta tarefa. Uma consulta encontrada continua success se o enriquecimento falhar. Uma busca normal sem resultado é registrada como success no banco, embora o histórico local preserve a classificação anterior de erro_consulta. A checagem Magazord posterior não cria outra operação de pesquisa.
+
+### Duplicidades e falhas de gravação
+
+Os INSERTs ficam nos handlers/callbacks de negócio, fora de efeitos, renderização e funções atualizadoras de estado. Guards com refs bloqueiam pesquisas, vinculações e cadastros concorrentes; o cadastro também bloqueia repetição do callback após conclusão. Não há replay do histórico antigo no carregamento, no rerender ou no F5. Consultas novas intencionais do mesmo ISBN podem gerar novas linhas: não há deduplicação permanente por ISBN.
+
+A escrita não bloqueia a conclusão local. Em caso de falha, o serviço registra somente uma categoria fixa de erro no console em build de desenvolvimento; não registra payload, mensagem bruta do servidor ou dados sensíveis. A interface mostra um aviso dispensável: “Uma operação não pôde ser registrada no Supabase. O resultado e o histórico local foram preservados.” Falha do INSERT não provoca outro operation_error, retry automático ou loop.
+
+Não há garantia de entrega offline nem transação entre localStorage e Supabase. Fechar/recarregar a página antes de concluir o INSERT pode perder essa gravação; ela não é reenviada automaticamente. A homologação deve aguardar o recebimento no banco antes de encerrar a página.
+
+### Testes executados
+
+- `npm.cmd run lint`: aprovado (`tsc --noEmit`).
+- `npm.cmd run build`: aprovado; aviso de bundle maior que 500 kB permanece fora do escopo.
+- `git diff --check`: aprovado.
+- `node --test tests/operations.test.mjs`: **13 testes aprovados**, usando node:test e esbuild já disponíveis, sem novas bibliotecas.
+
+Os testes executam o serviço e handlers reais com SDK/fontes simulados e hooks controlados: payload sem identidade/ambiente; UUID/sessão inválidos; falha de INSERT sem recursão; várias fontes em uma pesquisa; resultado ausente versus falha fatal; cliques concorrentes; novos/usados; reaproveitamento confirmado; permissões admin/operator/developer sem overrides de ambiente; erros operacionais seguros; aviso não destrutivo; ausência de replay em rerender/remontagem e proteção do formulário. Os atualizadores de estado são repetidos no harness para verificar que não contêm INSERTs. Não substituem teste visual em navegador.
+
+Referência consultada: [Supabase — tratamento de erros no SDK](https://supabase.com/docs/guides/api/handling-errors-in-supabase-js).
+
+### Homologação e escopo preservado
+
+Não foram usadas credenciais nem realizadas gravações no Supabase real. Próximo passo manual: executar consulta, cadastro novo, reaproveitamento e cadastro usado com conta real; conferir uma linha por ação em public.operations, store_id, tipos/condição/status/completed_at e user_id/environment definidos pelo banco. Confirmar developer em development e admin/operator em production, conforme as triggers/RLS já existentes.
+
+**metrics ainda NÃO lê Supabase. ProductionView ainda NÃO foi migrada. localStorage, histórico antigo e CSV foram preservados. audit_logs ainda NÃO foi implementado.** BrasilAPI, Distribuidora Curitiba, regras Novo/Usado, serviço/fluxo comercial Magazord, Amazon, câmera, autenticação, recuperação de senha, SMTP e Resend permanecem como antes. No formulário Magazord, houve somente instrumentação de erro e proteção contra duplicidade, sem mudar validações ou regras do cadastro.

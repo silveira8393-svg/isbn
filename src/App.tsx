@@ -30,7 +30,8 @@ import {
   mergeBookWithDistribuidora,
   searchBookByIsbnDistribuidoraCuritiba,
 } from './services/distribuidoraCuritiba';
-import { cleanIsbn } from './utils/isbn';
+import { cleanIsbn, isValidIsbnFormat } from './utils/isbn';
+import { recordOperation, type RecordOperationInput } from './services/operationsService';
 import { createRegistrationDraft } from './utils/draft';
 import { CANONICAL_CSV_DATASET } from './utils/metrics';
 import { magazordMockService } from './services/magazordMockService';
@@ -53,6 +54,15 @@ export default function App() {
   const [history, setHistory] = useState<SearchHistoryItem[]>([]);
   const [activeTab, setActiveTab] = useState<NavigationTab>('consultar');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [operationWarning, setOperationWarning] = useState(false);
+  const searchInFlight = useRef(false);
+  const stockLinkInFlight = useRef(false);
+
+  const saveOperation = (operation: Omit<RecordOperationInput, 'storeId'>) => {
+    // Capture the account/store of the explicit business event; never write from a React updater/effect.
+    void recordOperation({ ...operation, storeId: currentUser.active ? currentUser.storeId ?? '' : '' }, currentUser.id)
+      .then(saved => { if (!saved) setOperationWarning(true); });
+  };
 
   // Redireciona para consulta caso o perfil atual não tenha permissão na aba ativa
   useEffect(() => {
@@ -127,12 +137,14 @@ export default function App() {
 
   // Handler to carry out lookup
   const handleSearch = async (targetIsbn: string) => {
+    if (searchInFlight.current) return;
     const cleaned = cleanIsbn(targetIsbn);
     if (!cleaned) {
       setErrorText('Por favor, informe um código ISBN válido.');
       return;
     }
 
+    searchInFlight.current = true;
     setIsLoading(true);
     setErrorText(null);
     setFoundBook(null);
@@ -194,6 +206,14 @@ export default function App() {
         });
 
         // Executa a checagem simulada da Magazord
+        if (isValidIsbnFormat(cleaned)) saveOperation({
+          isbn: cleaned, title: enrichedBook.title, operationType: 'isbn_search', status: 'success',
+          completedAt: new Date(newItem.timestamp).toISOString(),
+          metadata: { resultFound: true, sources: {
+            brasilApi: { status: result.diagnostic.status, resultFound: true },
+            distribuidoraCuritiba: { status: distribuidoraResult.diagnostic.status, resultFound: Boolean(distribuidoraResult.book) },
+          } },
+        });
         void runMagazordCheck(cleaned, enrichedBook);
       } else {
         let localError = 'ISBN não encontrado na base de dados.';
@@ -229,11 +249,30 @@ export default function App() {
           }
           return updated;
         });
+        if (isValidIsbnFormat(cleaned)) {
+          const status = result.diagnostic.status;
+          const normalCompletion = status === 404 || (typeof status === 'number' && status >= 200 && status < 300);
+          saveOperation({
+            isbn: cleaned, operationType: normalCompletion ? 'isbn_search' : 'operation_error',
+            status: normalCompletion ? 'success' : 'error',
+            errorMessage: normalCompletion ? undefined : 'Falha do serviço na consulta bibliográfica.',
+            completedAt: new Date(newItem.timestamp).toISOString(),
+            metadata: { flow: 'isbn_search', resultFound: false, sources: {
+              brasilApi: { status, resultFound: false }, distribuidoraCuritiba: { consulted: false },
+            } },
+          });
+        }
       }
     } catch (err: any) {
       console.error('Unhandled search exception:', err);
       setErrorText('Não foi possível conectar ao serviço de consulta.');
+      if (isValidIsbnFormat(cleaned)) saveOperation({
+        isbn: cleaned, operationType: 'operation_error', status: 'error',
+        errorMessage: 'Falha fatal ao concluir a consulta bibliográfica.',
+        metadata: { flow: 'isbn_search' }, completedAt: new Date().toISOString(),
+      });
     } finally {
+      searchInFlight.current = false;
       setIsLoading(false);
     }
   };
@@ -278,11 +317,23 @@ export default function App() {
       targetItem?.childCode ||
       (magazordCheckResult?.existingCondition === 'novo' ? magazordCheckResult?.childCode : undefined);
 
-    const result = await magazordMockService.addStockToExistingProduct(
-      ean,
-      quantityToAdd,
-      targetChildCode
-    );
+    if (stockLinkInFlight.current) throw new Error('Vinculação já em andamento.');
+    stockLinkInFlight.current = true;
+    let result: Awaited<ReturnType<typeof magazordMockService.addStockToExistingProduct>>;
+    try {
+      result = await magazordMockService.addStockToExistingProduct(ean, quantityToAdd, targetChildCode);
+    } catch (err) {
+      saveOperation({
+        isbn: searchedTerm || foundBook.isbn13 || foundBook.isbn10, title: foundBook.title,
+        condition: 'new', operationType: 'operation_error', status: 'error',
+        parentCode: targetItem?.parentCode || magazordCheckResult?.parentCode, childCode: targetChildCode,
+        errorMessage: 'Falha ao concluir a vinculação de estoque simulada.',
+        metadata: { flow: 'new_product_reused', mock: true }, completedAt: new Date().toISOString(),
+      });
+      throw err;
+    } finally {
+      stockLinkInFlight.current = false;
+    }
 
     // Atualiza imediatamente o estado de checagem em tela para refletir o novo saldo de estoque
     setMagazordCheckResult((prev) => {
@@ -333,6 +384,14 @@ export default function App() {
       return updated;
     });
 
+    saveOperation({
+      isbn: searchedTerm || foundBook.isbn13 || foundBook.isbn10,
+      title: foundBook.title, condition: 'new', operationType: result.success ? 'new_product_reused' : 'operation_error',
+      status: result.success ? 'success' : 'error', parentCode: auditItem.parentCode, childCode: auditItem.childCode,
+      errorMessage: result.success ? undefined : 'Vinculação de estoque simulada não concluída.',
+      metadata: { flow: 'new_product_reused', mock: true, quantity: quantityToAdd },
+      completedAt: new Date(auditItem.timestamp).toISOString(),
+    });
     return result;
   };
 
@@ -377,6 +436,16 @@ export default function App() {
     });
 
     // Atualiza estado de checagem consultando o banco simulado atualizado
+    saveOperation({
+      isbn: currentIsbn, title: savedDraft.title,
+      condition: savedDraft.condition === 'usado' ? 'used' : 'new',
+      operationType: !result.success ? 'operation_error' : savedDraft.condition === 'usado' ? 'used_copy_created' : 'new_product_created',
+      status: result.success ? 'success' : 'error', parentCode: result.parentCode, childCode: result.childCode,
+      errorMessage: result.success ? undefined : 'Cadastro simulado não concluído.',
+      metadata: { mock: true, quantity: savedDraft.quantity, registrationMode: savedDraft.registrationMode ?? null,
+        bibliographicSource: foundBook?.enrichmentSource || foundBook?.provider || null },
+      completedAt: new Date(result.registeredAt).toISOString(),
+    });
     void magazordMockService.checkProductByEan(currentIsbn, savedDraft.title).then((freshCheck) => {
       setMagazordCheckResult(freshCheck);
     });
@@ -515,6 +584,10 @@ export default function App() {
 
       {/* 2. Main Content Viewport */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 flex-1 w-full">
+        {operationWarning && <div role="status" className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 text-sm flex items-center justify-between gap-3">
+          <span>Uma operação não pôde ser registrada no Supabase. O resultado e o histórico local foram preservados.</span>
+          <button type="button" onClick={() => setOperationWarning(false)} className="font-semibold cursor-pointer">Fechar</button>
+        </div>}
         {/* ABA 1: CONSULTAR */}
         {activeTab === 'consultar' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -635,6 +708,14 @@ export default function App() {
                 }
                 onBackToSearch={() => setActiveTab('consultar')}
                 onSuccessRegistration={handleSuccessRegistration}
+                onRegistrationError={(failedDraft) => saveOperation({
+                  isbn: failedDraft.isbn13 || failedDraft.ean || searchedTerm, title: failedDraft.title,
+                  condition: failedDraft.condition === 'usado' ? 'used' : 'new',
+                  operationType: 'operation_error', status: 'error',
+                  parentCode: failedDraft.parentCode, childCode: failedDraft.childCode,
+                  errorMessage: 'Falha ao concluir o cadastro simulado.',
+                  metadata: { flow: 'registration', mock: true }, completedAt: new Date().toISOString(),
+                })}
                 onProcessNextBook={handleProcessNextBook}
               />
             ) : (
