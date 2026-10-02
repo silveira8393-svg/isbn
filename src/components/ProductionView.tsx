@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
-import { SearchHistoryItem, User } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { loadProduction, type ProductionData, type ProductionPeriod } from '../services/productionService';
 import { useUser } from '../contexts/UserContext';
 import {
-  calculateMetrics,
-  classifyOperationForMetrics,
+  calculateProductionMetrics,
 } from '../utils/metrics';
 import {
   BarChart3,
@@ -27,141 +26,46 @@ import {
   Clock,
 } from 'lucide-react';
 
-interface ProductionViewProps {
-  history: SearchHistoryItem[];
-}
-
-type PeriodFilter = 'today' | '7days' | '30days' | 'all';
-
-export default function ProductionView({ history }: ProductionViewProps) {
-  const { currentUser, isDeveloper, isAdmin } = useUser();
-  const [period, setPeriod] = useState<PeriodFilter>('all');
+export default function ProductionView() {
+  const { currentUser, isDeveloper, isAdmin, operationEnvironment } = useUser();
+  const [period, setPeriod] = useState<ProductionPeriod>('all');
   const [selectedUserFilter, setSelectedUserFilter] = useState<string>('all');
+  const [loadState, setLoadState] = useState<{
+    key: string; status: 'loading' | 'success' | 'error'; data: ProductionData;
+  }>({ key: '', status: 'loading', data: { operations: [], names: {} } });
+  const contextKey = [currentUser.id, currentUser.storeId, operationEnvironment, period].join(':');
 
-  // Filtra por período
-  const periodFilteredHistory = useMemo(() => {
-    const now = Date.now();
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+    setLoadState({ key: contextKey, status: 'loading', data: { operations: [], names: {} } });
+    void loadProduction(currentUser.storeId ?? '', operationEnvironment, period, controller.signal)
+      .then(data => { if (!cancelled) setLoadState({ key: contextKey, status: 'success', data }); })
+      .catch(() => { if (!cancelled) setLoadState({ key: contextKey, status: 'error', data: { operations: [], names: {} } }); });
+    return () => { cancelled = true; controller.abort(); };
+  }, [contextKey, currentUser.storeId, operationEnvironment, period]);
 
-    return history.filter((item) => {
-      if (period === 'today') {
-        return item.timestamp >= startOfToday.getTime();
-      }
-      if (period === '7days') {
-        return item.timestamp >= now - 7 * 24 * 60 * 60 * 1000;
-      }
-      if (period === '30days') {
-        return item.timestamp >= now - 30 * 24 * 60 * 60 * 1000;
-      }
-      return true;
-    });
-  }, [history, period]);
+  const status = loadState.key === contextKey ? loadState.status : 'loading';
+  const productionItems = useMemo(() => status === 'success' ? loadState.data.operations : [], [status, loadState.data]);
+  const developmentItems = operationEnvironment === 'development' ? productionItems : [];
+  const displayedItems = useMemo(() => productionItems.filter(item =>
+    currentUser.role === 'operator' ? item.user_id === currentUser.id
+      : selectedUserFilter === 'all' || item.user_id === selectedUserFilter
+  ), [productionItems, currentUser.role, currentUser.id, selectedUserFilter]);
+  const metrics = useMemo(() => calculateProductionMetrics(displayedItems), [displayedItems]);
 
-  // REGRA FUNDAMENTAL: Ações de desenvolvimento NÃO contaminam as métricas de produção da loja!
-  const productionItems = useMemo(() => {
-    return periodFilteredHistory.filter(
-      (item) => item.operationEnvironment !== 'development'
-    );
-  }, [periodFilteredHistory]);
-
-  const developmentItems = useMemo(() => {
-    return periodFilteredHistory.filter(
-      (item) => item.operationEnvironment === 'development'
-    );
-  }, [periodFilteredHistory]);
-
-  // Se o usuário for Operador, filtra exclusivamente por ele (não atribui registros legados sem usuário a João)
-  const displayedItems = useMemo(() => {
-    const items = productionItems;
-    if (currentUser.role === 'operator') {
-      return items.filter(
-        (item) => item.userId === currentUser.id || item.userName === currentUser.name
-      );
-    }
-    if (selectedUserFilter !== 'all') {
-      return items.filter(
-        (item) => item.userId === selectedUserFilter || item.userName === selectedUserFilter
-      );
-    }
-    return items;
-  }, [productionItems, currentUser, selectedUserFilter]);
-
-  // Cálculo canônico das métricas de produção (baseado exclusivamente no operationType)
-  const metrics = useMemo(() => {
-    return calculateMetrics(displayedItems);
-  }, [displayedItems]);
-
-  // Agrupamento por Operador / Usuário
   const userBreakdown = useMemo(() => {
-    const map: Record<
-      string,
-      {
-        name: string;
-        role: string;
-        totalProcessed: number;
-        newCreated: number;
-        newReused: number;
-        usedCreated: number;
-        searches: number;
-        errors: number;
-      }
-    > = {};
-
+    const groups = new Map<string, typeof productionItems>();
     for (const item of productionItems) {
-      // REGRA: Registros legados sem identificação de usuário NÃO são atribuídos a nenhum operador individual
-      if (!item.userId && !item.userName) {
-        continue;
-      }
-
-      const key = item.userId || item.userName!;
-      const name =
-        item.userName ||
-        (item.userId === 'usr_joao_operador'
-          ? 'João'
-          : item.userId === 'usr_proprietario_admin'
-          ? 'Proprietário'
-          : 'Operador');
-      const role =
-        item.userRole ||
-        (item.userId === 'usr_proprietario_admin' ? 'admin' : 'operator');
-
-      if (!map[key]) {
-        map[key] = {
-          name,
-          role,
-          totalProcessed: 0,
-          newCreated: 0,
-          newReused: 0,
-          usedCreated: 0,
-          searches: 0,
-          errors: 0,
-        };
-      }
-
-      const classification = classifyOperationForMetrics(item);
-
-      if (classification.isError) {
-        map[key].errors++;
-        continue;
-      }
-
-      if (classification.isNewCreated) {
-        map[key].newCreated++;
-        map[key].totalProcessed++;
-      } else if (classification.isNewReused) {
-        map[key].newReused++;
-        map[key].totalProcessed++;
-      } else if (classification.isUsedCreated) {
-        map[key].usedCreated++;
-        map[key].totalProcessed++;
-      } else if (classification.isSearch) {
-        map[key].searches++;
-      }
+      if (!item.user_id) continue;
+      const items = groups.get(item.user_id) ?? [];
+      items.push(item);
+      groups.set(item.user_id, items);
     }
-
-    return Object.entries(map).map(([id, data]) => ({ id, ...data }));
-  }, [productionItems]);
+    return [...groups].map(([id, items]) => ({
+      id, name: loadState.data.names[id] || id, ...calculateProductionMetrics(items),
+    }));
+  }, [productionItems, loadState.data.names]);
 
   return (
     <div className="w-full max-w-5xl mx-auto space-y-6 animate-fade-in pb-12">
@@ -183,6 +87,8 @@ export default function ProductionView({ history }: ProductionViewProps) {
             <p className="text-xs text-slate-500 mt-0.5">
               {currentUser.role === 'operator'
                 ? `Exibindo a produção pessoal de ${currentUser.name}`
+                : operationEnvironment === 'development'
+                ? 'Métricas da equipe no ambiente de desenvolvimento, isoladas da produção.'
                 : 'Métricas consolidadas de produtividade da equipe da loja (exclui testes de desenvolvimento).'}
             </p>
           </div>
@@ -204,8 +110,7 @@ export default function ProductionView({ history }: ProductionViewProps) {
                 className="bg-transparent text-xs font-semibold text-slate-700 cursor-pointer focus:outline-hidden pr-1"
               >
                 <option value="all">Todos os operadores</option>
-                <option value="usr_joao_operador">João (Operador)</option>
-                <option value="usr_proprietario_admin">Proprietário (Admin)</option>
+                {userBreakdown.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
               </select>
             </div>
           )}
@@ -260,6 +165,10 @@ export default function ProductionView({ history }: ProductionViewProps) {
       </div>
     </div>
 
+      {status === 'loading' && <div role="status" className="p-5 text-sm text-slate-600">Carregando produção...</div>}
+      {status === 'error' && <div role="alert" className="p-5 text-sm text-red-700">Não foi possível carregar a produção. Tente novamente mais tarde.</div>}
+      {status === 'success' && displayedItems.length === 0 && <div role="status" className="p-5 text-sm text-slate-600">Nenhuma operação no período e operador selecionados.</div>}
+      {status === 'success' && <>
       {/* Grid de Métricas Principais (6 Cards) */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4">
         {/* 1. Total Processados */}
@@ -277,7 +186,7 @@ export default function ProductionView({ history }: ProductionViewProps) {
             <span className="text-xs text-slate-500 font-medium">cadastros/entradas</span>
           </div>
           <p className="text-[11px] text-blue-700/80 mt-1 font-medium">
-            Soma de novos cadastros e entradas vinculadas
+            Soma de novos cadastros e entradas vinculadas · {metrics.units} unidades movimentadas
           </p>
         </div>
 
@@ -383,7 +292,7 @@ export default function ProductionView({ history }: ProductionViewProps) {
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-slate-900 text-sm">{op.name}</span>
                         <span className="px-2 py-0.2 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
-                          {op.role === 'admin' ? 'Administrador' : 'Operador'}
+                          Usuário
                         </span>
                       </div>
                       <span className="text-xs text-slate-500">
@@ -432,7 +341,7 @@ export default function ProductionView({ history }: ProductionViewProps) {
             <div className="flex items-center gap-2">
               <Wrench className="w-4 h-4 text-amber-700" />
               <h4 className="text-sm font-bold text-amber-950">
-                Auditoria do Ambiente de Desenvolvimento (Testes Mock)
+                Auditoria do Ambiente de Desenvolvimento
               </h4>
             </div>
             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-200 text-amber-900 border border-amber-300">
@@ -461,11 +370,12 @@ export default function ProductionView({ history }: ProductionViewProps) {
             </div>
             <div>
               <span className="text-slate-500 block text-[11px]">Auditoria Técnica</span>
-              <span className="text-slate-700">Registrado localmente</span>
+              <span className="text-slate-700">Registrado no Supabase</span>
             </div>
           </div>
         </div>
       )}
+      </>}
     </div>
   );
 }

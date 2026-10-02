@@ -759,7 +759,7 @@ export default function App() {
 
         {/* ABA 4: PRODUÇÃO & MÉTRICAS (Admin e Dev) */}
         {activeTab === 'producao' && canViewProduction && (
-          <ProductionView history={history} />
+          <ProductionView />
         )}
 
         {/* ABA 5: CONFIGURAÇÕES DA LOJA & INTEGRAÇÕES (Admin e Dev) */}

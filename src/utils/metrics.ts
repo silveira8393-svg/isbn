@@ -4,6 +4,40 @@
  */
 
 import { SearchHistoryItem } from '../types';
+import type { ProductionOperation } from '../services/productionService';
+
+/** Structured database fields classify production; registrationMode is never consulted. */
+export function classifyProductionOperation(item: ProductionOperation): OperationMetricClassification {
+  const isError = item.status === 'error' || item.operation_type === 'operation_error';
+  const completed = item.status === 'success' && !isError;
+  const isNewCreated = completed && item.operation_type === 'new_product_created' && item.condition === 'new';
+  const isNewReused = completed && item.operation_type === 'new_product_reused' && item.condition === 'new';
+  const isUsedCreated = completed && item.operation_type === 'used_copy_created' && item.condition === 'used';
+  return { isError, isNewCreated, isNewReused, isUsedCreated,
+    isProcessed: isNewCreated || isNewReused || isUsedCreated,
+    isSearch: completed && item.operation_type === 'isbn_search' };
+}
+
+/** Only positive safe integer quantities are units; old/invalid commercial quantities default to one. */
+export function productionUnits(item: ProductionOperation): number {
+  if (!classifyProductionOperation(item).isProcessed) return 0;
+  const quantity = item.metadata?.quantity;
+  return typeof quantity === 'number' && Number.isSafeInteger(quantity) && quantity > 0 ? quantity : 1;
+}
+
+export function calculateProductionMetrics(items: ProductionOperation[]): MetricsResult & { units: number } {
+  const result = { searches: 0, totalProcessed: 0, newCreated: 0, newReused: 0, usedCreated: 0, errors: 0, units: 0 };
+  for (const item of items) {
+    const classification = classifyProductionOperation(item);
+    if (classification.isError) result.errors++;
+    if (classification.isSearch) result.searches++;
+    if (classification.isNewCreated) result.newCreated++;
+    if (classification.isNewReused) result.newReused++;
+    if (classification.isUsedCreated) result.usedCreated++;
+    if (classification.isProcessed) { result.totalProcessed++; result.units += productionUnits(item); }
+  }
+  return result;
+}
 
 export interface OperationMetricClassification {
   isSearch: boolean;
