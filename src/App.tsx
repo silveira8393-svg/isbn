@@ -442,7 +442,7 @@ export default function App() {
       operationType: !result.success ? 'operation_error' : savedDraft.condition === 'usado' ? 'used_copy_created' : 'new_product_created',
       status: result.success ? 'success' : 'error', parentCode: result.parentCode, childCode: result.childCode,
       errorMessage: result.success ? undefined : 'Cadastro simulado não concluído.',
-      metadata: { mock: true, quantity: savedDraft.quantity, registrationMode: savedDraft.registrationMode ?? null,
+      metadata: { mock: true, quantity: savedDraft.quantity, registrationMode: savedDraft.condition === 'usado' ? 'used_copy' : 'new_product',
         bibliographicSource: foundBook?.enrichmentSource || foundBook?.provider || null },
       completedAt: new Date(result.registeredAt).toISOString(),
     });

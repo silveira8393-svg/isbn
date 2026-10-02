@@ -151,8 +151,8 @@ test('Concurrent clicks result in one search', async () => {
   assert.equal(deps.records.length, 1);
 });
 
-test('New and used registration record only final completion, using the correct condition/type', async () => {
-  for (const [condition, type, databaseCondition] of [['novo', 'new_product_created', 'new'], ['usado', 'used_copy_created', 'used']]) {
+test('New and used registration record only final completion, using the correct condition/type/registrationMode', async () => {
+  for (const [condition, type, databaseCondition, registrationMode] of [['novo', 'new_product_created', 'new', 'new_product'], ['usado', 'used_copy_created', 'used', 'used_copy']]) {
     const deps = dependencies(); const view = mount(app, deps); await search(view);
     view.find(n => n.type === 'Header').props.onTabChange('cadastro'); await flush();
     const props = view.find(n => n.type === 'ProductRegistrationForm').props;
@@ -160,6 +160,7 @@ test('New and used registration record only final completion, using the correct 
     props.onSuccessRegistration({ success: true, parentCode: 'P', childCode: 'C', registeredAt: Date.now() }, { ...props.draft, condition, quantity: 2 });
     assert.equal(deps.records.length, 2); assert.equal(deps.records[1].operationType, type); assert.equal(deps.records[1].condition, databaseCondition);
     assert.equal(deps.records[1].metadata.quantity, 2);
+    assert.equal(deps.records[1].metadata.registrationMode, registrationMode);
   }
 });
 
