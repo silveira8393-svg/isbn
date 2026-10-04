@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { useUser } from '../contexts/UserContext';
+import MagazordTestMode from './magazord/MagazordTestMode';
 import {
   Settings,
   Store,
@@ -166,6 +167,8 @@ export default function SettingsView() {
                 Camada Simulada (Mock)
               </span>
             </div>
+
+            <MagazordTestMode />
 
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-3">
               <div className="flex items-start gap-2">

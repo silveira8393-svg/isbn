@@ -290,3 +290,54 @@ Validações reexecutadas: `node --test tests/production.test.mjs tests/operatio
 | Alteração | Arquivo | Função / símbolo | Linhas finais | Implementação |
 | --- | --- | --- | --- | --- |
 | Registro desta reconferência | RELATORIO_CODEX.md | seção "Mapa preciso de alterações — ProductionView e métricas Supabase" (reconferência) | 282–292 | Documenta diagnóstico em disco, diff pendente e validações reexecutadas. Sem teste automatizado específico para documentação; conferência por leitura final e diff. |
+
+## Mapa preciso de alterações — Proteção do Modo Teste
+
+Correção pontual em 04/10/2026, partindo de main em 3aa0939d7146d89069e6b4f1b8c118d77eed83f7, com working tree inicialmente limpa. Causa: controles de simulação e handleModeChange não verificavam isDeveloper; o efeito de restauração sozinho não impedia mudanças manuais posteriores.
+
+| Alteração | Arquivo | Função / símbolo | Linhas finais | Implementação |
+| --- | --- | --- | --- | --- |
+| Guard da alteração manual | src/components/magazord/MagazordStatusCard.tsx | MagazordStatusCard / handleModeChange | 87–91 | Não-developer restaura auto no serviço (memória/localStorage) e estado do componente, retornando antes da mudança solicitada e onRetryCheck. Cobertura: testes admin/operator de chamada direta. |
+| Restrição do botão Modo Teste | src/components/magazord/MagazordStatusCard.tsx | MagazordStatusCard / botão de alternância | 198–210 | Renderiza somente quando isDeveloper. Cobertura: testes das três roles. |
+| Restrição do alerta com retorno manual | src/components/magazord/MagazordStatusCard.tsx | MagazordStatusCard / alerta de modo forçado | 214–214 | Alerta e botão de retorno manual disponíveis somente para developer. Cobertura: ausência de botões de mudança para admin/operator. |
+| Restrição do painel de opções | src/components/magazord/MagazordStatusCard.tsx | MagazordStatusCard / painel de simulação | 234–234 | Exige isDeveloper mesmo com showConfig previamente aberto. Cobertura: testes admin/operator com estado de painel aberto. |
+| Harness sem dependências novas | tests/magazordMode.test.mjs | output / nodes / setup | 1–71 | Compila componente real em memória com esbuild, captura handler privado apenas no bundle de teste e usa serviço mock real com localStorage controlado; não altera código de produção para expor handler. |
+| Preservação do developer | tests/magazordMode.test.mjs | teste Developer keeps manual controls, simulation options and local persistence | 73–94 | Verifica controle, opções existentes, persistência, estado e nova checagem após mudanças. |
+| Bloqueio de admin/operator | tests/magazordMode.test.mjs | testes parametrizados hidden controls, persisted forced mode reset and direct handler blocked | 96–123 | Verifica controles ocultos, restauração de persistência/estado para auto, handler direto sem retry e transição de developer para não-developer. |
+| Registro da correção | RELATORIO_CODEX.md | seção Mapa preciso de alterações — Proteção do Modo Teste | 294–311 | Acrescenta causa, mapa exato, validações e limites, preservando o histórico. Conferência por leitura e diff. |
+
+Validações: `node --test tests/magazordMode.test.mjs tests/operations.test.mjs tests/production.test.mjs` — 31 aprovados; `npm.cmd run lint` — aprovado; `npm.cmd run build` — aprovado, com aviso existente de bundle acima de 500 kB (1.134,06 kB); `git diff --check` e verificação do novo teste com `git diff --no-index --check -- NUL tests/magazordMode.test.mjs` — sem erros de whitespace. `npm run lint/build` inicialmente bloqueados pelo PowerShell (npm.ps1); executados via npm.cmd sem alterar política do sistema. Conferidos git status, git diff --stat e git diff.
+
+Persistência e opções do serviço permanecem inalteradas; o efeito existente continua restaurando auto ao carregar como admin/operator. Nenhuma alteração em UserContext, Auth, banco/RLS, operations, ProductionView/métricas, histórico/CSV, consultas ISBN ou regras Novo/Usado/reaproveitamento. audit_logs não implementado. Sem commit/push. Testes isolados não substituem homologação visual: conferir Modo Teste como developer e ausência dos controles/retorno a auto como admin/operator após modo forçado persistido.
+
+## Mapa preciso de alterações — Aplicação confirmada do Modo Teste
+
+Em 04/10/2026, partindo do diff pendente das etapas anteriores: Configurações e Consultar aplicavam imediatamente cada opção. Agora escolher uma opção altera somente selectedMode, um estado React local; Aplicar confirma a alteração. Modo ativo mostra currentMode, lido do serviço, e Aplicar fica desabilitado quando não existe diferença efetiva entre os dois modos. Nenhum botão Salvar foi acrescentado.
+
+A regra de seleção/aplicação foi concentrada em useMagazordTestMode, utilizado pelos dois controles, preservando os estilos e ações operacionais do card. O atalho de Auto em Consultar passou a selecionar Auto e abrir o painel para confirmação. Somente uma aplicação efetiva dispara a nova consulta e limpa a mensagem de vinculação de estoque, como ocorria anteriormente na mudança imediata. A configuração efetiva continua no mesmo magazordMockService e na chave sebo_magazord_sim_config_v2; seleções pendentes não são persistidas e são descartadas ao desmontar. Aliases legados permanecem equivalentes sem regravação automática.
+
+Developer vê os controles e pode selecionar/aplicar. Admin/operator continuam sem botão/painel; o efeito por perfil e os guards de seleção/aplicação restauram auto, inclusive nas chamadas diretas aos handlers e na troca de perfil com painel aberto. A proteção foi centralizada, não removida. App/activeTab e SettingsView/activeSubTab não foram alterados: F5 continua iniciando em Consultar. Auth, UserContext, banco/RLS, serviço de simulação, operations, ProductionView/métricas, histórico/CSV e regras ISBN/Novo/Usado permanecem sem alteração nesta etapa; audit_logs não implementado. Sem commit/push.
+
+Validações: `node --test tests/magazordMode.test.mjs tests/operations.test.mjs tests/production.test.mjs` — 40 aprovados (12 magazordMode, 13 operations, 15 production); `npm.cmd run lint` — aprovado; `npm.cmd run build` — aprovado, com aviso de bundle acima de 500 kB (1.136,46 kB); `git diff --check` — sem erros de whitespace. Os arquivos novos também foram conferidos por `git diff --no-index --check -- NUL <arquivo>`, incluindo o hook compartilhado.
+
+Os testes usam os componentes e o serviço reais, hooks/JSX controlados e localStorage em memória, contando cada chamada efetiva e gravação; a captura dos handlers ocorre somente no bundle de teste. A recarga é simulada por nova instância do módulo/serviço com a mesma persistência. Não foi realizada homologação visual no navegador nem acesso ao banco real nesta etapa.
+
+| Alteração | Arquivo | Função / símbolo | Linhas finais | Implementação |
+| --- | --- | --- | --- | --- |
+| Opções, rótulos e compatibilidade | src/components/magazord/useMagazordTestMode.ts | magazordModeOptions / normalizeMode / getMagazordModeLabel | 5–22 | Mantém os seis modos visíveis e reconhece os aliases legados sem persistência adicional. |
+| Estados de modo e seleção pendente | src/components/magazord/useMagazordTestMode.ts | useMagazordTestMode | 24–29 | Inicializa currentMode pelo serviço, selectedMode local e comparação que habilita Aplicar. |
+| Restauração e proteção por perfil | src/components/magazord/useMagazordTestMode.ts | resetRestrictedMode / efeito por isDeveloper | 31–46 | Restaura auto no serviço e nos estados, fecha o painel e relê o serviço para developer. |
+| Sincronização do resultado do catálogo | src/components/magazord/useMagazordTestMode.ts | efeito por syncKey | 48–54 | Relê o modo efetivo quando o resultado muda, preservando uma escolha pendente. |
+| Seleção local protegida | src/components/magazord/useMagazordTestMode.ts | selectMode | 56–62 | Verifica developer e altera apenas selectedMode; não aplica nem persiste a escolha. |
+| Aplicação confirmada protegida | src/components/magazord/useMagazordTestMode.ts | applyMode | 64–77 | Verifica developer, ignora reaplicação do mesmo modo, grava pelo serviço, relê currentMode e executa callback após mudança efetiva. |
+| Controle em Configurações | src/components/magazord/MagazordTestMode.tsx | MagazordTestMode | 1–40 | Usa o hook compartilhado, exibe Modo ativo, destaca selectedMode e oferece somente Aplicar, condicionado à diferença pendente. |
+| Integração do card de Consultar | src/components/magazord/MagazordStatusCard.tsx | imports / useMagazordTestMode / callback onApplied | 6; 13–14; 64–68 | Substitui a lógica duplicada pelo hook e mantém nova consulta/limpeza de mensagem somente após Aplicar. |
+| Atalho de Auto com confirmação | src/components/magazord/MagazordStatusCard.tsx | botão Selecionar Padrão (Auto) | 174–180 | Seleciona Auto e abre o painel; não altera o modo efetivo antes de Aplicar. |
+| Painel de Consultar | src/components/magazord/MagazordStatusCard.tsx | painel protegido / opções / botão Aplicar | 185–281 | Mantém guard developer, exibe Modo ativo, destaca apenas selectedMode e adiciona Aplicar desabilitado sem pendência. |
+| Harness unificado das duas telas | tests/magazordMode.test.mjs | output / setupView / assertSelection | 1–166 | Compila componentes e hook reais com um único serviço; controla hooks, perfis, persistência e contadores de chamadas/gravações. |
+| Fluxo developer e Auto | tests/magazordMode.test.mjs | testes parametrizados developer selects locally | 168–214 | Confere seleção sem escrita/chamada/retry, aplicação efetiva, indicação textual, destaque único, botão desabilitado e Auto pelo mesmo fluxo nas duas telas. |
+| Leitura inicial e aliases | tests/magazordMode.test.mjs | testes parametrizados initial mode | 216–236 | Confere todos os modos iniciais, aliases e padrão sem configuração salva, sem gravação na montagem ou reaplicação direta. |
+| Persistência e descarte de pendência | tests/magazordMode.test.mjs | testes parametrizados only applied selection survives | 238–267 | Confere navegação entre os controles, remontagem e nova instância do serviço; só o modo aplicado sobrevive. |
+| Bloqueio admin/operator | tests/magazordMode.test.mjs | testes parametrizados has no controls | 269–312 | Confere controles ausentes, auto efetivo/persistido, chamadas diretas de seleção/aplicação bloqueadas e troca de perfil com escolha pendente. |
+| Atalho e atualização do catálogo | tests/magazordMode.test.mjs | testes consultar Auto alert shortcut / catalog refresh | 314–332; 334–352 | Confere confirmação de Auto no atalho e preservação da seleção pendente durante atualização do resultado. |
+| Documentação final desta etapa | RELATORIO_CODEX.md | seção Aplicação confirmada do Modo Teste | 313–343 | Acrescenta comportamento, escopo, validações, limites e mapa exato, preservando todo o histórico anterior. |

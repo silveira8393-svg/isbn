@@ -3,18 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   MagazordProductCheck,
   BookInfo,
   BookCondition,
   MagazordMatchItem,
 } from '../../types';
-import {
-  magazordMockService,
-  MagazordSimulationMode,
-} from '../../services/magazordMockService';
-import { useUser } from '../../contexts/UserContext';
+import { magazordMockService } from '../../services/magazordMockService';
+import { getMagazordModeLabel as getModeLabel, useMagazordTestMode } from './useMagazordTestMode';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -55,25 +52,6 @@ export default function MagazordStatusCard({
   onResetForNextBook,
   onLinkStock,
 }: MagazordStatusCardProps) {
-  const { isDeveloper } = useUser();
-  const [showConfig, setShowConfig] = useState(false);
-  const [currentMode, setCurrentMode] = useState<MagazordSimulationMode>(
-    magazordMockService.getSimulationConfig().mode
-  );
-
-  // Sincroniza sempre o modo da simulação caso haja atualizações externas ou navegação entre abas
-  useEffect(() => {
-    setCurrentMode(magazordMockService.getSimulationConfig().mode);
-  }, [checkResult]);
-
-  // Se o usuário atual não for Desenvolvedor, garante que modos forçados sejam desativados para não afetar o balcão
-  useEffect(() => {
-    if (!isDeveloper && magazordMockService.getSimulationConfig().mode !== 'auto') {
-      magazordMockService.resetModeToAuto();
-      setCurrentMode('auto');
-    }
-  }, [isDeveloper]);
-
   // Estado para vinculação de estoque ao produto NOVO existente
   const [stockQuantityToAdd, setStockQuantityToAdd] = useState(1);
   const [isLinkingStock, setIsLinkingStock] = useState(false);
@@ -83,12 +61,11 @@ export default function MagazordStatusCard({
     message: string;
   } | null>(null);
 
-  const handleModeChange = (newMode: MagazordSimulationMode) => {
-    setCurrentMode(newMode);
+  const { isDeveloper, showConfig, setShowConfig, currentMode, selectedMode,
+    hasPendingChange, selectMode: handleModeChange, applyMode } = useMagazordTestMode(() => {
     setStockLinkSuccess(null);
-    magazordMockService.setSimulationConfig({ mode: newMode });
     onRetryCheck();
-  };
+  }, checkResult);
 
   const handleLinkStockSubmit = async (targetItem?: MagazordMatchItem) => {
     setIsLinkingStock(true);
@@ -109,27 +86,6 @@ export default function MagazordStatusCard({
       console.error('Erro ao vincular estoque:', err);
     } finally {
       setIsLinkingStock(false);
-    }
-  };
-
-  const getModeLabel = (mode: MagazordSimulationMode): string => {
-    switch (mode) {
-      case 'auto':
-        return 'Padrão (Auto)';
-      case 'force_new_found':
-      case 'force_existing':
-        return 'Novo Encontrado';
-      case 'force_new_not_found':
-      case 'force_not_found':
-        return 'Novo Não Encontrado';
-      case 'force_used_known':
-        return 'Usado / Edição Conhecida';
-      case 'force_multiple_matches':
-        return 'Múltiplos Resultados';
-      case 'force_error':
-        return 'Simular Erro';
-      default:
-        return mode;
     }
   };
 
@@ -190,7 +146,7 @@ export default function MagazordStatusCard({
         </div>
 
         {/* Botão de alternância da simulação de teste */}
-        <button
+        {isDeveloper && <button
           type="button"
           onClick={() => setShowConfig(!showConfig)}
           className={`px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-xs cursor-pointer ${
@@ -202,11 +158,11 @@ export default function MagazordStatusCard({
         >
           <Settings2 className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Modo Teste</span>
-        </button>
+        </button>}
       </div>
 
       {/* Alerta de Modo de Teste Forçado ativo caso o usuário tenha esquecido ligado */}
-      {currentMode !== 'auto' && (
+      {isDeveloper && currentMode !== 'auto' && (
         <div className="bg-amber-500/10 border-b border-amber-500/20 px-5 py-2.5 flex items-center justify-between gap-3 text-xs text-amber-900">
           <span className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
@@ -217,16 +173,16 @@ export default function MagazordStatusCard({
           </span>
           <button
             type="button"
-            onClick={() => handleModeChange('auto')}
+            onClick={() => { handleModeChange('auto'); setShowConfig(true); }}
             className="px-3 py-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shrink-0 cursor-pointer shadow-xs transition-colors"
           >
-            Voltar para Padrão (Auto)
+            Selecionar Padrão (Auto)
           </button>
         </div>
       )}
 
       {/* Painel de controle de teste com todos os cenários da regra de negócio */}
-      {showConfig && (
+      {isDeveloper && showConfig && (
         <div className="bg-slate-50 border-b border-slate-200 p-3.5 px-5 text-xs text-slate-700">
           <div className="flex flex-col gap-2.5">
             <div className="flex items-center justify-between">
@@ -239,12 +195,16 @@ export default function MagazordStatusCard({
                 </p>
               </div>
             </div>
+            <p role="status" className="font-semibold text-slate-900">
+              Modo ativo: {getModeLabel(currentMode)}
+            </p>
             <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
+                aria-pressed={selectedMode === 'auto'}
                 onClick={() => handleModeChange('auto')}
                 className={`px-2.5 py-1 rounded text-xs font-medium cursor-pointer border transition-colors ${
-                  currentMode === 'auto'
+                  selectedMode === 'auto'
                     ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                     : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
                 }`}
@@ -253,9 +213,10 @@ export default function MagazordStatusCard({
               </button>
               <button
                 type="button"
+                aria-pressed={selectedMode === 'force_new_found'}
                 onClick={() => handleModeChange('force_new_found')}
                 className={`px-2.5 py-1 rounded text-xs font-medium cursor-pointer border transition-colors ${
-                  currentMode === 'force_new_found' || currentMode === 'force_existing'
+                  selectedMode === 'force_new_found'
                     ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
                     : 'bg-white text-emerald-800 border-emerald-300 hover:bg-emerald-50'
                 }`}
@@ -264,9 +225,10 @@ export default function MagazordStatusCard({
               </button>
               <button
                 type="button"
+                aria-pressed={selectedMode === 'force_new_not_found'}
                 onClick={() => handleModeChange('force_new_not_found')}
                 className={`px-2.5 py-1 rounded text-xs font-medium cursor-pointer border transition-colors ${
-                  currentMode === 'force_new_not_found' || currentMode === 'force_not_found'
+                  selectedMode === 'force_new_not_found'
                     ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                     : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
                 }`}
@@ -275,9 +237,10 @@ export default function MagazordStatusCard({
               </button>
               <button
                 type="button"
+                aria-pressed={selectedMode === 'force_used_known'}
                 onClick={() => handleModeChange('force_used_known')}
                 className={`px-2.5 py-1 rounded text-xs font-medium cursor-pointer border transition-colors ${
-                  currentMode === 'force_used_known'
+                  selectedMode === 'force_used_known'
                     ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
                     : 'bg-white text-indigo-800 border-indigo-300 hover:bg-indigo-50'
                 }`}
@@ -286,9 +249,10 @@ export default function MagazordStatusCard({
               </button>
               <button
                 type="button"
+                aria-pressed={selectedMode === 'force_multiple_matches'}
                 onClick={() => handleModeChange('force_multiple_matches')}
                 className={`px-2.5 py-1 rounded text-xs font-medium cursor-pointer border transition-colors ${
-                  currentMode === 'force_multiple_matches'
+                  selectedMode === 'force_multiple_matches'
                     ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
                     : 'bg-white text-amber-800 border-amber-300 hover:bg-amber-50'
                 }`}
@@ -297,14 +261,19 @@ export default function MagazordStatusCard({
               </button>
               <button
                 type="button"
+                aria-pressed={selectedMode === 'force_error'}
                 onClick={() => handleModeChange('force_error')}
                 className={`px-2.5 py-1 rounded text-xs font-medium cursor-pointer border transition-colors ${
-                  currentMode === 'force_error'
+                  selectedMode === 'force_error'
                     ? 'bg-red-600 text-white border-red-600 shadow-xs'
                     : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
                 }`}
               >
                 Simular Erro
+              </button>
+              <button type="button" onClick={applyMode} disabled={!hasPendingChange}
+                className="px-3 py-1 rounded bg-blue-600 text-white text-xs font-semibold cursor-pointer disabled:bg-slate-200 disabled:text-slate-500 disabled:cursor-not-allowed">
+                Aplicar
               </button>
             </div>
           </div>
