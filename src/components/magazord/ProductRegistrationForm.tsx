@@ -9,7 +9,7 @@ import {
   MagazordRegistrationResult,
   BookInfo,
 } from '../../types';
-import { magazordMockService } from '../../services/magazordMockService';
+import { magazordMockService, type MagazordSimulationMode } from '../../services/magazordMockService';
 import { buildFinalDescription } from '../../utils/draft';
 import ProductIdentitySection from './ProductIdentitySection';
 import CategoryAndBrandSection from './CategoryAndBrandSection';
@@ -33,9 +33,10 @@ import {
 interface ProductRegistrationFormProps {
   draft: RegistrationDraft;
   originalBook: BookInfo;
+  captureActionMode?: () => MagazordSimulationMode;
   onUpdateDraft: (updates: Partial<RegistrationDraft>) => void;
   onBackToSearch: () => void;
-  onSuccessRegistration: (result: MagazordRegistrationResult, draft: RegistrationDraft) => void;
+  onSuccessRegistration: (result: MagazordRegistrationResult, draft: RegistrationDraft, actionMode?: MagazordSimulationMode) => void;
   onRegistrationError?: (draft: RegistrationDraft) => void;
   onProcessNextBook: () => void;
 }
@@ -43,6 +44,7 @@ interface ProductRegistrationFormProps {
 export default function ProductRegistrationForm({
   draft,
   originalBook,
+  captureActionMode,
   onUpdateDraft,
   onBackToSearch,
   onSuccessRegistration,
@@ -114,6 +116,7 @@ export default function ProductRegistrationForm({
     }
 
     submissionInFlight.current = true;
+    const actionMode = captureActionMode?.() ?? magazordMockService.getSimulationConfig().mode;
     setIsSubmitting(true);
 
     try {
@@ -122,10 +125,10 @@ export default function ProductRegistrationForm({
         ...draft,
         description: finalDescription,
       };
-      const result = await magazordMockService.createProduct(draftToSubmit);
+      const result = await magazordMockService.createProduct(draftToSubmit, actionMode);
       submissionCompleted.current = true;
       setSuccessResult(result);
-      onSuccessRegistration(result, draftToSubmit);
+      onSuccessRegistration(result, draftToSubmit, actionMode);
     } catch (err: any) {
       console.error('Falha no cadastro simulado Magazord', err);
       setSubmitError(

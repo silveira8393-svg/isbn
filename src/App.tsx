@@ -34,7 +34,7 @@ import { cleanIsbn, isValidIsbnFormat } from './utils/isbn';
 import { recordOperation, type RecordOperationInput } from './services/operationsService';
 import { createRegistrationDraft } from './utils/draft';
 import { CANONICAL_CSV_DATASET } from './utils/metrics';
-import { magazordMockService } from './services/magazordMockService';
+import { magazordMockService, type MagazordSimulationMode } from './services/magazordMockService';
 import {
   BookOpen,
   AlertCircle,
@@ -57,6 +57,19 @@ export default function App() {
   const [operationWarning, setOperationWarning] = useState(false);
   const searchInFlight = useRef(false);
   const stockLinkInFlight = useRef(false);
+  const currentUserRef = useRef(currentUser);
+  currentUserRef.current = currentUser;
+  const checkActionMode = useRef<MagazordSimulationMode>('auto');
+
+  const captureActionMode = (): MagazordSimulationMode => currentUserRef.current.role === 'developer'
+    ? magazordMockService.getSimulationConfig().mode
+    : 'auto';
+  const canShowActionResult = (actionMode: MagazordSimulationMode) => captureActionMode() === actionMode
+    && (actionMode === 'auto' || currentUserRef.current.role === 'developer');
+
+  const visibleHistory = currentUser.role === 'developer'
+    ? history
+    : history.filter(item => item.historyKind !== 'test');
 
   const saveOperation = (operation: Omit<RecordOperationInput, 'storeId'>) => {
     // Capture the account/store of the explicit business event; never write from a React updater/effect.
@@ -79,6 +92,14 @@ export default function App() {
   const [magazordCheckResult, setMagazordCheckResult] = useState<MagazordProductCheck | null>(null);
   const [isCheckingMagazord, setIsCheckingMagazord] = useState(false);
   const [magazordCheckError, setMagazordCheckError] = useState<string | null>(null);
+  const canViewCheck = currentUser.role === 'developer' || checkActionMode.current === 'auto';
+  const visibleMagazordCheck = canViewCheck ? magazordCheckResult : null;
+
+  useEffect(() => {
+    if (currentUser.role !== 'developer' && magazordMockService.getSimulationConfig().mode !== 'auto') {
+      magazordMockService.resetModeToAuto();
+    }
+  }, [currentUser.role]);
 
   // Load history from localStorage on startup (ou popula com o dataset canônico real se vazio)
   useEffect(() => {
@@ -96,19 +117,27 @@ export default function App() {
   }, []);
 
   // Realiza checagem simulada na API Magazord para o livro encontrado
-  const runMagazordCheck = async (cleanedIsbn: string, book: BookInfo) => {
+  const runMagazordCheck = async (
+    cleanedIsbn: string,
+    book: BookInfo,
+    actionMode: MagazordSimulationMode = captureActionMode()
+  ) => {
     setIsCheckingMagazord(true);
     setMagazordCheckError(null);
 
     try {
-      const check = await magazordMockService.checkProductByEan(cleanedIsbn, book.title);
-      setMagazordCheckResult(check);
+      const check = await magazordMockService.checkProductByEan(cleanedIsbn, book.title, undefined, actionMode);
+      if (canShowActionResult(actionMode)) {
+        checkActionMode.current = actionMode;
+        setMagazordCheckResult(check);
+      }
 
       // Atualiza o registro no histórico com status da Magazord (apenas em consultas pendentes)
       setHistory((prevHistory) => {
         const updated = prevHistory.map((item) => {
           if (
             item.isbn === cleanedIsbn &&
+            (item.historyKind ?? 'operational') === (actionMode === 'auto' ? 'operational' : 'test') &&
             (!item.operationType || item.operationType === 'pesquisa_isbn')
           ) {
             return {
@@ -129,7 +158,10 @@ export default function App() {
       });
     } catch (err: any) {
       console.error('Erro na checagem Magazord simulada:', err);
-      setMagazordCheckError(err.message || 'Falha de comunicação simulada com a Magazord.');
+      if (canShowActionResult(actionMode)) {
+        checkActionMode.current = actionMode;
+        setMagazordCheckError(err.message || 'Falha de comunicação simulada com a Magazord.');
+      }
     } finally {
       setIsCheckingMagazord(false);
     }
@@ -145,6 +177,7 @@ export default function App() {
     }
 
     searchInFlight.current = true;
+    const actionMode = captureActionMode();
     setIsLoading(true);
     setErrorText(null);
     setFoundBook(null);
@@ -173,6 +206,7 @@ export default function App() {
         // Add item to history with thumbnail support and audit info
         const newItem: SearchHistoryItem = {
           timestamp: Date.now(),
+          historyKind: actionMode === 'auto' ? 'operational' : 'test',
           isbn: cleaned,
           title: enrichedBook.title,
           authors: enrichedBook.authors,
@@ -192,6 +226,7 @@ export default function App() {
             prevHistory.length > 0 &&
             prevHistory[0].isbn === cleaned &&
             prevHistory[0].operationType === 'pesquisa_isbn' &&
+            (prevHistory[0].historyKind ?? 'operational') === newItem.historyKind &&
             Date.now() - prevHistory[0].timestamp < 3000
           ) {
             return prevHistory;
@@ -214,7 +249,7 @@ export default function App() {
             distribuidoraCuritiba: { status: distribuidoraResult.diagnostic.status, resultFound: Boolean(distribuidoraResult.book) },
           } },
         });
-        void runMagazordCheck(cleaned, enrichedBook);
+        void runMagazordCheck(cleaned, enrichedBook, actionMode);
       } else {
         let localError = 'ISBN não encontrado na base de dados.';
         if (result.diagnostic.status === 404) {
@@ -230,6 +265,7 @@ export default function App() {
 
         const newItem: SearchHistoryItem = {
           timestamp: Date.now(),
+          historyKind: actionMode === 'auto' ? 'operational' : 'test',
           isbn: cleaned,
           title: `Não localizado (${cleaned})`,
           authors: undefined,
@@ -299,7 +335,7 @@ export default function App() {
     if (!foundBook) return;
     const targetCondition =
       condition ||
-      magazordCheckResult?.existingCondition ||
+      visibleMagazordCheck?.existingCondition ||
       'novo';
     const draft = createRegistrationDraft(foundBook, targetCondition);
     setRegistrationDraft(draft);
@@ -315,18 +351,19 @@ export default function App() {
     const ean = targetItem?.childCode || foundBook.isbn13 || foundBook.isbn10 || searchedTerm;
     const targetChildCode =
       targetItem?.childCode ||
-      (magazordCheckResult?.existingCondition === 'novo' ? magazordCheckResult?.childCode : undefined);
+      (visibleMagazordCheck?.existingCondition === 'novo' ? visibleMagazordCheck?.childCode : undefined);
 
     if (stockLinkInFlight.current) throw new Error('Vinculação já em andamento.');
+    const actionMode = captureActionMode();
     stockLinkInFlight.current = true;
     let result: Awaited<ReturnType<typeof magazordMockService.addStockToExistingProduct>>;
     try {
-      result = await magazordMockService.addStockToExistingProduct(ean, quantityToAdd, targetChildCode);
+      result = await magazordMockService.addStockToExistingProduct(ean, quantityToAdd, targetChildCode, actionMode);
     } catch (err) {
       saveOperation({
         isbn: searchedTerm || foundBook.isbn13 || foundBook.isbn10, title: foundBook.title,
         condition: 'new', operationType: 'operation_error', status: 'error',
-        parentCode: targetItem?.parentCode || magazordCheckResult?.parentCode, childCode: targetChildCode,
+        parentCode: targetItem?.parentCode || visibleMagazordCheck?.parentCode, childCode: targetChildCode,
         errorMessage: 'Falha ao concluir a vinculação de estoque simulada.',
         metadata: { flow: 'new_product_reused', mock: true }, completedAt: new Date().toISOString(),
       });
@@ -336,7 +373,7 @@ export default function App() {
     }
 
     // Atualiza imediatamente o estado de checagem em tela para refletir o novo saldo de estoque
-    setMagazordCheckResult((prev) => {
+    if (canShowActionResult(actionMode)) setMagazordCheckResult((prev) => {
       if (!prev) return null;
       const updatedMatches = prev.matches?.map((m) => {
         if (
@@ -358,6 +395,7 @@ export default function App() {
     // Registra evento de auditoria operacional: Reaproveitamento Comercial de Produto Novo
     const auditItem: SearchHistoryItem = {
       timestamp: Date.now(),
+      historyKind: actionMode === 'auto' ? 'operational' : 'test',
       isbn: searchedTerm || ean,
       title: foundBook.title,
       authors: foundBook.authors,
@@ -366,8 +404,8 @@ export default function App() {
       magazordStatus: 'localizado',
       condition: 'novo',
       operationType: 'reaproveitamento_produto_novo',
-      parentCode: targetItem?.parentCode || magazordCheckResult?.parentCode,
-      childCode: targetItem?.childCode || magazordCheckResult?.childCode,
+      parentCode: targetItem?.parentCode || visibleMagazordCheck?.parentCode,
+      childCode: targetItem?.childCode || visibleMagazordCheck?.childCode,
       userId: currentUser.id,
       userName: currentUser.name,
       userRole: currentUser.role,
@@ -398,7 +436,8 @@ export default function App() {
   // Sucesso no cadastro Magazord simulado
   const handleSuccessRegistration = (
     result: MagazordRegistrationResult,
-    savedDraft: RegistrationDraft
+    savedDraft: RegistrationDraft,
+    actionMode: MagazordSimulationMode = captureActionMode()
   ) => {
     // Registra evento de auditoria operacional do cadastro concluído
     const currentIsbn = searchedTerm || savedDraft.isbn13 || savedDraft.ean;
@@ -409,6 +448,7 @@ export default function App() {
 
     const auditItem: SearchHistoryItem = {
       timestamp: Date.now(),
+      historyKind: actionMode === 'auto' ? 'operational' : 'test',
       isbn: currentIsbn,
       title: savedDraft.title,
       authors: foundBook?.authors || [],
@@ -446,8 +486,13 @@ export default function App() {
         bibliographicSource: foundBook?.enrichmentSource || foundBook?.provider || null },
       completedAt: new Date(result.registeredAt).toISOString(),
     });
-    void magazordMockService.checkProductByEan(currentIsbn, savedDraft.title).then((freshCheck) => {
-      setMagazordCheckResult(freshCheck);
+    void magazordMockService.checkProductByEan(currentIsbn, savedDraft.title, undefined, actionMode).then((freshCheck) => {
+      if (canShowActionResult(actionMode)) {
+        checkActionMode.current = actionMode;
+        setMagazordCheckResult(freshCheck);
+      }
+    }).catch(() => {
+      if (canShowActionResult(actionMode)) setMagazordCheckError('Falha ao atualizar a consulta Magazord.');
     });
   };
 
@@ -475,7 +520,7 @@ export default function App() {
   };
 
   const handleExportHistoryCsv = () => {
-    if (history.length === 0) return;
+    if (visibleHistory.length === 0) return;
 
     const headers = [
       'ISBN',
@@ -493,7 +538,7 @@ export default function App() {
       'Status Consulta',
     ];
 
-    const rows = history.map((item) => {
+    const rows = visibleHistory.map((item) => {
       const authors = Array.isArray(item.authors) && item.authors.length > 0 ? item.authors.join(' | ') : '';
       const condition = item.condition ? (item.condition === 'novo' ? 'Novo' : 'Usado') : '';
       const operationType =
@@ -578,7 +623,7 @@ export default function App() {
       <Header
         activeTab={activeTab}
         onTabChange={(tab) => setActiveTab(tab)}
-        historyCount={history.length}
+        historyCount={visibleHistory.length}
         hasActiveDraft={Boolean(registrationDraft)}
       />
 
@@ -649,9 +694,9 @@ export default function App() {
                 <div className="space-y-6 animate-fade-in">
                   {/* Card de Status e Ação Magazord (Regras de Novos e Usados) */}
                   <MagazordStatusCard
-                    checkResult={magazordCheckResult}
+                    checkResult={visibleMagazordCheck}
                     isChecking={isCheckingMagazord}
-                    checkError={magazordCheckError}
+                    checkError={canViewCheck ? magazordCheckError : null}
                     book={foundBook}
                     onOpenRegistration={handleOpenRegistration}
                     onRetryCheck={() => runMagazordCheck(searchedTerm, foundBook)}
@@ -687,7 +732,7 @@ export default function App() {
             {/* Sidebar Area: Histórico Recente (4 cols no desktop) */}
             <div className="hidden lg:block lg:col-span-4 space-y-6">
               <SearchHistoryGroup
-                items={history}
+                items={visibleHistory}
                 onSelect={handleSelectHistoryItem}
                 onClear={handleClearHistory}
                 onExport={handleExportHistoryCsv}
@@ -702,6 +747,7 @@ export default function App() {
             {registrationDraft && foundBook ? (
               <ProductRegistrationForm
                 draft={registrationDraft}
+                captureActionMode={captureActionMode}
                 originalBook={foundBook}
                 onUpdateDraft={(updates) =>
                   setRegistrationDraft((prev) => (prev ? { ...prev, ...updates } : null))
@@ -746,7 +792,7 @@ export default function App() {
         {activeTab === 'historico' && (
           <div className="max-w-3xl mx-auto">
             <SearchHistoryGroup
-              items={history}
+              items={visibleHistory}
               onSelect={(isbn) => {
                 handleSelectHistoryItem(isbn);
                 setActiveTab('consultar');

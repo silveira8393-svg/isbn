@@ -10,7 +10,7 @@ import {
   BookCondition,
   MagazordMatchItem,
 } from '../../types';
-import { magazordMockService } from '../../services/magazordMockService';
+import { magazordMockService, type MagazordSimulationMode } from '../../services/magazordMockService';
 import { getMagazordModeLabel as getModeLabel, useMagazordTestMode } from './useMagazordTestMode';
 import {
   CheckCircle2,
@@ -55,10 +55,11 @@ export default function MagazordStatusCard({
   // Estado para vinculação de estoque ao produto NOVO existente
   const [stockQuantityToAdd, setStockQuantityToAdd] = useState(1);
   const [isLinkingStock, setIsLinkingStock] = useState(false);
-  const [stockLinkSuccess, setStockLinkSuccess] = useState<{
+  const [stockLinkResult, setStockLinkSuccess] = useState<{
     success: boolean;
     newStock: number;
     message: string;
+    actionMode: MagazordSimulationMode;
   } | null>(null);
 
   const { isDeveloper, showConfig, setShowConfig, currentMode, selectedMode,
@@ -66,21 +67,25 @@ export default function MagazordStatusCard({
     setStockLinkSuccess(null);
     onRetryCheck();
   }, checkResult);
+  const stockLinkSuccess = stockLinkResult && stockLinkResult.actionMode === currentMode
+    && (isDeveloper || stockLinkResult.actionMode === 'auto') ? stockLinkResult : null;
 
   const handleLinkStockSubmit = async (targetItem?: MagazordMatchItem) => {
+    const actionMode = isDeveloper ? magazordMockService.getSimulationConfig().mode : 'auto';
     setIsLinkingStock(true);
     try {
       if (onLinkStock) {
         const res = await onLinkStock(stockQuantityToAdd, targetItem);
-        setStockLinkSuccess(res);
+        setStockLinkSuccess({ ...res, actionMode });
       } else {
         const ean = book.isbn13 || book.isbn10 || '';
         const res = await magazordMockService.addStockToExistingProduct(
           ean,
           stockQuantityToAdd,
-          targetItem?.childCode
+          targetItem?.childCode,
+          actionMode
         );
-        setStockLinkSuccess(res);
+        setStockLinkSuccess({ ...res, actionMode });
       }
     } catch (err: any) {
       console.error('Erro ao vincular estoque:', err);

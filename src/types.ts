@@ -178,6 +178,8 @@ export type OperationType =
 
 export interface SearchHistoryItem {
   timestamp: number;
+  // Entradas legadas sem classificação são tratadas como operacionais.
+  historyKind?: 'operational' | 'test';
   isbn: string;
   title: string;
   authors?: string[];

@@ -35,6 +35,7 @@ const DEFAULT_CONFIG: MagazordSimulationConfig = {
 
 const SIMULATED_MAGAZORD_STORAGE_KEY_V3 = 'sebo_magazord_simulated_db_v3';
 const SIMULATED_MAGAZORD_STORAGE_KEY_LEGACY = 'sebo_magazord_simulated_db_v2';
+const SANDBOX_MAGAZORD_STORAGE_KEY = 'sebo_magazord_sandbox_db_v1';
 const SIMULATION_CONFIG_KEY = 'sebo_magazord_sim_config_v2';
 
 export interface SimulatedRecord {
@@ -47,8 +48,12 @@ export interface SimulatedRecord {
   price?: string;
   stock: number;
   description?: string;
+  sku?: string;
   registeredAt: number;
 }
+
+type SimulatedCatalog = Record<string, SimulatedRecord[]>;
+type SandboxCatalogs = Partial<Record<MagazordSimulationMode, SimulatedCatalog>>;
 
 class MagazordMockService {
   private config: MagazordSimulationConfig = DEFAULT_CONFIG;
@@ -81,11 +86,30 @@ class MagazordMockService {
     this.setSimulationConfig({ mode: 'auto' });
   }
 
+  private normalizeMode(mode: MagazordSimulationMode): MagazordSimulationMode {
+    if (mode === 'force_existing') return 'force_new_found';
+    if (mode === 'force_not_found') return 'force_new_not_found';
+    return mode;
+  }
+
+  private getSandboxCatalogs(): SandboxCatalogs {
+    try {
+      const raw = localStorage.getItem(SANDBOX_MAGAZORD_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
   /**
    * Carrega o banco de dados simulado local, com suporte a múltiplos registros por EAN/ISBN
    * e migração transparente de versões legadas de formato único.
    */
-  private getSimulatedDb(): Record<string, SimulatedRecord[]> {
+  private getSimulatedDb(actionMode: MagazordSimulationMode): SimulatedCatalog {
+    if (actionMode !== 'auto') {
+      return this.getSandboxCatalogs()[this.normalizeMode(actionMode)] || {};
+    }
     try {
       const rawV3 = localStorage.getItem(SIMULATED_MAGAZORD_STORAGE_KEY_V3);
       if (rawV3) {
@@ -126,8 +150,14 @@ class MagazordMockService {
     }
   }
 
-  private saveSimulatedDb(db: Record<string, SimulatedRecord[]>) {
+  private saveSimulatedDb(db: SimulatedCatalog, actionMode: MagazordSimulationMode) {
     try {
+      if (actionMode !== 'auto') {
+        const catalogs = this.getSandboxCatalogs();
+        catalogs[this.normalizeMode(actionMode)] = db;
+        localStorage.setItem(SANDBOX_MAGAZORD_STORAGE_KEY, JSON.stringify(catalogs));
+        return;
+      }
       localStorage.setItem(SIMULATED_MAGAZORD_STORAGE_KEY_V3, JSON.stringify(db));
       localStorage.setItem(SIMULATED_MAGAZORD_STORAGE_KEY_LEGACY, JSON.stringify(db));
     } catch (e) {
@@ -135,12 +165,42 @@ class MagazordMockService {
     }
   }
 
+  /** Materializa somente fixtures do cenário sandbox, sem copiar dados operacionais. */
+  private ensureSandboxFixtures(ean: string, bookTitle: string | undefined, actionMode: MagazordSimulationMode): SimulatedRecord[] {
+    const mode = this.normalizeMode(actionMode);
+    const safeEan = cleanIsbn(ean) || '9788553131303';
+    const db = this.getSimulatedDb(mode);
+    const records = db[safeEan] || [];
+    const fixture = (condition: BookCondition, parentCode: string, childCode: string, title: string, stock: number, sku: string, price?: string): SimulatedRecord => ({
+      id: `fixture-${mode}-${safeEan}-${childCode}`, ean: safeEan, condition,
+      parentCode, childCode, title, stock, sku, price, registeredAt: Date.now(),
+    });
+    let fixtures: SimulatedRecord[] = [];
+    if (mode === 'force_new_found' && !records.some(record => record.condition === 'novo')) {
+      fixtures = [fixture('novo', 'LV26579-P', safeEan, bookTitle || 'Produto Novo Cadastrado na Magazord', 3, `SKU-NV-${safeEan.slice(-6)}`)];
+    } else if (mode === 'force_used_known' && !records.some(record => record.condition === 'usado')) {
+      fixtures = [fixture('usado', 'LV-EDICAO-P', 'LV10100', bookTitle || 'Edição Conhecida no Catálogo Magazord', 1, `SKU-US-${safeEan.slice(-6)}`)];
+    } else if (mode === 'force_multiple_matches') {
+      fixtures = [
+        fixture('novo', 'LV26579-P', safeEan, (bookTitle || 'Obra') + ' (Cadastro Novo Padrão)', 4, `SKU-NV-${safeEan.slice(-4)}`, '49.90'),
+        fixture('usado', 'LV10100-P', 'LV10100', (bookTitle || 'Obra') + ' (Exemplar Usado A - Sebo)', 1, 'SKU-US-10100', '25.00'),
+        fixture('usado', 'LV10105-P', 'LV10105', (bookTitle || 'Obra') + ' (Exemplar Usado B - Sebo)', 1, 'SKU-US-10105', '19.90'),
+      ].filter(candidate => !records.some(record => record.condition === candidate.condition && record.childCode === candidate.childCode));
+    }
+    if (fixtures.length > 0) {
+      db[safeEan] = [...records, ...fixtures];
+      this.saveSimulatedDb(db, mode);
+      return db[safeEan];
+    }
+    return records;
+  }
+
   /**
    * Obtém a lista de registros para determinado ISBN/EAN (ou código filho).
    */
-  public getRecordsForEan(ean: string): SimulatedRecord[] {
+  public getRecordsForEan(ean: string, actionMode: MagazordSimulationMode = this.config.mode): SimulatedRecord[] {
     const cleanKey = cleanIsbn(ean) || ean;
-    const db = this.getSimulatedDb();
+    const db = this.getSimulatedDb(actionMode);
     if (db[cleanKey] && Array.isArray(db[cleanKey]) && db[cleanKey].length > 0) {
       return db[cleanKey];
     }
@@ -166,12 +226,14 @@ class MagazordMockService {
   public async checkProductByEan(
     ean: string,
     bookTitle?: string,
-    inspectedCondition?: BookCondition
+    inspectedCondition?: BookCondition,
+    actionMode: MagazordSimulationMode = this.config.mode
   ): Promise<MagazordProductCheck> {
+    // O parâmetro padrão captura o modo antes do primeiro await; chamadas compostas podem repassá-lo.
     // Delay simulado de rede (300ms a 450ms)
     await new Promise((resolve) => setTimeout(resolve, 380));
 
-    const mode = this.config.mode;
+    const mode = this.normalizeMode(actionMode);
 
     if (mode === 'force_error') {
       throw new Error('Falha de conexão com a API Magazord (503 Service Unavailable)');
@@ -179,19 +241,19 @@ class MagazordMockService {
 
     // 1. FORÇAR: Novo Encontrado (Cadastro Novo Compatível)
     if (mode === 'force_new_found' || mode === 'force_existing') {
-      const safeEan = cleanIsbn(ean) || '9788553131303';
+      const record = this.ensureSandboxFixtures(ean, bookTitle, mode).find(item => item.condition === 'novo')!;
       return {
         exists: true,
         status: 'NEW_PRODUCT_FOUND',
         catalogMatch: true,
         canReuseCommercialRegistration: true,
         existingCondition: 'novo',
-        parentCode: 'LV26579-P',
-        childCode: safeEan,
-        sku: `SKU-NV-${safeEan.slice(-6)}`,
-        title: bookTitle || 'Produto Novo Cadastrado na Magazord',
+        parentCode: record.parentCode,
+        childCode: record.childCode,
+        sku: record.sku || `SKU-NV-${record.childCode.slice(-6)}`,
+        title: record.title,
         statusMessage: 'Cadastro NOVO compatível localizado na Magazord.',
-        currentStock: 3,
+        currentStock: record.stock,
       };
     }
 
@@ -208,17 +270,18 @@ class MagazordMockService {
 
     // 3. FORÇAR: Usado / ISBN Conhecido (Edição Conhecida)
     if (mode === 'force_used_known') {
-      const safeEan = cleanIsbn(ean) || '9788553131303';
+      const record = this.ensureSandboxFixtures(ean, bookTitle, mode).find(item => item.condition === 'usado')!;
       return {
         exists: true,
         status: 'USED_EDITION_FOUND',
         catalogMatch: true,
         canReuseCommercialRegistration: false, // Usado NUNCA reaproveita o cadastro comercial
         existingCondition: 'usado',
-        parentCode: 'LV-EDICAO-P',
-        childCode: 'LV10100',
-        sku: `SKU-US-${safeEan.slice(-6)}`,
-        title: bookTitle || 'Edição Conhecida no Catálogo Magazord',
+        parentCode: record.parentCode,
+        childCode: record.childCode,
+        sku: record.sku || `SKU-US-${record.childCode.slice(-6)}`,
+        title: record.title,
+        currentStock: record.stock,
         statusMessage:
           'Esta edição já é conhecida no catálogo. Os dados bibliográficos existentes serão reaproveitados para preparar um novo exemplar usado.',
       };
@@ -237,39 +300,14 @@ class MagazordMockService {
 
     // 5. FORÇAR: Múltiplos Resultados
     if (mode === 'force_multiple_matches') {
-      const safeEan = cleanIsbn(ean) || '9788553131303';
-      const matches: MagazordMatchItem[] = [
-        {
-          id: 'match-1',
-          parentCode: 'LV26579-P',
-          childCode: safeEan,
-          condition: 'novo',
-          title: (bookTitle || 'Obra') + ' (Cadastro Novo Padrão)',
-          sku: `SKU-NV-${safeEan.slice(-4)}`,
-          stock: 4,
-          price: '49.90',
-        },
-        {
-          id: 'match-2',
-          parentCode: 'LV10100-P',
-          childCode: 'LV10100',
-          condition: 'usado',
-          title: (bookTitle || 'Obra') + ' (Exemplar Usado A - Sebo)',
-          sku: `SKU-US-10100`,
-          stock: 1,
-          price: '25.00',
-        },
-        {
-          id: 'match-3',
-          parentCode: 'LV10105-P',
-          childCode: 'LV10105',
-          condition: 'usado',
-          title: (bookTitle || 'Obra') + ' (Exemplar Usado B - Sebo)',
-          sku: `SKU-US-10105`,
-          stock: 1,
-          price: '19.90',
-        },
-      ];
+      const records = this.ensureSandboxFixtures(ean, bookTitle, mode);
+      const novoRecord = records.find(record => record.condition === 'novo')!;
+      const matches: MagazordMatchItem[] = records.map(record => ({
+        id: record.id, parentCode: record.parentCode, childCode: record.childCode,
+        condition: record.condition, title: record.title,
+        sku: record.sku || `SKU-${record.condition === 'novo' ? 'NV' : 'US'}-${record.childCode.slice(-6)}`,
+        stock: record.stock, price: record.price,
+      }));
 
       return {
         exists: true,
@@ -277,9 +315,9 @@ class MagazordMockService {
         catalogMatch: true,
         canReuseCommercialRegistration: true, // Possui produto novo
         existingCondition: 'novo',
-        parentCode: 'LV26579-P',
-        childCode: safeEan,
-        currentStock: 4,
+        parentCode: novoRecord.parentCode,
+        childCode: novoRecord.childCode,
+        currentStock: novoRecord.stock,
         statusMessage: 'Encontramos cadastro comercial NOVO e exemplar(es) USADO(S) vinculados a este ISBN.',
         matches,
       };
@@ -289,7 +327,7 @@ class MagazordMockService {
     // MODO 'auto': busca no banco simulado local real
     // -------------------------------------------------------------
     const cleanKey = cleanIsbn(ean) || ean;
-    const records = this.getRecordsForEan(cleanKey);
+    const records = this.getRecordsForEan(cleanKey, mode);
 
     if (records.length === 0) {
       return {
@@ -427,12 +465,14 @@ class MagazordMockService {
   public async addStockToExistingProduct(
     ean: string,
     quantityToAdd: number,
-    targetChildCode?: string
+    targetChildCode?: string,
+    actionMode: MagazordSimulationMode = this.config.mode
   ): Promise<{ success: boolean; newStock: number; message: string }> {
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     const cleanKey = cleanIsbn(ean) || ean;
-    const db = this.getSimulatedDb();
+    if (actionMode !== 'auto') this.ensureSandboxFixtures(ean, undefined, actionMode);
+    const db = this.getSimulatedDb(actionMode);
     let records = db[cleanKey] || [];
     let targetKey = cleanKey;
 
@@ -466,7 +506,7 @@ class MagazordMockService {
     if (targetRecord) {
       targetRecord.stock = newStock;
       db[targetKey] = records;
-      this.saveSimulatedDb(db);
+      this.saveSimulatedDb(db, actionMode);
     } else {
       // Se não havia registro Novo no banco (ex: teste forçado), cria registro Novo padrão
       const fallbackRecord: SimulatedRecord = {
@@ -480,7 +520,7 @@ class MagazordMockService {
         registeredAt: Date.now(),
       };
       db[targetKey] = [fallbackRecord, ...records];
-      this.saveSimulatedDb(db);
+      this.saveSimulatedDb(db, actionMode);
     }
 
     return {
@@ -496,11 +536,11 @@ class MagazordMockService {
    * - Para USADO: SEMPRE cria um exemplar físico independente (novo id, Código Pai próprio, etc.),
    *   preservando integralmente o produto Novo e quaisquer Usados anteriores.
    */
-  public async createProduct(draft: RegistrationDraft): Promise<MagazordRegistrationResult> {
+  public async createProduct(draft: RegistrationDraft, actionMode: MagazordSimulationMode = this.config.mode): Promise<MagazordRegistrationResult> {
     // Delay de processamento simulado (850ms)
     await new Promise((resolve) => setTimeout(resolve, 850));
 
-    if (this.config.mode === 'force_error') {
+    if (actionMode === 'force_error') {
       throw new Error('Falha ao processar cadastro na API Magazord: Timeout de resposta');
     }
 
@@ -509,7 +549,7 @@ class MagazordMockService {
       cleanIsbn(draft.childCode) ||
       'SEM_EAN';
 
-    const db = this.getSimulatedDb();
+    const db = this.getSimulatedDb(actionMode);
     const existingList = db[cleanEan] ? [...db[cleanEan]] : [];
 
     const newRecord: SimulatedRecord = {
@@ -545,7 +585,7 @@ class MagazordMockService {
     }
 
     db[cleanEan] = existingList;
-    this.saveSimulatedDb(db);
+    this.saveSimulatedDb(db, actionMode);
 
     return {
       success: true,
@@ -564,12 +604,13 @@ class MagazordMockService {
    */
   public async complementExistingProduct(
     ean: string,
-    book: BookInfo
+    book: BookInfo,
+    actionMode: MagazordSimulationMode = this.config.mode
   ): Promise<{ success: boolean; parentCode: string; childCode: string; message: string }> {
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     const cleanKey = cleanIsbn(ean) || ean;
-    const records = this.getRecordsForEan(cleanKey);
+    const records = this.getRecordsForEan(cleanKey, actionMode);
     const existing = records[0] || {
       parentCode: 'LV-EXISTING-P',
       childCode: cleanKey,

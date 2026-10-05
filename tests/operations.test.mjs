@@ -122,7 +122,7 @@ function dependencies(overrides = {}) {
     record: async (row, expectedActor) => { assert.equal(expectedActor, actor); records.push(row); return true; },
     brasil: async () => ({ book, diagnostic: { status: 200 } }),
     curitiba: async () => ({ book: null, diagnostic: { status: 'FALHA_CONEXAO' } }),
-    magazord: { checkProductByEan: async () => ({ matches: [] }), addStockToExistingProduct: async () => ({ success: true, newStock: 5 }), createProduct: async () => ({ success: true, parentCode: 'P', childCode: 'C', registeredAt: Date.now() }) },
+    magazord: { getSimulationConfig: () => ({ mode: 'auto' }), checkProductByEan: async () => ({ matches: [] }), addStockToExistingProduct: async () => ({ success: true, newStock: 5 }), createProduct: async () => ({ success: true, parentCode: 'P', childCode: 'C', registeredAt: Date.now() }) },
     ...overrides };
 }
 async function search(view) { await view.find(n => n.type === 'SearchForm').props.onSearch(input.isbn); await flush(); }
