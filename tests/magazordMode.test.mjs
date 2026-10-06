@@ -15,6 +15,7 @@ const output = await build({
       [/^react\/jsx-runtime$/, 'exports.jsx=exports.jsxs=(type,props)=>({type,props})'],
       [/^lucide-react$/, 'module.exports=new Proxy({},{get:(_,key)=>String(key)})'],
       [/\/contexts\/UserContext$/, 'exports.useUser=()=>deps.user'],
+      [/\/users\/UserManagement$/, 'module.exports="UserManagement"'],
     ];
     builder.onResolve({ filter: /.*/ }, args => {
       const mock = mocks.find(([pattern]) => pattern.test(args.path));

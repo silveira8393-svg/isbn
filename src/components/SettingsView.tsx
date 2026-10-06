@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { useUser } from '../contexts/UserContext';
 import MagazordTestMode from './magazord/MagazordTestMode';
+import UserManagement from './users/UserManagement';
 import {
   Settings,
   Store,
@@ -14,7 +15,6 @@ import {
   Sliders,
   Users,
   ShieldCheck,
-  CheckCircle2,
   Lock,
   Info,
 } from 'lucide-react';
@@ -22,7 +22,7 @@ import {
 type SettingsTab = 'loja' | 'magazord' | 'amazon' | 'parametros' | 'usuarios';
 
 export default function SettingsView() {
-  const { currentUser, users } = useUser();
+  const { currentUser } = useUser();
   const [activeSubTab, setActiveSubTab] = useState<SettingsTab>('loja');
 
   return (
@@ -118,7 +118,7 @@ export default function SettingsView() {
           }`}
         >
           <Users className="w-3.5 h-3.5" />
-          <span>Usuários ({users.length})</span>
+          <span>Usuários</span>
         </button>
       </div>
 
@@ -238,57 +238,7 @@ export default function SettingsView() {
 
         {/* 5. GESTÃO DE USUÁRIOS */}
         {activeSubTab === 'usuarios' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">Usuários & Perfis do Sistema</h3>
-                <p className="text-xs text-slate-500">Identidade autenticada nesta sessão.</p>
-              </div>
-              <span className="text-xs text-slate-500 font-medium">
-                {users.length} usuário autenticado
-              </span>
-            </div>
-
-            <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden text-xs">
-              {users.map((u) => (
-                <div key={u.id} className="p-3.5 flex items-center justify-between gap-3 bg-white">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs ${
-                        u.role === 'admin'
-                          ? 'bg-emerald-600'
-                          : u.role === 'developer'
-                          ? 'bg-amber-600'
-                          : 'bg-blue-600'
-                      }`}
-                    >
-                      {u.name.charAt(0)}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <strong className="text-slate-900">{u.name}</strong>
-                        <span className="px-2 py-0.2 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-700">
-                          {u.role}
-                        </span>
-                      </div>
-                      <span className="text-[11px] text-slate-500 font-mono">{u.id}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="flex items-center gap-1 text-emerald-700 font-semibold text-[11px]">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      Ativo
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900">
-              <strong>Supabase Auth:</strong> Perfil e vínculo com a loja carregados do Supabase. A gestão de outros usuários será implementada em uma etapa futura.
-            </div>
-          </div>
+          <UserManagement />
         )}
       </div>
     </div>
