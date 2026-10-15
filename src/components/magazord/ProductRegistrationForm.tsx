@@ -123,14 +123,17 @@ export default function ProductRegistrationForm({
       const finalDescription = buildFinalDescription(draft);
       const draftToSubmit: RegistrationDraft = {
         ...draft,
+        authors: [...(draft.authors || [])],
+        additionalImageUrls: [...(draft.additionalImageUrls || [])],
         description: finalDescription,
       };
       const result = await magazordMockService.createProduct(draftToSubmit, actionMode);
+      if (!result.success) throw new Error('Cadastro simulado não concluído.');
       submissionCompleted.current = true;
       setSuccessResult(result);
       onSuccessRegistration(result, draftToSubmit, actionMode);
     } catch (err: any) {
-      console.error('Falha no cadastro simulado Magazord', err);
+      console.error('Falha no cadastro simulado Magazord.');
       setSubmitError(
         err.message || 'Falha ao processar cadastro na API Magazord simulada.'
       );
@@ -153,13 +156,13 @@ export default function ProductRegistrationForm({
 
         <div className="space-y-1">
           <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800">
-            Sucesso Operacional
+            Simulação concluída
           </span>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight pt-2">
-            Produto Cadastrado com Sucesso!
+            Cadastro simulado concluído
           </h2>
           <p className="text-sm text-slate-600 max-w-lg mx-auto">
-            Os dados do livro foram compilados e enviados para o Magazord. O produto está pronto para etiquetagem e distribuição aos marketplaces.
+            Os dados foram processados pelo catálogo simulado deste navegador. Nenhum produto ou estoque foi publicado na Magazord ou nos marketplaces. A confirmação da auditoria aparece no aviso geral do aplicativo.
           </p>
         </div>
 

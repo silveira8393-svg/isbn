@@ -19,7 +19,7 @@ export type NavigationTab =
   | 'consultar'
   | 'cadastro'
   | 'historico'
-  | 'producao'
+  | 'dashboard'
   | 'configuracoes';
 
 interface HeaderProps {
@@ -116,15 +116,15 @@ export default function Header({
             {canViewProduction && (
               <button
                 type="button"
-                onClick={() => onTabChange?.('producao')}
+                onClick={() => onTabChange?.('dashboard')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all cursor-pointer ${
-                  activeTab === 'producao'
+                  activeTab === 'dashboard'
                     ? 'bg-white text-blue-700 font-semibold shadow-xs'
                     : 'text-blue-100 hover:text-white hover:bg-white/10'
                 }`}
               >
                 <BarChart3 className="w-3.5 h-3.5 shrink-0" />
-                <span>Produção</span>
+                <span>Dashboard</span>
               </button>
             )}
 
@@ -176,14 +176,14 @@ export default function Header({
 
           {/* LINHA 2: Navegação responsiva proporcional sem overflow */}
           <nav
-            className={`w-full grid gap-1 p-1 bg-blue-700/70 border border-blue-500/40 rounded-lg text-xs font-medium ${
+            className={`w-full grid gap-1 p-1 bg-blue-700/70 border border-blue-500/40 rounded-lg text-[10px] sm:text-xs font-medium ${
               isOperator ? 'grid-cols-3' : 'grid-cols-5'
             }`}
           >
             <button
               type="button"
               onClick={() => onTabChange?.('consultar')}
-              className={`flex items-center justify-center gap-1 py-1.5 px-0.5 rounded-md transition-all cursor-pointer min-w-0 ${
+              className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-0.5 rounded-md transition-all cursor-pointer min-w-0 ${
                 activeTab === 'consultar'
                   ? 'bg-white text-blue-700 font-semibold shadow-xs'
                   : 'text-blue-100 hover:text-white hover:bg-white/10'
@@ -196,7 +196,7 @@ export default function Header({
             <button
               type="button"
               onClick={() => onTabChange?.('cadastro')}
-              className={`flex items-center justify-center gap-1 py-1.5 px-0.5 rounded-md transition-all cursor-pointer min-w-0 ${
+              className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-0.5 rounded-md transition-all cursor-pointer min-w-0 ${
                 activeTab === 'cadastro'
                   ? 'bg-white text-blue-700 font-semibold shadow-xs'
                   : 'text-blue-100 hover:text-white hover:bg-white/10'
@@ -212,7 +212,7 @@ export default function Header({
             <button
               type="button"
               onClick={() => onTabChange?.('historico')}
-              className={`flex items-center justify-center gap-1 py-1.5 px-0.5 rounded-md transition-all cursor-pointer min-w-0 ${
+              className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-0.5 rounded-md transition-all cursor-pointer min-w-0 ${
                 activeTab === 'historico'
                   ? 'bg-white text-blue-700 font-semibold shadow-xs'
                   : 'text-blue-100 hover:text-white hover:bg-white/10'
@@ -233,19 +233,19 @@ export default function Header({
               )}
             </button>
 
-            {/* Produção e Configurações no Mobile para Admin/Dev */}
+            {/* Dashboard e Configurações no Mobile para Admin/Dev */}
             {canViewProduction && (
               <button
                 type="button"
-                onClick={() => onTabChange?.('producao')}
-                className={`flex items-center justify-center gap-1 py-1.5 px-0.5 rounded-md transition-all cursor-pointer min-w-0 ${
-                  activeTab === 'producao'
+                onClick={() => onTabChange?.('dashboard')}
+                className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-0.5 rounded-md transition-all cursor-pointer min-w-0 ${
+                  activeTab === 'dashboard'
                     ? 'bg-white text-blue-700 font-semibold shadow-xs'
                     : 'text-blue-100 hover:text-white hover:bg-white/10'
                 }`}
               >
                 <BarChart3 className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">Produção</span>
+                <span className="truncate">Dashboard</span>
               </button>
             )}
 
@@ -253,7 +253,7 @@ export default function Header({
               <button
                 type="button"
                 onClick={() => onTabChange?.('configuracoes')}
-                className={`flex items-center justify-center gap-1 py-1.5 px-0.5 rounded-md transition-all cursor-pointer min-w-0 ${
+                className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-0.5 rounded-md transition-all cursor-pointer min-w-0 ${
                   activeTab === 'configuracoes'
                     ? 'bg-white text-blue-700 font-semibold shadow-xs'
                     : 'text-blue-100 hover:text-white hover:bg-white/10'

@@ -78,7 +78,7 @@ const componentMocks = [
 async function component(entry) {
   // Preserve each component name so assertions can find the public event props.
   const mocks = [...componentMocks];
-  const paths = ['Header', 'SearchForm', 'BookDetailsCard', 'SearchHistoryGroup', 'CameraScannerModal', 'MagazordStatusCard', 'ProductRegistrationForm', 'ProductionView', 'SettingsView',
+  const paths = ['Header', 'SearchForm', 'BookDetailsCard', 'SearchHistoryGroup', 'CameraScannerModal', 'MagazordStatusCard', 'ProductRegistrationForm', 'OwnerDashboard', 'SettingsView',
     'ProductIdentitySection', 'CategoryAndBrandSection', 'CommercialSection', 'BibliographicSection', 'PhysicalAttributesSection', 'ImagesSection', 'SynopsisSection', 'AdvancedFiscalSection'];
   for (const name of paths) mocks.push([new RegExp(`(?:^|/)${name}$`), `module.exports=${JSON.stringify(name)}`]);
   return compile(entry, mocks);
@@ -219,4 +219,125 @@ test('Registration submission guard prevents duplicate service calls and complet
   const first = handler(); await handler(); assert.equal(calls, 1);
   resolve({ success: true, parentCode: 'P', childCode: 'C', registeredAt: Date.now() }); await first; await handler();
   assert.equal(completions, 1); assert.equal(calls, 1);
+});
+
+test('Lost INSERT response can be retried with the same UUID and confirmed under RLS without UPDATE', async () => {
+  const id = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+  let committed, attempts = 0;
+  const fake = { supabase: {
+    auth: { getSession: async () => ({ data: { session: { user: { id: actor } } } }) },
+    from(table) {
+      assert.equal(table, 'operations');
+      const query = { async insert(payload) {
+        attempts++;
+        if (!committed) { committed = { ...payload, user_id: actor }; throw new Error('lost response'); }
+        assert.equal(payload.id, committed.id);
+        return { error: { code: '23505' } };
+      }, select() { return query; }, eq() { return query; }, async maybeSingle() { return { data: committed, error: null }; } };
+      return query;
+    },
+  } };
+  const api = service(fake);
+  assert.equal(await api.recordOperation({ ...input, id }, actor), false);
+  assert.equal(await api.recordOperation({ ...input, id }, actor), true);
+  assert.equal(attempts, 2);
+  committed.title = 'different event';
+  assert.equal(await api.recordOperation({ ...input, id }, actor), false);
+  committed.title = null; committed.user_id = 'another actor';
+  assert.equal(await api.recordOperation({ ...input, id }, actor), false);
+});
+
+test('Pending audit warns and retries the identical event without repeating the ISBN search', async () => {
+  let calls = 0, searches = 0;
+  const deps = dependencies({ record: async row => { deps.records.push(row); return ++calls > 1; },
+    brasil: async () => { searches++; return { book: { title: 'Livro' }, diagnostic: { status: 200 } }; } });
+  const view = mount(app, deps); await search(view);
+  const initial = structuredClone(deps.records[0]);
+  assert.match(initial.id, /^[a-f0-9-]{36}$/);
+  assert.equal(initial.metadata.purpose, 'operational_test');
+  assert.equal(initial.metadata.operational_test_run_id, 'isbn-operational-20261014-01');
+  assert.ok(view.find(n => n.props?.role === 'alert'));
+  const retry = view.find(n => n.type === 'button' && n.props.children === 'Reenviar auditoria pendente').props.onClick;
+  retry(); retry(); await flush();
+  assert.equal(calls, 2); assert.equal(searches, 1);
+  assert.deepEqual(deps.records[1], initial);
+  assert.equal(view.find(n => n.props?.role === 'alert'), null);
+});
+
+test('Outbox survives a reload in the same tab and isolates a different signed-in actor', async t => {
+  const previous = globalThis.sessionStorage; const storage = new Map();
+  globalThis.sessionStorage = { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) };
+  t.after(() => { if (previous === undefined) delete globalThis.sessionStorage; else globalThis.sessionStorage = previous; });
+  const first = dependencies({ record: async () => false }); const view = mount(app, first); await search(view);
+  assert.equal(storage.size, 1); const saved = JSON.parse([...storage.values()][0])[0];
+  const other = dependencies(); other.user.currentUser = { ...other.user.currentUser, id: 'different-actor' };
+  const otherView = mount(app, other); await flush();
+  assert.equal(otherView.find(n => n.props?.role === 'alert'), null); assert.equal(other.records.length, 0);
+  const restored = dependencies(); const reload = mount(app, restored); await flush();
+  assert.match(JSON.stringify(reload.tree()), /sem confirmação de registro/); assert.equal(restored.records.length, 0);
+  reload.find(n => n.type === 'button' && n.props.children === 'Reenviar auditoria pendente').props.onClick(); await flush();
+  assert.deepEqual(restored.records[0], saved.input); assert.equal(storage.size, 0);
+});
+
+test('Outbox storage failure is visible and audit can still succeed without stopping the workflow', async t => {
+  const previous = globalThis.sessionStorage;
+  globalThis.sessionStorage = { getItem() { return null; }, setItem() { throw new Error('quota'); }, removeItem() { throw new Error('blocked'); } };
+  t.after(() => { if (previous === undefined) delete globalThis.sessionStorage; else globalThis.sessionStorage = previous; });
+  const deps = dependencies({ record: async () => false }); const view = mount(app, deps); await search(view);
+  assert.match(JSON.stringify(view.tree()), /Não foi possível preservar a fila/);
+  assert.ok(view.find(n => n.type === 'MagazordStatusCard'));
+});
+
+test('Catalog check and post-registration check failures produce separate sanitized evidence', async () => {
+  const deps = dependencies(); deps.magazord.checkProductByEan = async () => { throw new Error('secret access token'); };
+  const view = mount(app, deps); await search(view);
+  assert.equal(deps.records[1].metadata.flow, 'magazord_check');
+  view.find(n => n.type === 'Header').props.onTabChange('cadastro'); await flush();
+  const props = view.find(n => n.type === 'ProductRegistrationForm').props;
+  props.onSuccessRegistration({ success: true, registeredAt: Date.now(), parentCode: 'P', childCode: 'C' }, { ...props.draft, condition: 'novo', quantity: 1 }); await flush();
+  assert.deepEqual(deps.records.map(row => row.operationType), ['isbn_search', 'operation_error', 'new_product_created', 'operation_error']);
+  assert.equal(deps.records.at(-1).metadata.flow, 'magazord_post_registration_check');
+  assert.ok(deps.records.every(row => !String(row.errorMessage).includes('secret')));
+});
+
+test('Completed registrations persist the final versioned snapshot; searches, errors and stock reuse do not', async () => {
+  const deps = dependencies(); const view = mount(app, deps); await search(view);
+  await view.find(n => n.type === 'MagazordStatusCard').props.onLinkStock(2);
+  view.find(n => n.type === 'Header').props.onTabChange('cadastro'); await flush();
+  const props = view.find(n => n.type === 'ProductRegistrationForm').props;
+  const finalDraft = { ...props.draft, condition: 'usado', title: 'Título final editado', authors: ['Autor final'], quantity: 1,
+    parentCode: 'UP', childCode: 'UC', price: '18,00', usedBookConditionNotes: 'Marcas na capa', synopsis: 'Sinopse final', description: 'Descrição final' };
+  props.onSuccessRegistration({ success: true, registeredAt: Date.now(), parentCode: 'UP', childCode: 'UC' }, finalDraft); await flush();
+  const snapshot = deps.records.at(-1).metadata.registrationSnapshot;
+  assert.equal(snapshot.version, 1); assert.equal(snapshot.fields.title, 'Título final editado');
+  assert.equal(snapshot.fields.usedBookConditionNotes, 'Marcas na capa'); assert.equal(snapshot.fields.price, '18,00');
+  finalDraft.authors.push('later'); assert.deepEqual(snapshot.fields.authors, ['Autor final']);
+  assert.ok(deps.records.slice(0, 2).every(row => !row.metadata.registrationSnapshot));
+});
+
+test('Denied duplicate-confirmation read remains visibly pending instead of accepting an unverified conflict', async () => {
+  const fake = { supabase: { auth: { getSession: async () => ({ data: { session: { user: { id: actor } } } }) },
+    from() { const query = { insert: async () => ({ error: { code: '23505' } }), select() { return query; }, eq() { return query; },
+      maybeSingle: async () => ({ data: null, error: { code: '42501' } }) }; return query; } } };
+  assert.equal(await service(fake).recordOperation({ ...input, id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' }, actor), false);
+});
+
+test('Browser storage access denial does not throw out of the operational flow', async t => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
+  Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, get() { throw new Error('storage security policy'); } });
+  t.after(() => { if (descriptor) Object.defineProperty(globalThis, 'sessionStorage', descriptor); else delete globalThis.sessionStorage; });
+  const deps = dependencies(); const view = mount(app, deps); await search(view);
+  assert.equal(deps.records.length, 1); assert.ok(view.find(n => n.type === 'MagazordStatusCard'));
+  assert.match(JSON.stringify(view.tree()), /Não foi possível preservar a fila/);
+});
+
+test('A negative registration result cannot show success or call the completed-registration snapshot handler', async () => {
+  let completions = 0, errors = 0;
+  const deps = dependencies(); deps.magazord.createProduct = async () => ({ success: false });
+  const view = mount(form, deps, { draft: { condition: 'usado', parentCode: 'P', childCode: 'C', title: 'Livro', category: 'Livro', price: '10', quantity: 1 },
+    originalBook: { title: 'Livro' }, onSuccessRegistration: () => completions++, onRegistrationError: () => errors++,
+    onUpdateDraft() {}, onBackToSearch() {}, onProcessNextBook() {} });
+  await view.find(n => n.props?.id === 'btn-submit-magazord-registration').props.onClick(); await flush();
+  assert.equal(completions, 0); assert.equal(errors, 1);
+  assert.equal(view.find(n => n.props?.id === 'btn-process-next-book'), null);
 });

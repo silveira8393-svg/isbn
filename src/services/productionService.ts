@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type { OperationEnvironment } from '../types';
 import type { DatabaseOperationType, OperationCondition, OperationStatus } from './operationsService';
+import { DEMO_BATCH_ID, isAuthorizedDemo } from '../utils/operationalTest';
 
 export type ProductionPeriod = 'today' | '7days' | '30days' | 'all';
 
@@ -16,6 +17,7 @@ export interface ProductionOperation {
   title: string | null;
   parent_code: string | null;
   child_code: string | null;
+  error_message?: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
   completed_at: string | null;
@@ -36,9 +38,9 @@ export function productionPeriodBounds(period: ProductionPeriod, now = new Date(
   return { start: start.toISOString(), end };
 }
 
-/** Read only the active store/environment, without local history or privileged credentials. */
+/** Read the active store under RLS. Owner callers can add only the exact demo batch; no privileged credentials. */
 export async function loadProduction(
-  storeId: string, environment: OperationEnvironment, period: ProductionPeriod, signal?: AbortSignal,
+  storeId: string, environment: OperationEnvironment, period: ProductionPeriod, signal?: AbortSignal, includeDemo = false,
 ): Promise<ProductionData> {
   const failure = () => new Error('Não foi possível carregar a produção. Tente novamente mais tarde.');
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(storeId)
@@ -49,16 +51,20 @@ export async function loadProduction(
     let offset = 0;
     while (true) {
       let query = supabase.from('operations')
-        .select('id,store_id,user_id,environment,operation_type,status,condition,isbn,title,parent_code,child_code,metadata,created_at,completed_at', { count: 'exact' })
-        .eq('store_id', storeId).eq('environment', environment)
-        .or(`completed_at.lte.${end},and(completed_at.is.null,created_at.lte.${end})`);
+        .select('id,store_id,user_id,environment,operation_type,status,condition,isbn,title,parent_code,child_code,error_message,metadata,created_at,completed_at', { count: 'exact' })
+        .eq('store_id', storeId);
+      if (includeDemo && environment === 'production') {
+        query = query.or(`environment.eq.production,and(environment.eq.development,metadata->>demo_batch_id.eq.${DEMO_BATCH_ID},metadata->>demo.eq.true,metadata->>mock.eq.true)`);
+      } else query = query.eq('environment', environment);
+      query = query.or(`completed_at.lte.${end},and(completed_at.is.null,created_at.lte.${end})`);
       if (start) query = query.or(`completed_at.gte.${start},and(completed_at.is.null,created_at.gte.${start})`);
       query = query.order('created_at', { ascending: true }).order('id', { ascending: true }).range(offset, offset + 499);
       if (signal) query = query.abortSignal(signal);
       const { data, error, count } = await query;
       if (error || !data || count === null || signal?.aborted) throw failure();
       // Defence in depth; RLS and explicit SELECT filters remain authoritative.
-      operations.push(...(data as ProductionOperation[]).filter(row => row.store_id === storeId && row.environment === environment));
+      operations.push(...(data as ProductionOperation[]).filter(row => row.store_id === storeId
+        && (row.environment === environment || (includeDemo && environment === 'production' && isAuthorizedDemo(row)))));
       offset += data.length;
       if (offset >= count) break;
       // Use actual returned length even if the server caps pages below the requested size.

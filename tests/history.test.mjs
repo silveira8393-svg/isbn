@@ -26,7 +26,7 @@ const output = await build({
       [/\/lib\/supabase$/, 'exports.supabase=deps.supabase'],
     ];
     for (const name of ['Header', 'SearchForm', 'BookDetailsCard', 'SearchHistoryGroup', 'CameraScannerModal',
-      'MagazordStatusCard', 'ProductRegistrationForm', 'ProductionView', 'SettingsView', 'ProductIdentitySection',
+      'MagazordStatusCard', 'ProductRegistrationForm', 'OwnerDashboard', 'SettingsView', 'ProductIdentitySection',
       'CategoryAndBrandSection', 'CommercialSection', 'BibliographicSection', 'PhysicalAttributesSection',
       'ImagesSection', 'SynopsisSection', 'AdvancedFiscalSection']) {
       mocks.push([new RegExp(`(?:^|/)${name}$`), `module.exports=${JSON.stringify(name)}`]);
@@ -207,7 +207,7 @@ for (const [mode, status] of forcedModes) {
     const card = app.prop('MagazordStatusCard');
     if (status) assert.equal(card.checkResult.status, status);
     else assert.match(card.checkError, /503 Service Unavailable/);
-    assert.equal(app.rows.length, 1);
+    assert.equal(app.rows.length, mode === 'force_error' ? 2 : 1);
     assert.equal(app.rows[0].operation_type, 'isbn_search');
     assert.equal(app.deps.user.operationEnvironment, 'development');
     assert.ok(!('environment' in app.rows[0]));
@@ -244,6 +244,13 @@ for (const condition of ['novo', 'usado']) {
       assert.ok(form.find(node => node.props?.id === 'btn-process-next-book'));
       assert.ok(app.service.getRecordsForEan(isbn).some(record => record.condition === condition));
       assert.deepEqual(app.rows.map(row => row.operation_type), ['isbn_search', condition === 'novo' ? 'new_product_created' : 'used_copy_created']);
+      const snapshot = app.rows[1].metadata.registrationSnapshot;
+      assert.equal(snapshot.version, 1);
+      assert.equal(snapshot.fields.condition, condition);
+      const stored = app.service.getRecordsForEan(isbn).find(record => record.childCode === app.rows[1].child_code);
+      assert.equal(snapshot.fields.price, stored.price);
+      assert.equal(snapshot.fields.description, stored.description);
+      assert.equal(app.rows[0].metadata.registrationSnapshot, undefined);
       assert.equal(app.history().length, 3);
       assert.equal(app.history()[0].historyKind, mode === 'auto' ? 'operational' : 'test');
       assert.equal(app.history()[0].condition, condition);
@@ -276,7 +283,8 @@ test('Forced registration failure keeps the test lookup and the independent oper
   const { form, completion } = await app.registration();
   await completion; await flush(); app.view.render(); form.render();
   assert.match(JSON.stringify(form.tree()), /Timeout de resposta/);
-  assert.deepEqual(app.rows.map(row => row.operation_type), ['isbn_search', 'operation_error']);
+  assert.deepEqual(app.rows.map(row => row.operation_type), ['isbn_search', 'operation_error', 'operation_error']);
+  assert.deepEqual(app.rows.slice(1).map(row => row.metadata.flow), ['magazord_check', 'registration']);
   assert.equal(app.history()[0].historyKind, 'test');
   app.assertOldEntries();
 });

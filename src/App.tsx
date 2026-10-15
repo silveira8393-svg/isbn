@@ -12,7 +12,9 @@ import SearchHistoryGroup from './components/SearchHistoryGroup';
 import CameraScannerModal from './components/CameraScannerModal';
 import MagazordStatusCard from './components/magazord/MagazordStatusCard';
 import ProductRegistrationForm from './components/magazord/ProductRegistrationForm';
-import ProductionView from './components/ProductionView';
+import OwnerDashboard from './components/OwnerDashboard';
+import { useOperationAudit } from './hooks/useOperationAudit';
+import { createRegistrationSnapshot } from './utils/registrationSnapshot';
 import SettingsView from './components/SettingsView';
 import { useUser } from './contexts/UserContext';
 import {
@@ -31,7 +33,6 @@ import {
   searchBookByIsbnDistribuidoraCuritiba,
 } from './services/distribuidoraCuritiba';
 import { cleanIsbn, isValidIsbnFormat } from './utils/isbn';
-import { recordOperation, type RecordOperationInput } from './services/operationsService';
 import { createRegistrationDraft } from './utils/draft';
 import { CANONICAL_CSV_DATASET } from './utils/metrics';
 import { magazordMockService, type MagazordSimulationMode } from './services/magazordMockService';
@@ -52,9 +53,9 @@ export default function App() {
   const [searchedTerm, setSearchedTerm] = useState<string>('');
   const [rawSearchedTerm, setRawSearchedTerm] = useState<string>('');
   const [history, setHistory] = useState<SearchHistoryItem[]>([]);
-  const [activeTab, setActiveTab] = useState<NavigationTab>('consultar');
+  const [activeTab, setActiveTab] = useState<NavigationTab>(currentUser.role === 'admin' && canViewProduction ? 'dashboard' : 'consultar');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [operationWarning, setOperationWarning] = useState(false);
+  const { saveOperation, pending: pendingAudit, saving: savingAudit, retry: retryAudit, storageUnavailable: auditStorageUnavailable, lastConfirmation: auditConfirmation } = useOperationAudit(currentUser);
   const searchInFlight = useRef(false);
   const stockLinkInFlight = useRef(false);
   const currentUserRef = useRef(currentUser);
@@ -71,15 +72,9 @@ export default function App() {
     ? history
     : history.filter(item => item.historyKind !== 'test');
 
-  const saveOperation = (operation: Omit<RecordOperationInput, 'storeId'>) => {
-    // Capture the account/store of the explicit business event; never write from a React updater/effect.
-    void recordOperation({ ...operation, storeId: currentUser.active ? currentUser.storeId ?? '' : '' }, currentUser.id)
-      .then(saved => { if (!saved) setOperationWarning(true); });
-  };
-
   // Redireciona para consulta caso o perfil atual não tenha permissão na aba ativa
   useEffect(() => {
-    if (activeTab === 'producao' && !canViewProduction) {
+    if (activeTab === 'dashboard' && !canViewProduction) {
       setActiveTab('consultar');
     }
     if (activeTab === 'configuracoes' && !canViewSettings) {
@@ -157,7 +152,9 @@ export default function App() {
         return updated;
       });
     } catch (err: any) {
-      console.error('Erro na checagem Magazord simulada:', err);
+      console.error('Erro na checagem Magazord simulada.');
+      saveOperation({ isbn: cleanedIsbn, title: book.title, operationType: 'operation_error', status: 'error',
+        errorMessage: 'Falha na consulta ao catálogo simulado.', metadata: { flow: 'magazord_check', mock: true }, completedAt: new Date().toISOString() });
       if (canShowActionResult(actionMode)) {
         checkActionMode.current = actionMode;
         setMagazordCheckError(err.message || 'Falha de comunicação simulada com a Magazord.');
@@ -246,7 +243,8 @@ export default function App() {
           completedAt: new Date(newItem.timestamp).toISOString(),
           metadata: { resultFound: true, sources: {
             brasilApi: { status: result.diagnostic.status, resultFound: true },
-            distribuidoraCuritiba: { status: distribuidoraResult.diagnostic.status, resultFound: Boolean(distribuidoraResult.book) },
+            distribuidoraCuritiba: { status: distribuidoraResult.diagnostic.status, resultFound: Boolean(distribuidoraResult.book),
+              partialFailure: distribuidoraResult.diagnostic.state === 'unavailable' || distribuidoraResult.diagnostic.status === 'FALHA_CONEXAO' },
           } },
         });
         void runMagazordCheck(cleaned, enrichedBook, actionMode);
@@ -300,7 +298,7 @@ export default function App() {
         }
       }
     } catch (err: any) {
-      console.error('Unhandled search exception:', err);
+      console.error('Falha ao concluir pesquisa bibliográfica.');
       setErrorText('Não foi possível conectar ao serviço de consulta.');
       if (isValidIsbnFormat(cleaned)) saveOperation({
         isbn: cleaned, operationType: 'operation_error', status: 'error',
@@ -483,6 +481,7 @@ export default function App() {
       status: result.success ? 'success' : 'error', parentCode: result.parentCode, childCode: result.childCode,
       errorMessage: result.success ? undefined : 'Cadastro simulado não concluído.',
       metadata: { mock: true, quantity: savedDraft.quantity, registrationMode: savedDraft.condition === 'usado' ? 'used_copy' : 'new_product',
+        ...(result.success ? { registrationSnapshot: JSON.parse(JSON.stringify(createRegistrationSnapshot(savedDraft, new Date(result.registeredAt).toISOString()))) } : {}),
         bibliographicSource: foundBook?.enrichmentSource || foundBook?.provider || null },
       completedAt: new Date(result.registeredAt).toISOString(),
     });
@@ -492,6 +491,9 @@ export default function App() {
         setMagazordCheckResult(freshCheck);
       }
     }).catch(() => {
+      saveOperation({ isbn: currentIsbn, title: savedDraft.title, operationType: 'operation_error', status: 'error',
+        parentCode: result.parentCode, childCode: result.childCode, errorMessage: 'Cadastro simulado concluído; falha na reconsulta do catálogo simulado.',
+        metadata: { flow: 'magazord_post_registration_check', mock: true }, completedAt: new Date().toISOString() });
       if (canShowActionResult(actionMode)) setMagazordCheckError('Falha ao atualizar a consulta Magazord.');
     });
   };
@@ -622,16 +624,23 @@ export default function App() {
       {/* 1. Header azul profissional com navegação Consultar | Cadastro | Histórico */}
       <Header
         activeTab={activeTab}
-        onTabChange={(tab) => setActiveTab(tab)}
+        onTabChange={(tab) => setActiveTab(
+          (tab === 'dashboard' && !canViewProduction) || (tab === 'configuracoes' && !canViewSettings)
+            ? 'consultar' : tab
+        )}
         historyCount={visibleHistory.length}
         hasActiveDraft={Boolean(registrationDraft)}
       />
 
       {/* 2. Main Content Viewport */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 flex-1 w-full">
-        {operationWarning && <div role="status" className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 text-sm flex items-center justify-between gap-3">
-          <span>Uma operação não pôde ser registrada no Supabase. O resultado e o histórico local foram preservados.</span>
-          <button type="button" onClick={() => setOperationWarning(false)} className="font-semibold cursor-pointer">Fechar</button>
+      <main className={`${activeTab === 'dashboard' ? 'max-w-[1440px]' : 'max-w-7xl'} mx-auto px-4 sm:px-6 py-6 flex-1 w-full`}>
+        {savingAudit > 0 && <p role="status" className="mb-3 text-sm text-slate-600">Confirmando auditoria de {savingAudit} operação(ões)...</p>}
+        {auditConfirmation && <p role="status" className="mb-3 break-words text-xs text-slate-600">Último evento com auditoria confirmada: {auditConfirmation.eventId} · {new Date(auditConfirmation.at).toLocaleString('pt-BR')}. Este registro não comprova publicação na Magazord.</p>}
+        {auditStorageUnavailable && <p role="alert" className="mb-3 rounded bg-rose-50 p-3 text-sm text-rose-800">Não foi possível preservar a fila de auditoria nesta sessão do navegador. Não recarregue nem encerre a sessão enquanto houver eventos pendentes; registre os IDs abaixo como evidência.</p>}
+        {pendingAudit.length > 0 && <div role="alert" className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 text-sm space-y-2">
+          <p>{pendingAudit.length} operação(ões) sem confirmação de registro no Supabase. O resultado e o histórico local foram preservados quando disponíveis. O Dashboard pode estar incompleto. Mantenha esta página aberta até confirmar o reenvio.</p>
+          <button type="button" onClick={retryAudit} className="font-semibold underline cursor-pointer">Reenviar auditoria pendente</button>
+          <details><summary className="cursor-pointer">IDs pendentes para evidência</summary><ul>{pendingAudit.map(entry => <li key={entry.input.id}>{entry.input.id} · {entry.input.operationType} · {entry.input.completedAt}</li>)}</ul></details>
         </div>}
         {/* ABA 1: CONSULTAR */}
         {activeTab === 'consultar' && (
@@ -803,9 +812,9 @@ export default function App() {
           </div>
         )}
 
-        {/* ABA 4: PRODUÇÃO & MÉTRICAS (Admin e Dev) */}
-        {activeTab === 'producao' && canViewProduction && (
-          <ProductionView />
+        {/* ABA 4: DASHBOARD OPERACIONAL (Admin e Dev) */}
+        {activeTab === 'dashboard' && canViewProduction && (
+          <OwnerDashboard key={`${currentUser.id}:${currentUser.storeId}:${currentUser.role}`} />
         )}
 
         {/* ABA 5: CONFIGURAÇÕES DA LOJA & INTEGRAÇÕES (Admin e Dev) */}
