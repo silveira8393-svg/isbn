@@ -6,6 +6,12 @@
 import { BookInfo, BookCondition, RegistrationDraft, RegistrationMode } from '../types';
 import { sanitizeSynopsis } from './sanitizer';
 import { cleanIsbn } from './isbn';
+import { imageReferences } from './imageUrls';
+
+export function registrationModeForCondition(condition: BookCondition, mode?: RegistrationMode): RegistrationMode {
+  if (condition === 'usado') return 'new_used_from_known_edition';
+  return mode === 'reuse_existing_new' ? mode : 'new_product';
+}
 
 export const CATEGORIES_BY_CONDITION: Record<BookCondition, string[]> = {
   novo: [
@@ -57,7 +63,7 @@ function normalizeWeightToGrams(book: BookInfo): number | undefined {
 export function createRegistrationDraft(
   book: BookInfo,
   initialCondition: BookCondition = 'novo',
-  registrationMode: RegistrationMode = 'new_product'
+  registrationMode?: RegistrationMode
 ): RegistrationDraft {
   const isbn13 = cleanIsbn(book.isbn13 || '');
   const isbn10 = cleanIsbn(book.isbn10 || '');
@@ -69,16 +75,8 @@ export function createRegistrationDraft(
   const childCode = initialCondition === 'novo' ? (isbn13 || ean) : '';
 
   // Lista de imagens sem duplicatas
-  const allImages = Array.from(
-    new Set(
-      [book.coverUrl, book.thumbnailUrl, ...(book.additionalImages || [])].filter(
-        (img): img is string => typeof img === 'string' && img.trim().length > 0
-      )
-    )
-  );
-
-  const mainImageUrl =
-    book.coverUrl || book.thumbnailUrl || (allImages.length > 0 ? allImages[0] : undefined);
+  const allImages = imageReferences([book.coverUrl, book.thumbnailUrl, ...(book.additionalImages || [])]);
+  const mainImageUrl = allImages[0];
   const additionalImageUrls = allImages.filter((img) => img !== mainImageUrl);
 
   // Ano de publicação
@@ -108,7 +106,7 @@ export function createRegistrationDraft(
 
   return {
     condition: initialCondition,
-    registrationMode,
+    registrationMode: registrationModeForCondition(initialCondition, registrationMode),
     parentCode: '', // Sempre manual (etiqueta física da loja, ex: LV26579-P)
     childCode, // Vazio se usado, ISBN-13 se novo
     ean, // Preservado

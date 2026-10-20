@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import type { OperationEnvironment } from '../types';
 import type { DatabaseOperationType, OperationCondition, OperationStatus } from './operationsService';
 import { DEMO_BATCH_ID, isAuthorizedDemo } from '../utils/operationalTest';
+import { startOfStoreDay } from '../utils/storeTime';
 
 export type ProductionPeriod = 'today' | '7days' | '30days' | 'all';
 
@@ -33,7 +34,7 @@ export function productionPeriodBounds(period: ProductionPeriod, now = new Date(
   const end = now.toISOString();
   if (period === 'all') return { start: null, end };
   const start = new Date(now);
-  if (period === 'today') start.setHours(0, 0, 0, 0);
+  if (period === 'today') start.setTime(startOfStoreDay(now).getTime());
   else start.setTime(now.getTime() - (period === '7days' ? 7 : 30) * 86400000);
   return { start: start.toISOString(), end };
 }

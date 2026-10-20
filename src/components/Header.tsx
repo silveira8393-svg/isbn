@@ -52,7 +52,7 @@ export default function Header({
                 Consulta ISBN para Sebos
               </h1>
               <p className="text-xs text-blue-100 truncate">
-                Balcão de Atendimento & Catalogação Magazord
+                Balcão de Atendimento · Magazord simulada
               </p>
             </div>
           </div>
@@ -163,7 +163,7 @@ export default function Header({
                   Consulta ISBN para Sebos
                 </h1>
                 <p className="text-[10px] text-blue-100 truncate">
-                  Balcão & Catalogação Magazord
+                  Balcão · Magazord simulada
                 </p>
               </div>
             </div>

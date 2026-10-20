@@ -10,7 +10,8 @@ import {
   BookInfo,
 } from '../../types';
 import { magazordMockService, type MagazordSimulationMode } from '../../services/magazordMockService';
-import { buildFinalDescription } from '../../utils/draft';
+import { buildFinalDescription, registrationModeForCondition } from '../../utils/draft';
+import { magazordPresentation } from '../../utils/magazordPresentation';
 import ProductIdentitySection from './ProductIdentitySection';
 import CategoryAndBrandSection from './CategoryAndBrandSection';
 import CommercialSection from './CommercialSection';
@@ -123,6 +124,7 @@ export default function ProductRegistrationForm({
       const finalDescription = buildFinalDescription(draft);
       const draftToSubmit: RegistrationDraft = {
         ...draft,
+        registrationMode: registrationModeForCondition(draft.condition, draft.registrationMode),
         authors: [...(draft.authors || [])],
         additionalImageUrls: [...(draft.additionalImageUrls || [])],
         description: finalDescription,
@@ -203,7 +205,7 @@ export default function ProductRegistrationForm({
           {sentDescription && (
             <div className="col-span-1 sm:col-span-2 pt-2 border-t border-slate-200">
               <span className="text-slate-500 block font-semibold mb-1">
-                Descrição Enviada ao Magazord (Campo Único)
+                Descrição armazenada no simulador (campo único)
               </span>
               <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-slate-700 whitespace-pre-line text-[11px] leading-relaxed max-h-32 overflow-y-auto">
                 {sentDescription}
@@ -246,7 +248,7 @@ export default function ProductRegistrationForm({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-bold text-slate-900">
-                Cadastro Magazord em Tela Única
+                Cadastro no simulador Magazord
               </h2>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">
                 Pré-preenchido
@@ -281,7 +283,7 @@ export default function ProductRegistrationForm({
             ) : (
               <>
                 <Send className="w-3.5 h-3.5" />
-                <span>CADASTRAR NO MAGAZORD</span>
+                <span>{magazordPresentation.submit}</span>
               </>
             )}
           </button>
@@ -388,7 +390,7 @@ export default function ProductRegistrationForm({
           <div>
             <div className="flex items-center gap-2">
               <span className="font-bold text-white text-sm">
-                Pronto para cadastrar na Magazord?
+                Pronto para concluir o cadastro no simulador?
               </span>
               <span className="px-2 py-0.2 rounded text-[10px] bg-slate-800 text-slate-300 font-mono">
                 {draft.condition === 'novo' ? 'Livro Novo' : 'Livro Usado'}
@@ -426,7 +428,7 @@ export default function ProductRegistrationForm({
             ) : (
               <>
                 <Send className="w-4 h-4" />
-                <span>CADASTRAR NO MAGAZORD</span>
+                <span>{magazordPresentation.submit}</span>
               </>
             )}
           </button>

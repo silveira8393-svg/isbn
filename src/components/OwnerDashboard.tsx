@@ -5,6 +5,7 @@ import { calculateProductionMetrics } from '../utils/metrics';
 import { DailyOperationsChart, ProcessedDistributionChart } from './dashboard/DashboardCharts';
 import { recordProvenance, provenanceLabels, type RecordProvenance } from '../utils/operationalTest';
 import RegistrationLookup from './dashboard/RegistrationLookup';
+import { formatStoreDate, formatStoreTime, formatStoreDateTime } from '../utils/storeTime';
 import {
   bibliographicSearchEvidence, classifyOperationOrigin, dailyActivityCounts, metricsByOrigin, operationDate,
   operationLabels, operationOrigins, processedDistribution, userDashboardMetrics, type OperationOrigin,
@@ -173,7 +174,7 @@ export default function OwnerDashboard() {
         </div>
       </div>
       <div className="border-t border-slate-100 px-4 py-2 text-xs text-slate-500" role="status">
-        Última atualização: {status === 'success' && loadState.updatedAt ? new Date(loadState.updatedAt).toLocaleString('pt-BR') : 'aguardando leitura confirmada'}.
+        Última atualização: {status === 'success' && loadState.updatedAt ? formatStoreDateTime(loadState.updatedAt) : 'aguardando leitura confirmada'} (São Paulo).
         {' '}Totais seguem os filtros; incluem dados fictícios quando selecionados. Ambiente não comprova produção comercial.
         {' '}{Object.entries(provenanceLabels).map(([value, label]) => `${label}: ${displayedItems.filter(item => recordProvenance(item) === value).length}`).join(' · ')}
       </div>
@@ -291,8 +292,8 @@ export default function OwnerDashboard() {
                   const error = item.status === 'error' || item.operation_type === 'operation_error';
                   const date = operationDate(item);
                   return <tr key={item.id} data-record-id={item.id} className={`h-10 ${error ? 'bg-rose-50' : 'bg-white'}`}>
-                    <td className={`sticky left-0 z-10 px-3 py-2 text-xs tabular-nums lg:static ${error ? 'bg-rose-50' : 'bg-white'}`} title={date?.toLocaleString('pt-BR')}>
-                      {date ? <><span className="block">{date.toLocaleDateString('pt-BR')}</span><span className="text-slate-500">{date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span></> : 'Data não identificada'}
+                    <td className={`sticky left-0 z-10 px-3 py-2 text-xs tabular-nums lg:static ${error ? 'bg-rose-50' : 'bg-white'}`} title={date ? `${formatStoreDateTime(date)} (São Paulo)` : undefined}>
+                      {date ? <><span className="block">{formatStoreDate(date)}</span><span className="text-slate-500">{formatStoreTime(date)}</span></> : 'Data não identificada'}
                     </td>
                     <td className="px-3 py-2 text-xs text-slate-700">{fullText(operationLabels[item.operation_type] || 'Operação não identificada')}</td>
                     <td className="px-3 py-2 text-slate-700">{fullText(item.title || item.isbn || 'Sem título ou ISBN informado')}{item.title && item.isbn && <span className="block truncate text-[11px] text-slate-500">{item.isbn}</span>}</td>
@@ -318,7 +319,7 @@ export default function OwnerDashboard() {
               <div className="flex justify-between gap-3"><h3 className="font-semibold text-sm">Evidência da operação</h3><button type="button" onClick={() => setEvidenceSelection(null)} className={`rounded text-xs text-blue-700 underline ${focusStyle}`}>Fechar evidência</button></div>
               <dl className="grid gap-3 text-sm sm:grid-cols-2">
                 {Object.entries({ 'ID do evento': evidence.id, 'Operador': namedUser(evidence.user_id), 'UUID do operador': evidence.user_id,
-                  'Data/hora': operationDate(evidence)?.toLocaleString('pt-BR'), 'ISBN': evidence.isbn, 'Título': evidence.title, 'Ambiente': evidence.environment,
+                  'Data/hora (São Paulo)': operationDate(evidence) ? formatStoreDateTime(operationDate(evidence)!) : null, 'ISBN': evidence.isbn, 'Título': evidence.title, 'Ambiente': evidence.environment,
                   'Natureza': provenanceLabels[recordProvenance(evidence)], 'Código Pai': evidence.parent_code, 'Código Filho': evidence.child_code,
                   'Fluxo': typeof evidence.metadata?.flow === 'string' ? evidence.metadata.flow : null,
                   'Rodada': typeof evidence.metadata?.operational_test_run_id === 'string' ? evidence.metadata.operational_test_run_id : null,

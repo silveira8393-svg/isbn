@@ -14,9 +14,10 @@ async function compile(entry) {
       builder.onLoad({ filter: /.*/, namespace: 'mock' }, args => ({ contents: args.pluginData, loader: 'js' }));
     } }],
   });
-  return deps => { const module = { exports: {} }; new Function('deps', 'module', 'exports', output.outputFiles[0].text)(deps, module, module.exports); return module.exports; };
+  return deps => { const module = { exports: {} }; new Function('deps', 'module', 'exports', 'document', output.outputFiles[0].text)(deps, module, module.exports, deps.document); return module.exports; };
 }
 const factory = await compile('src/components/dashboard/RegistrationLookup.tsx');
+const imageFactory = await compile('src/components/dashboard/RegistrationImage.tsx');
 const snapshot = (await compile('src/utils/registrationSnapshot.ts'))({});
 const storeId = '11111111-2222-3333-4444-555555555555';
 const userId = '22222222-3333-4444-5555-666666666666';
@@ -29,19 +30,39 @@ const draft = { condition: 'usado', title: 'Título final', authors: ['Autor'], 
 
 function mount(operations, role = 'admin') {
   const deps = { user: { currentUser: { id: userId, storeId, role, active: true }, canViewProduction: role !== 'operator' } };
-  const slots = []; let cursor = 0, tree;
-  deps.react = { useState(initial) { const index = cursor++; if (!(index in slots)) slots[index] = initial;
+  const document = deps.document = { body: { style: { overflow: 'auto' } }, activeElement: null };
+  const dialogState = { open: false, opens: 0, closes: 0,
+    showModal() { this.open = true; this.opens++; }, close() { this.open = false; this.closes++; } };
+  const focusCalls = [];
+  const slots = []; let cursor = 0, tree, effects = [];
+  deps.react = {
+    useEffect(callback, dependencies) {
+      const index = cursor++, previous = slots[index];
+      if (!previous || dependencies.some((value, i) => !Object.is(value, previous.dependencies[i]))) {
+        effects.push(() => { previous?.cleanup?.(); slots[index] = { dependencies, cleanup: callback() }; });
+      }
+    },
+    useRef(initial) { const index = cursor++; return slots[index] ??= { current: initial }; },
+    useState(initial) { const index = cursor++; if (!(index in slots)) slots[index] = initial;
     return [slots[index], next => { slots[index] = typeof next === 'function' ? next(slots[index]) : next; render(); }]; } };
   const api = factory(deps); const props = { operations, names: { [userId]: 'Operador' } };
-  function render() { cursor = 0; tree = api.default(props); }
+  function render() {
+    cursor = 0; effects = []; tree = api.default(props);
+    const dialog = nodes().find(n => n.type === 'dialog');
+    if (dialog) dialog.props.ref.current = dialogState;
+    effects.forEach(effect => effect());
+  }
   const nodes = (node = tree) => node == null || typeof node !== 'object' ? [] : Array.isArray(node)
     ? node.flatMap(child => nodes(child ?? null)) : [node, ...nodes(node.props?.children ?? null)];
   const text = (node = tree) => node == null || typeof node === 'boolean' ? '' : typeof node !== 'object' ? String(node)
     : Array.isArray(node) ? node.map(child => text(child ?? null)).join(' ') : text(node.props?.children ?? null);
   render();
-  return { deps, props, render, nodes, text, find: predicate => nodes().find(predicate),
+  return { deps, props, render, nodes, text, dialogState, document, focusCalls, find: predicate => nodes().find(predicate),
     search(value) { nodes().find(n => n.props?.id === 'registration-search').props.onChange({ target: { value } }); },
-    open(id) { const tr = nodes().find(n => n.props?.['data-registration-id'] === id); nodes(tr).find(n => n.type === 'button').props.onClick(); } };
+    open(id) {
+      document.activeElement = { isConnected: true, focus(options) { focusCalls.push({ id, options }); } };
+      const tr = nodes().find(n => n.props?.['data-registration-id'] === id); nodes(tr).find(n => n.type === 'button').props.onClick();
+    } };
 }
 
 test('ISBN normalization and partial title search retain individual used copies and exclude movements/errors', () => {
@@ -65,7 +86,7 @@ test('Versioned snapshots allow only product data and public image URLs, excludi
   assert.equal(snapshot.readRegistrationSnapshot({ ...result, fields: {} }), null);
 });
 
-test('Read-only fiche renders stored commercial/bibliographic/used notes with no form or external image requests', t => {
+test('Read-only fiche retains stored fields and supplies original image URLs without forms or extra data requests', t => {
   const previous = globalThis.fetch; let calls = 0;
   globalThis.fetch = () => { calls++; throw new Error('Read-only view must not make requests'); };
   t.after(() => { globalThis.fetch = previous; });
@@ -75,6 +96,8 @@ test('Read-only fiche renders stored commercial/bibliographic/used notes with no
   assert.match(view.text(), /Assinatura na primeira página/); assert.match(view.text(), /19,90/);
   assert.match(view.text(), /Título final/); assert.match(view.text(), /Editora/); assert.match(view.text(), /sem publicação real/);
   assert.equal(view.nodes().filter(n => ['img', 'form', 'textarea'].includes(n.type)).length, 0);
+  assert.deepEqual(view.nodes().filter(n => typeof n.type === 'function' && n.props?.url).map(n => [n.props.label, n.props.url]),
+    [['Imagem principal', 'https://example.com/capa.jpg'], ['Imagem adicional 1', 'https://example.com/extra.jpg']]);
   assert.equal(view.nodes().filter(n => n.type === 'input').length, 1); // Search only.
   assert.equal(view.nodes().filter(n => n.props?.dangerouslySetInnerHTML).length, 0);
   assert.equal(calls, 0);
@@ -126,4 +149,153 @@ test('Consultation paginates and search changes hide the previous detail', () =>
   assert.equal(view.nodes().filter(n => n.props?.['data-registration-id']).length, 20);
   view.find(n => n.type === 'button' && n.props.children === 'Próxima').props.onClick();
   assert.equal(view.nodes().filter(n => n.props?.['data-registration-id']).length, 5);
+});
+
+test('Fiche modal closes by button or cancel and reopens the selected record while retaining search and pagination', () => {
+  const view = mount(Array.from({ length: 45 }, (_, i) => row(String(i).padStart(2, '0'))));
+  view.search('historia');
+  view.find(n => n.type === 'button' && n.props.children === 'Próxima').props.onClick();
+  const listIds = () => view.nodes().filter(n => n.props?.['data-registration-id']).map(n => n.props['data-registration-id']);
+  const originalIds = listIds();
+  view.open('20');
+  const dialog = () => view.find(n => n.type === 'dialog');
+  assert.equal(dialog().props['aria-modal'], 'true');
+  assert.equal(view.dialogState.open, true);
+  assert.equal(view.document.body.style.overflow, 'hidden');
+  assert.equal(view.nodes().filter(n => n.props?.id === 'registration-detail').length, 1);
+  assert.match(view.text(dialog()), /P-20/);
+  view.find(n => n.type === 'button' && n.props.children === 'Fechar ficha').props.onClick();
+  assert.equal(dialog(), undefined);
+  assert.equal(view.dialogState.open, false);
+  assert.equal(view.document.body.style.overflow, 'auto');
+  assert.deepEqual(view.focusCalls, [{ id: '20', options: { preventScroll: true } }]);
+  assert.deepEqual(listIds(), originalIds);
+  assert.equal(view.find(n => n.props?.id === 'registration-search').props.value, 'historia');
+  view.open('21');
+  assert.match(view.text(dialog()), /P-21/);
+  assert.doesNotMatch(view.text(dialog()), /P-20/);
+  let prevented = false;
+  dialog().props.onCancel({ preventDefault() { prevented = true; } });
+  assert.equal(prevented, true);
+  assert.equal(dialog(), undefined);
+  assert.equal(view.dialogState.open, false);
+  assert.equal(view.document.body.style.overflow, 'auto');
+  assert.deepEqual(view.focusCalls.at(-1), { id: '21', options: { preventScroll: true } });
+  assert.equal(view.dialogState.opens, 2);
+  assert.equal(view.dialogState.closes, 2);
+  assert.deepEqual(listIds(), originalIds);
+});
+
+test('Losing access while the fiche is open releases the page scroll lock', () => {
+  const view = mount([row('A')]);
+  view.document.body.style.overflow = 'scroll';
+  view.open('A');
+  assert.equal(view.document.body.style.overflow, 'hidden');
+  view.deps.user.currentUser.active = false;
+  view.render();
+  assert.equal(view.dialogState.open, false);
+  assert.equal(view.document.body.style.overflow, 'scroll');
+  assert.equal(view.nodes().length, 0);
+});
+
+function mountImage(url, label = 'Imagem principal') {
+  const slots = []; let cursor = 0, tree;
+  const dialog = { open: false, showModal() { this.open = true; }, close() { this.open = false; } };
+  const component = imageFactory({ react: {
+    useState(initial) {
+      const index = cursor++; if (!(index in slots)) slots[index] = initial;
+      return [slots[index], next => { slots[index] = next; render(); }];
+    },
+    useRef(initial) { const index = cursor++; return slots[index] ??= { current: initial }; },
+  } }).default;
+  const nodes = (node = tree) => node == null || typeof node !== 'object' ? [] : Array.isArray(node)
+    ? node.flatMap(child => nodes(child ?? null)) : [node, ...nodes(node.props?.children ?? null)];
+  function render() {
+    cursor = 0; tree = component({ url, label });
+    const preview = nodes().find(n => n.type === 'dialog');
+    if (preview) preview.props.ref.current = dialog;
+  }
+  render();
+  return { nodes, dialog, find: predicate => nodes().find(predicate) };
+}
+
+test('HTTPS main and additional thumbnails open only after loading and close independently of the fiche', () => {
+  for (const label of ['Imagem principal', 'Imagem adicional 1']) {
+    // Extensionless image endpoints are used exactly as stored, without guessing a file name.
+    const url = 'https://example.com/images/123';
+    const view = mountImage(url, label);
+    const thumbnail = () => view.find(n => n.type === 'button' && n.props['aria-haspopup'] === 'dialog');
+    assert.equal(thumbnail().props.disabled, true);
+    assert.equal(view.nodes().filter(n => n.type === 'img').length, 1);
+    assert.equal(view.find(n => n.type === 'img').props.loading, 'lazy');
+    assert.equal(view.find(n => n.type === 'img').props.referrerPolicy, 'no-referrer');
+    view.find(n => n.type === 'img').props.onLoad();
+    assert.equal(thumbnail().props.disabled, false);
+    thumbnail().props.onClick();
+    assert.equal(view.dialog.open, true);
+    assert.deepEqual(view.nodes().filter(n => n.type === 'img').map(n => n.props.src), [url, url]);
+    view.find(n => n.type === 'button' && n.props.children === 'Fechar imagem').props.onClick();
+    assert.equal(view.dialog.open, false);
+    assert.equal(view.nodes().filter(n => n.type === 'img').length, 1);
+    thumbnail().props.onClick();
+    let prevented = false, stopped = false;
+    view.find(n => n.type === 'dialog').props.onCancel({
+      preventDefault() { prevented = true; }, stopPropagation() { stopped = true; },
+    });
+    assert.equal(prevented, true);
+    assert.equal(stopped, true); // Escape must not reach the parent fiche's cancel handler.
+    assert.equal(view.dialog.open, false);
+    assert.equal(thumbnail().props.disabled, false);
+  }
+});
+
+test('Failed images preserve the original link, including failures during enlargement', () => {
+  const url = 'https://example.com/missing.jpg';
+  for (const enlarge of [false, true]) {
+    const view = mountImage(url);
+    if (enlarge) {
+      view.find(n => n.type === 'img').props.onLoad();
+      view.find(n => n.type === 'button' && n.props['aria-haspopup'] === 'dialog').props.onClick();
+    }
+    view.nodes().filter(n => n.type === 'img').at(-1).props.onError();
+    assert.equal(view.nodes().filter(n => n.type === 'img').length, 0);
+    const link = view.find(n => n.type === 'a');
+    assert.equal(link.props.href, url);
+    assert.equal(link.props.children, url);
+    assert.equal(link.props.rel, 'noopener noreferrer');
+    assert.equal(link.props.referrerPolicy, 'no-referrer');
+    assert.ok(view.find(n => n.type === 'p' && n.props.children.includes('Não foi possível exibir')));
+    if (enlarge) {
+      view.find(n => n.type === 'button' && n.props.children === 'Fechar imagem').props.onClick();
+      assert.equal(view.dialog.open, false);
+    }
+  }
+});
+
+test('Unsafe or malformed URLs remain text; directories and HTML pages retain HTTPS links without previews', () => {
+  for (const url of ['http://example.com/capa.jpg', 'javascript:alert(1)', 'data:image/svg+xml,<svg onload="alert(1)">',
+    'file:///C:/capa.jpg', '//example.com/capa.jpg', 'https://user:password@example.com/a.jpg', 'invalid']) {
+    const view = mountImage(url);
+    assert.equal(view.nodes().filter(n => ['img', 'a', 'dialog', 'iframe', 'object'].includes(n.type)).length, 0);
+    assert.ok(view.find(n => n.type === 'span' && n.props.children === url));
+    assert.equal(view.nodes().filter(n => n.props?.dangerouslySetInnerHTML).length, 0);
+  }
+  for (const url of ['https://example.com/images/', 'https://example.com/index.html']) {
+    const view = mountImage(url);
+    assert.equal(view.nodes().filter(n => n.type === 'img').length, 0);
+    assert.equal(view.find(n => n.type === 'a').props.href, url);
+  }
+});
+
+test('Records without images retain the fiche fields and do not create image previews', () => {
+  const view = mount([row('no-images', { metadata: { registrationSnapshot: snapshot.createRegistrationSnapshot({
+    ...draft, mainImageUrl: '', additionalImageUrls: [],
+  }, '2026-10-14T12:00:00Z') } })]);
+  view.open('no-images');
+  assert.match(view.text(), /URL da imagem principal/);
+  assert.match(view.text(), /URLs das imagens adicionais/);
+  assert.match(view.text(), /Não armazenado/);
+  assert.equal(view.nodes().filter(n => typeof n.type === 'function' && n.props?.url).length, 0);
+  assert.equal(view.dialogState.open, true);
+  assert.equal(view.document.body.style.overflow, 'hidden');
 });

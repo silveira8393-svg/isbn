@@ -35,7 +35,7 @@ const output = await build({
 
 const configKey = 'sebo_magazord_sim_config_v2';
 const modes = [
-  ['auto', 'Padrão (Auto)', 'Padrão (Auto - Banco Real)'],
+  ['auto', 'Padrão (Auto)', 'Padrão (Auto - catálogo simulado local)'],
   ['force_new_found', 'Novo Encontrado', 'Forçar: Novo Encontrado'],
   ['force_new_not_found', 'Novo Não Encontrado', 'Forçar: Novo Não Encontrado'],
   ['force_used_known', 'Usado / Edição Conhecida', 'Forçar: Usado / Edição Conhecida'],

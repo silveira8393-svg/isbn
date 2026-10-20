@@ -39,14 +39,15 @@ const output = await build({
   } }],
 });
 
-const historyKey = 'sebo_isbn_history_v1';
+const legacyHistoryKey = 'sebo_isbn_history_v1';
 const configKey = 'sebo_magazord_sim_config_v2';
 const isbn = '9788535914849';
 const otherIsbn = '9788553131303';
 const actor = '22222222-3333-4444-5555-666666666666';
 const storeId = '11111111-2222-3333-4444-555555555555';
+const historyKey = `sebo_isbn_history_v2:${storeId}:${actor}`;
 const book = { title: 'Livro de teste', isbn13: isbn, authors: ['Autor'] };
-const oldEntry = { timestamp: 1, isbn, title: 'Registro anterior', success: true,
+const oldEntry = { timestamp: 1, isbn, title: 'Registro anterior', success: true, userId: actor, storeId,
   operationType: 'pesquisa_isbn', magazordStatus: 'localizado', parentCode: 'ORIGINAL-P', childCode: 'ORIGINAL' };
 const forcedModes = [
   ['force_new_found', 'NEW_PRODUCT_FOUND'],
@@ -89,7 +90,7 @@ function setup(t, mode = 'auto', initialHistory = []) {
       isDeveloper: true, canViewSettings: true, canViewProduction: true, operationEnvironment: 'development' },
     brasil: async target => ({ book: { ...book, isbn13: target }, diagnostic: { status: 200 } }),
     supabase: {
-      auth: { getSession: async () => ({ data: { session: { user: { id: actor } } }, error: null }) },
+      auth: { getSession: async () => ({ data: { session: { user: { id: deps.user.currentUser.id } } }, error: null }) },
       from(table) {
         assert.equal(table, 'operations');
         return { insert: async row => { rows.push(row); return { error: null }; } };
@@ -123,9 +124,12 @@ function setup(t, mode = 'auto', initialHistory = []) {
   };
   const document = { querySelector: () => null, body: { appendChild() {} },
     createElement: () => ({ click() {}, remove() {} }) };
-  const urls = { createObjectURL: blob => { csvBlobs.push(blob); return 'blob:test'; }, revokeObjectURL() {} };
+  class TestURL extends URL {
+    static createObjectURL(blob) { csvBlobs.push(blob); return 'blob:test'; }
+    static revokeObjectURL() {}
+  }
   new Function('deps', 'module', 'exports', 'setTimeout', 'console', 'document', 'URL', output.outputFiles[0].text)(
-    deps, module, module.exports, timer, { error: (...args) => logs.push(args), warn: (...args) => logs.push(args) }, document, urls);
+    deps, module, module.exports, timer, { error: (...args) => logs.push(args), warn: (...args) => logs.push(args) }, document, TestURL);
   function mount(component, props) {
     const slots = [];
     let tree;
@@ -143,7 +147,7 @@ function setup(t, mode = 'auto', initialHistory = []) {
   }
   const view = mount(module.exports.App);
   const prop = name => view.find(node => node.type === name)?.props;
-  const history = () => JSON.parse(storage.get(historyKey));
+  const history = () => JSON.parse(storage.get(historyKey) ?? '[]');
   const historyWrites = () => writes.filter(write => write.key === historyKey);
   async function search(target = isbn) { await prop('SearchForm').onSearch(target); await flush(); view.render(); }
   async function tab(name) { prop('Header').onTabChange(name); await flush(); view.render(); }
@@ -176,6 +180,7 @@ function setup(t, mode = 'auto', initialHistory = []) {
     setRole, exportCsv, csvBlobs,
     badges: items => module.exports.HistoryGroup({ items, onSelect() {}, onClear() {}, onExport() {} }),
     mountStatusCard: props => mount(module.exports.StatusCard, props),
+    mountRegistration: props => mount(module.exports.RegistrationForm, props),
     service: module.exports.magazordMockService,
     hold: delay => heldTimers.set(delay, []),
     release: delay => { const callbacks = heldTimers.get(delay); heldTimers.delete(delay); callbacks.forEach(callback => callback()); },
@@ -247,6 +252,7 @@ for (const condition of ['novo', 'usado']) {
       const snapshot = app.rows[1].metadata.registrationSnapshot;
       assert.equal(snapshot.version, 1);
       assert.equal(snapshot.fields.condition, condition);
+      assert.equal(snapshot.fields.registrationMode, condition === 'usado' ? 'new_used_from_known_edition' : 'new_product');
       const stored = app.service.getRecordsForEan(isbn).find(record => record.childCode === app.rows[1].child_code);
       assert.equal(snapshot.fields.price, stored.price);
       assert.equal(snapshot.fields.description, stored.description);
@@ -374,14 +380,119 @@ for (const action of ['stock', 'registration']) {
   }
 }
 
-test('Canonical history initialization stays legacy; forced lookup adds a test entry without migration', async t => {
+test('Empty scoped history is never seeded and the legacy shared key is neither read nor migrated', async t => {
   const app = setup(t, 'force_new_found', null);
-  const initialized = app.history();
-  assert.ok(initialized.length > 0);
-  assert.ok(initialized.every(item => item.historyKind === undefined));
+  const legacy = JSON.stringify([{ ...oldEntry, userId: 'old-owner', title: 'Legacy demo' }]);
+  app.storage.set(legacyHistoryKey, legacy);
+  app.view.render();
+  assert.deepEqual(app.history(), []);
+  assert.deepEqual(app.prop('SearchHistoryGroup').items, []);
+  assert.equal(app.historyWrites().length, 0);
   await app.search(otherIsbn);
   assert.equal(app.history()[0].historyKind, 'test');
-  assert.deepEqual(app.history().slice(1), initialized);
+  assert.equal(app.history().length, 1);
+  assert.equal(app.storage.get(legacyHistoryKey), legacy);
+});
+
+test('Switching authenticated user/store isolates UI, CSV, writes and clearing without touching operations or legacy data', async t => {
+  const app = setup(t, 'auto', [oldEntry]);
+  const original = { ...app.deps.user.currentUser };
+  const other = { ...original, id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', name: 'Outro operador', role: 'operator' };
+  const otherStore = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+  const otherKey = `sebo_isbn_history_v2:${storeId}:${other.id}`;
+  const otherRow = { ...oldEntry, userId: other.id, title: 'ONLY_OTHER_ACCOUNT' };
+  const foreign = { ...oldEntry, title: 'WRONG_ACCOUNT_IN_KEY' };
+  app.storage.set(otherKey, JSON.stringify([otherRow, foreign]));
+  const legacy = JSON.stringify([foreign]);
+  app.storage.set(legacyHistoryKey, legacy);
+  app.deps.user.currentUser = other; app.view.render();
+  assert.deepEqual(app.prop('SearchHistoryGroup').items, [otherRow]);
+  const csv = await app.exportCsv();
+  assert.match(csv, /ONLY_OTHER_ACCOUNT/); assert.doesNotMatch(csv, /WRONG_ACCOUNT_IN_KEY|Registro anterior/);
+  app.deps.user.currentUser = { ...other, storeId: otherStore }; app.view.render();
+  assert.deepEqual(app.prop('SearchHistoryGroup').items, []);
+  await app.search();
+  const newKey = `sebo_isbn_history_v2:${otherStore}:${other.id}`;
+  assert.equal(JSON.parse(app.storage.get(newKey))[0].storeId, otherStore);
+  assert.equal(JSON.parse(app.storage.get(newKey))[0].userId, other.id);
+  assert.deepEqual(app.history(), [oldEntry]);
+  assert.deepEqual(JSON.parse(app.storage.get(otherKey)), [otherRow, foreign], 'Read must not rewrite existing data');
+  app.prop('SearchHistoryGroup').onClear(); app.view.render();
+  assert.equal(app.storage.has(newKey), false);
+  assert.equal(app.rows.length, 1, 'Clear must not create or delete centralized events');
+  app.deps.user.currentUser = original; app.view.render();
+  assert.deepEqual(app.prop('SearchHistoryGroup').items, [oldEntry]);
+  assert.equal(app.storage.get(legacyHistoryKey), legacy);
+});
+
+test('A lookup completing after an account switch writes only the original scoped history', async t => {
+  const app = setup(t, 'auto');
+  let resolve;
+  app.deps.brasil = () => new Promise(done => { resolve = done; });
+  const pending = app.search();
+  app.deps.user.currentUser = { ...app.deps.user.currentUser, id: 'next-account' }; app.view.render();
+  assert.deepEqual(app.prop('SearchHistoryGroup').items, []);
+  resolve({ book, diagnostic: { status: 200 } }); await pending;
+  assert.deepEqual(app.prop('SearchHistoryGroup').items, []);
+  assert.equal(app.history().length, 1);
+  assert.equal(app.history()[0].userId, actor);
+  assert.equal(app.storage.has(`sebo_isbn_history_v2:${storeId}:next-account`), false);
+});
+
+test('Unavailable local history storage is visible and does not suppress centralized audit', async t => {
+  const app = setup(t);
+  globalThis.localStorage.setItem = () => { throw new Error('Quota exceeded'); };
+  await app.search();
+  assert.ok(app.view.find(node => node.props?.role === 'alert' && /histórico local/.test(node.props?.children)));
+  assert.equal(app.prop('SearchHistoryGroup').items.length, 1, 'In-memory history survives');
+  assert.equal(app.rows.length, 1);
+});
+
+test('Form submission normalizes a stale used draft before simulator and snapshot without mutating the draft', async t => {
+  const app = setup(t); await app.search();
+  app.prop('MagazordStatusCard').onOpenRegistration('usado'); app.view.render();
+  app.prop('ProductRegistrationForm').onUpdateDraft({ registrationMode: 'new_product', parentCode: 'USED-P', childCode: 'USED-1', price: '150', quantity: 1 });
+  app.view.render();
+  const props = app.prop('ProductRegistrationForm');
+  const before = structuredClone(props.draft);
+  const form = app.mountRegistration(props);
+  const completion = form.find(node => node.props?.id === 'btn-submit-magazord-registration').props.onClick();
+  await completion; await flush(); app.view.render();
+  assert.deepEqual(props.draft, before);
+  assert.equal(app.rows.at(-1).metadata.registrationSnapshot.fields.registrationMode, 'new_used_from_known_edition');
+});
+
+test('Simulation notice remains visible throughout all app tabs and registration controls identify the simulator', async t => {
+  const app = setup(t);
+  app.deps.brasil = async () => ({ book: { ...book, synopsis: 'Sinopse de teste' }, diagnostic: { status: 200 } });
+  for (const tab of ['consultar', 'cadastro', 'historico', 'dashboard', 'configuracoes']) {
+    await app.tab(tab);
+    const notice = app.view.find(node => node.props?.['data-integration-mode'] === 'simulated');
+    assert.match(notice.props.children, /Nenhum produto ou estoque é publicado/);
+  }
+  await app.tab('consultar'); await app.search();
+  const { form, completion } = await app.registration('usado');
+  assert.match(JSON.stringify(form.tree()), /CONCLUIR CADASTRO NO SIMULADOR/);
+  assert.doesNotMatch(JSON.stringify(form.tree()), /CADASTRAR NO MAGAZORD/);
+  await completion; await flush(); form.render();
+  assert.match(JSON.stringify(form.tree()), /Cadastro simulado concluído/);
+  assert.match(JSON.stringify(form.tree()), /Descrição armazenada no simulador/);
+});
+
+test('Actual catalog status card labels standard Auto and all results as simulation', async t => {
+  const app = setup(t);
+  const props = { isChecking: false, checkError: null, book, onRetryCheck() {}, onOpenRegistration() {}, onResetForNextBook() {} };
+  for (const checkResult of [
+    { exists: false, status: 'NOT_FOUND' },
+    { exists: true, status: 'NEW_PRODUCT_FOUND', existingCondition: 'novo', canReuseCommercialRegistration: true, parentCode: 'P', childCode: isbn, currentStock: 3 },
+    { exists: true, status: 'USED_EDITION_FOUND', existingCondition: 'usado', canReuseCommercialRegistration: false },
+  ]) {
+    const card = app.mountStatusCard({ ...props, checkResult });
+    const text = JSON.stringify(card.tree());
+    assert.match(text, /Magazord — integração simulada/);
+    assert.match(text, /Simulador padrão \(Auto\)/);
+    assert.doesNotMatch(text, /cadastro compatível na Magazord|Produto não encontrado na Magazord|Edição conhecida no catálogo Magazord|Banco Real/);
+  }
 });
 
 test('Both classifications retain immediate lookup deduplication and the shared 50-entry limit', async t => {

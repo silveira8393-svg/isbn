@@ -91,7 +91,7 @@ export default function CategoryAndBrandSection({
             className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
           />
           <p className="text-[11px] text-slate-500 mt-1">
-            Marca comercial cadastrada no ERP Magazord (pode ser o selo ou nome da editora).
+            Marca comercial do cadastro simulado (pode ser o selo ou nome da editora).
           </p>
         </div>
 

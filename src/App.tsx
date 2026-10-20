@@ -14,6 +14,9 @@ import MagazordStatusCard from './components/magazord/MagazordStatusCard';
 import ProductRegistrationForm from './components/magazord/ProductRegistrationForm';
 import OwnerDashboard from './components/OwnerDashboard';
 import { useOperationAudit } from './hooks/useOperationAudit';
+import { useLocalHistory } from './hooks/useLocalHistory';
+import { formatStoreDateTime, storeDateKey } from './utils/storeTime';
+import { magazordPresentation } from './utils/magazordPresentation';
 import { createRegistrationSnapshot } from './utils/registrationSnapshot';
 import SettingsView from './components/SettingsView';
 import { useUser } from './contexts/UserContext';
@@ -34,7 +37,6 @@ import {
 } from './services/distribuidoraCuritiba';
 import { cleanIsbn, isValidIsbnFormat } from './utils/isbn';
 import { createRegistrationDraft } from './utils/draft';
-import { CANONICAL_CSV_DATASET } from './utils/metrics';
 import { magazordMockService, type MagazordSimulationMode } from './services/magazordMockService';
 import {
   BookOpen,
@@ -52,7 +54,7 @@ export default function App() {
   const [errorText, setErrorText] = useState<string | null>(null);
   const [searchedTerm, setSearchedTerm] = useState<string>('');
   const [rawSearchedTerm, setRawSearchedTerm] = useState<string>('');
-  const [history, setHistory] = useState<SearchHistoryItem[]>([]);
+  const { history, setHistory, clearHistory, storageWarning: historyStorageWarning } = useLocalHistory(currentUser);
   const [activeTab, setActiveTab] = useState<NavigationTab>(currentUser.role === 'admin' && canViewProduction ? 'dashboard' : 'consultar');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const { saveOperation, pending: pendingAudit, saving: savingAudit, retry: retryAudit, storageUnavailable: auditStorageUnavailable, lastConfirmation: auditConfirmation } = useOperationAudit(currentUser);
@@ -96,21 +98,6 @@ export default function App() {
     }
   }, [currentUser.role]);
 
-  // Load history from localStorage on startup (ou popula com o dataset canônico real se vazio)
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('sebo_isbn_history_v1');
-      if (saved) {
-        setHistory(JSON.parse(saved));
-      } else {
-        setHistory(CANONICAL_CSV_DATASET);
-        localStorage.setItem('sebo_isbn_history_v1', JSON.stringify(CANONICAL_CSV_DATASET));
-      }
-    } catch (e) {
-      console.error('Failed to load search history', e);
-    }
-  }, []);
-
   // Realiza checagem simulada na API Magazord para o livro encontrado
   const runMagazordCheck = async (
     cleanedIsbn: string,
@@ -144,11 +131,6 @@ export default function App() {
           }
           return item;
         });
-        try {
-          localStorage.setItem('sebo_isbn_history_v1', JSON.stringify(updated));
-        } catch {
-          // ignora
-        }
         return updated;
       });
     } catch (err: any) {
@@ -212,6 +194,7 @@ export default function App() {
           magazordStatus: 'nao_cadastrado',
           operationType: 'pesquisa_isbn',
           userId: currentUser.id,
+          storeId: currentUser.storeId,
           userName: currentUser.name,
           userRole: currentUser.role,
           operationEnvironment: operationEnvironment,
@@ -229,11 +212,6 @@ export default function App() {
             return prevHistory;
           }
           const updated = [newItem, ...prevHistory].slice(0, 50);
-          try {
-            localStorage.setItem('sebo_isbn_history_v1', JSON.stringify(updated));
-          } catch {
-            // ignora
-          }
           return updated;
         });
 
@@ -270,17 +248,13 @@ export default function App() {
           success: false,
           operationType: 'erro_consulta',
           userId: currentUser.id,
+          storeId: currentUser.storeId,
           userName: currentUser.name,
           userRole: currentUser.role,
           operationEnvironment: operationEnvironment,
         };
         setHistory((prevHistory) => {
           const updated = [newItem, ...prevHistory].slice(0, 50);
-          try {
-            localStorage.setItem('sebo_isbn_history_v1', JSON.stringify(updated));
-          } catch {
-            // ignora
-          }
           return updated;
         });
         if (isValidIsbnFormat(cleaned)) {
@@ -324,8 +298,7 @@ export default function App() {
   };
 
   const handleClearHistory = () => {
-    setHistory([]);
-    localStorage.removeItem('sebo_isbn_history_v1');
+    clearHistory();
   };
 
   // Abre a tela única de cadastro garantindo a condição desejada (Novo ou Usado)
@@ -405,6 +378,7 @@ export default function App() {
       parentCode: targetItem?.parentCode || visibleMagazordCheck?.parentCode,
       childCode: targetItem?.childCode || visibleMagazordCheck?.childCode,
       userId: currentUser.id,
+      storeId: currentUser.storeId,
       userName: currentUser.name,
       userRole: currentUser.role,
       operationEnvironment: operationEnvironment,
@@ -412,11 +386,6 @@ export default function App() {
 
     setHistory((prevHistory) => {
       const updated = [auditItem, ...prevHistory].slice(0, 50);
-      try {
-        localStorage.setItem('sebo_isbn_history_v1', JSON.stringify(updated));
-      } catch {
-        // ignora
-      }
       return updated;
     });
 
@@ -458,6 +427,7 @@ export default function App() {
       condition: savedDraft.condition,
       operationType: opType,
       userId: currentUser.id,
+      storeId: currentUser.storeId,
       userName: currentUser.name,
       userRole: currentUser.role,
       operationEnvironment: operationEnvironment,
@@ -465,11 +435,6 @@ export default function App() {
 
     setHistory((prevHistory) => {
       const updated = [auditItem, ...prevHistory].slice(0, 50);
-      try {
-        localStorage.setItem('sebo_isbn_history_v1', JSON.stringify(updated));
-      } catch {
-        // ignora
-      }
       return updated;
     });
 
@@ -494,7 +459,7 @@ export default function App() {
       saveOperation({ isbn: currentIsbn, title: savedDraft.title, operationType: 'operation_error', status: 'error',
         parentCode: result.parentCode, childCode: result.childCode, errorMessage: 'Cadastro simulado concluído; falha na reconsulta do catálogo simulado.',
         metadata: { flow: 'magazord_post_registration_check', mock: true }, completedAt: new Date().toISOString() });
-      if (canShowActionResult(actionMode)) setMagazordCheckError('Falha ao atualizar a consulta Magazord.');
+      if (canShowActionResult(actionMode)) setMagazordCheckError('Falha ao atualizar a consulta ao simulador Magazord.');
     });
   };
 
@@ -559,7 +524,7 @@ export default function App() {
         item.magazordStatus === 'cadastrado_simulado'
           ? 'Cadastrado Simulado'
           : item.magazordStatus === 'localizado'
-          ? 'Localizado Magazord'
+          ? 'Localizado no simulador'
           : item.success
           ? 'Não Cadastrado'
           : '–';
@@ -580,10 +545,7 @@ export default function App() {
           ? 'Produção'
           : '–';
 
-      const timestamp = new Date(item.timestamp).toLocaleString('pt-BR', {
-        dateStyle: 'short',
-        timeStyle: 'medium',
-      });
+      const timestamp = formatStoreDateTime(item.timestamp);
       const status = item.success ? 'Sucesso' : 'Falha';
 
       return [
@@ -609,7 +571,7 @@ export default function App() {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    const dateStamp = new Date().toISOString().slice(0, 10);
+    const dateStamp = storeDateKey(Date.now());
 
     link.href = url;
     link.download = `historico-isbn-${dateStamp}.csv`;
@@ -634,8 +596,10 @@ export default function App() {
 
       {/* 2. Main Content Viewport */}
       <main className={`${activeTab === 'dashboard' ? 'max-w-[1440px]' : 'max-w-7xl'} mx-auto px-4 sm:px-6 py-6 flex-1 w-full`}>
+        <p data-integration-mode={magazordPresentation.mode} className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">{magazordPresentation.notice}</p>
         {savingAudit > 0 && <p role="status" className="mb-3 text-sm text-slate-600">Confirmando auditoria de {savingAudit} operação(ões)...</p>}
-        {auditConfirmation && <p role="status" className="mb-3 break-words text-xs text-slate-600">Último evento com auditoria confirmada: {auditConfirmation.eventId} · {new Date(auditConfirmation.at).toLocaleString('pt-BR')}. Este registro não comprova publicação na Magazord.</p>}
+        {auditConfirmation && <p role="status" className="mb-3 break-words text-xs text-slate-600">Último evento com auditoria confirmada: {auditConfirmation.eventId} · {formatStoreDateTime(auditConfirmation.at)} (São Paulo). Este registro não comprova publicação na Magazord.</p>}
+        {historyStorageWarning && <p role="alert" className="mb-3 rounded bg-amber-50 p-3 text-sm text-amber-900">O histórico local deste usuário e loja não pôde ser lido ou salvo. Os eventos centralizados de auditoria continuam independentes.</p>}
         {auditStorageUnavailable && <p role="alert" className="mb-3 rounded bg-rose-50 p-3 text-sm text-rose-800">Não foi possível preservar a fila de auditoria nesta sessão do navegador. Não recarregue nem encerre a sessão enquanto houver eventos pendentes; registre os IDs abaixo como evidência.</p>}
         {pendingAudit.length > 0 && <div role="alert" className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 text-sm space-y-2">
           <p>{pendingAudit.length} operação(ões) sem confirmação de registro no Supabase. O resultado e o histórico local foram preservados quando disponíveis. O Dashboard pode estar incompleto. Mantenha esta página aberta até confirmar o reenvio.</p>
@@ -728,7 +692,7 @@ export default function App() {
                     Pronto para consulta e catalogação no balcão
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-500 mt-1.5 max-w-[440px] leading-relaxed">
-                    Digite ou leia o código de barras ISBN para carregar a ficha técnica nacional e preparar instantaneamente o cadastro na Magazord.
+                    Digite ou leia o código de barras ISBN para carregar a ficha técnica nacional e preparar o cadastro no simulador Magazord.
                   </p>
                   <div className="mt-6 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-mono text-slate-600">
                     <span>Dica: Use um leitor USB ou clique em</span>
@@ -826,7 +790,7 @@ export default function App() {
       {/* Footer discreto e limpo */}
       <footer className="border-t border-slate-200/80 bg-white py-4 px-6 mt-12 text-center text-xs text-slate-500">
         <p className="font-medium text-slate-600">
-          Consulta ISBN para Sebos e Livrarias · Balcão de Catalogação Magazord
+          Consulta ISBN para Sebos e Livrarias · Magazord simulada
         </p>
       </footer>
 

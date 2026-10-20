@@ -1,4 +1,5 @@
 import { BookInfo } from '../types';
+import { isImageReference } from '../utils/imageUrls';
 
 const BASE_URL = 'https://distribuidoracuritiba.com.br/up-server/public/service';
 const SEARCH_URL = `${BASE_URL}/produto/findProdutoList/produtoController/findAllByExampleByPages`;
@@ -280,7 +281,7 @@ function findImageUrls(value: unknown): string[] {
   const imageUrls = new Set<string>();
   walkJson(value, (record) => {
     Object.entries(record).forEach(([key, fieldValue]) => {
-      if (/url.*(foto|imagem|image|capa)|^(urlfoto|urlfotominiatura)$/i.test(key) && typeof fieldValue === 'string' && /^https?:\/\//i.test(fieldValue)) {
+      if (/url.*(foto|imagem|image|capa)|^(urlfoto|urlfotominiatura)$/i.test(key) && isImageReference(fieldValue)) {
         imageUrls.add(fieldValue);
       }
     });

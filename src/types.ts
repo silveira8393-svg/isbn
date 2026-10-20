@@ -177,6 +177,7 @@ export type OperationType =
   | 'consulta_apenas';
 
 export interface SearchHistoryItem {
+  storeId?: string;
   timestamp: number;
   // Entradas legadas sem classificação são tratadas como operacionais.
   historyKind?: 'operational' | 'test';

@@ -1,5 +1,6 @@
 import type { ProductionOperation } from '../services/productionService';
 import { calculateProductionMetrics, classifyProductionOperation } from './metrics';
+import { storeDateKey } from './storeTime';
 
 export type OperationOrigin = 'simulated' | 'declared' | 'unknown';
 export const operationOrigins: { value: OperationOrigin; label: string }[] = [
@@ -21,7 +22,7 @@ export function metricsByOrigin(items: ProductionOperation[]) {
   });
 }
 
-/** Preserve completion precedence and the existing browser timezone. */
+/** Preserve completion precedence; presentation/grouping uses the store timezone. */
 export function operationDate(item: ProductionOperation): Date | null {
   const date = new Date(item.completed_at ?? item.created_at);
   return Number.isNaN(date.getTime()) ? null : date;
@@ -32,7 +33,7 @@ export function dailyOperationCounts(items: ProductionOperation[]) {
   for (const item of items) {
     const date = operationDate(item);
     if (!date) continue;
-    const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const day = storeDateKey(date);
     const group = days.get(day) ?? { day, total: 0, simulated: 0, declared: 0, unknown: 0 };
     group.total++;
     group[classifyOperationOrigin(item)]++;
@@ -81,7 +82,7 @@ export function dailyActivityCounts(items: ProductionOperation[]): DailyActivity
   for (const item of items) {
     const date = operationDate(item);
     if (!date) continue;
-    const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const day = storeDateKey(date);
     const group = days.get(day)!;
     const metric = classifyProductionOperation(item);
     const key: ActivityKey = metric.isError ? 'errors' : metric.isSearch ? 'searches'

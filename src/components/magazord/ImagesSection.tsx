@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { isImageReference } from '../../utils/imageUrls';
 import { RegistrationDraft } from '../../types';
 import {
   ImageIcon,
@@ -26,6 +27,14 @@ export default function ImagesSection({
   const [newImageUrl, setNewImageUrl] = useState('');
   const [showAddInput, setShowAddInput] = useState(false);
   const [failedUrls, setFailedUrls] = useState<Set<string>>(new Set());
+  const [loadedUrls, setLoadedUrls] = useState<Set<string>>(new Set());
+  const [urlError, setUrlError] = useState('');
+  useEffect(() => {
+    if (isImageReference(draft.mainImageUrl) && !failedUrls.has(draft.mainImageUrl)) return;
+    const fallback = draft.additionalImageUrls.find(url => isImageReference(url) && loadedUrls.has(url) && !failedUrls.has(url));
+    if (fallback) onChange({ mainImageUrl: fallback, additionalImageUrls: draft.additionalImageUrls.filter(url => url !== fallback) });
+  }, [draft.mainImageUrl, draft.additionalImageUrls, failedUrls, loadedUrls, onChange]);
+  const handleImageLoad = (url: string) => setLoadedUrls(previous => previous.has(url) ? previous : new Set([...previous, url]));
 
   const handleImageError = (url: string) => {
     setFailedUrls((prev) => {
@@ -66,6 +75,8 @@ export default function ImagesSection({
   const handleAddManualImage = () => {
     const trimmed = newImageUrl.trim();
     if (!trimmed) return;
+    if (!isImageReference(trimmed)) { setUrlError('Informe uma URL HTTP/HTTPS de imagem, sem diretório ou página HTML.'); return; }
+    setUrlError('');
     if (!draft.mainImageUrl) {
       onChange({ mainImageUrl: trimmed });
     } else if (!draft.additionalImageUrls.includes(trimmed)) {
@@ -76,8 +87,8 @@ export default function ImagesSection({
   };
 
   const hasAnyImages =
-    (draft.mainImageUrl && !failedUrls.has(draft.mainImageUrl)) ||
-    draft.additionalImageUrls.some((url) => !failedUrls.has(url));
+    (isImageReference(draft.mainImageUrl) && !failedUrls.has(draft.mainImageUrl)) ||
+    draft.additionalImageUrls.some((url) => isImageReference(url) && !failedUrls.has(url));
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-5">
@@ -91,7 +102,7 @@ export default function ImagesSection({
               Galeria de Imagens do Produto
             </h3>
             <p className="text-xs text-slate-500">
-              Capa principal e fotos adicionais do exemplar para exibição na loja e marketplaces
+              Capa e fotos do exemplar no cadastro simulado; sem publicação de imagens
             </p>
           </div>
         </div>
@@ -133,6 +144,10 @@ export default function ImagesSection({
       )}
 
       {/* Visualização de Imagens */}
+      {urlError && <p role="alert" className="text-xs text-rose-700">{urlError}</p>}
+      {failedUrls.size > 0 && <div className="text-xs text-amber-800" role="status">Uma imagem não carregou. Se uma foto adicional carregar, ela será utilizada como capa.
+        <button type="button" onClick={() => { setFailedUrls(new Set()); setLoadedUrls(new Set()); }} className="ml-2 cursor-pointer rounded underline">Tentar carregar imagens novamente</button>
+      </div>}
       {!hasAnyImages && !draft.mainImageUrl ? (
         <div className="border border-dashed border-slate-300 rounded-xl p-8 text-center flex flex-col items-center justify-center bg-slate-50/50">
           <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center mb-2">
@@ -153,13 +168,14 @@ export default function ImagesSection({
             </span>
 
             <div className="w-full max-w-[220px] aspect-[3/4] rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm relative group">
-              {draft.mainImageUrl && !failedUrls.has(draft.mainImageUrl) ? (
+              {isImageReference(draft.mainImageUrl) && !failedUrls.has(draft.mainImageUrl) ? (
                 <>
                   <img
                     src={draft.mainImageUrl}
                     alt="Capa principal"
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
+                    onLoad={() => handleImageLoad(draft.mainImageUrl!)}
                     onError={() => handleImageError(draft.mainImageUrl!)}
                   />
                   <button
@@ -197,13 +213,14 @@ export default function ImagesSection({
                     key={`${imgUrl}-${idx}`}
                     className="group relative aspect-[3/4] rounded-lg border border-slate-200 bg-slate-100 overflow-hidden shadow-2xs"
                   >
-                    {!failedUrls.has(imgUrl) ? (
+                    {isImageReference(imgUrl) && !failedUrls.has(imgUrl) ? (
                       <>
                         <img
                           src={imgUrl}
                           alt=""
                           className="w-full h-full object-cover"
                           referrerPolicy="no-referrer"
+                          onLoad={() => handleImageLoad(imgUrl)}
                           onError={() => handleImageError(imgUrl)}
                         />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-between p-1.5">

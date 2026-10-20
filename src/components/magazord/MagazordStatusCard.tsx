@@ -12,6 +12,7 @@ import {
 } from '../../types';
 import { magazordMockService, type MagazordSimulationMode } from '../../services/magazordMockService';
 import { getMagazordModeLabel as getModeLabel, useMagazordTestMode } from './useMagazordTestMode';
+import { magazordPresentation } from '../../utils/magazordPresentation';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -132,11 +133,11 @@ export default function MagazordStatusCard({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold tracking-wide uppercase text-blue-300">
-                Integração Magazord
+                {magazordPresentation.title}
               </span>
               {currentMode === 'auto' ? (
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 font-semibold">
-                  Modo Padrão (Auto)
+                  Simulador padrão (Auto)
                 </span>
               ) : (
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-bold border border-amber-300">
@@ -173,7 +174,7 @@ export default function MagazordStatusCard({
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
             <span>
               Atenção: O modo de teste <strong>{getModeLabel(currentMode)}</strong> está forçado.
-              Para consultar os dados reais salvos na sessão, retorne para o modo Padrão.
+              Para consultar o catálogo simulado deste navegador, retorne para o modo Padrão.
             </span>
           </span>
           <button
@@ -196,7 +197,7 @@ export default function MagazordStatusCard({
                   Simulação de Cenários Magazord:
                 </span>
                 <p className="text-[11px] text-slate-500">
-                  Alterne entre o comportamento real do banco simulado ou force cenários específicos de teste.
+                  Use o catálogo simulado deste navegador ou force cenários específicos de teste.
                 </p>
               </div>
             </div>
@@ -214,7 +215,7 @@ export default function MagazordStatusCard({
                     : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
                 }`}
               >
-                Padrão (Auto - Banco Real)
+                Padrão (Auto - catálogo simulado local)
               </button>
               <button
                 type="button"
@@ -293,7 +294,7 @@ export default function MagazordStatusCard({
             <div className="w-5 h-5 rounded-full border-2 border-slate-200 border-t-blue-600 animate-spin shrink-0" />
             <div>
               <p className="text-sm font-semibold text-slate-900">
-                Consultando catálogo Magazord...
+                Consultando catálogo simulado Magazord...
               </p>
               <p className="text-xs text-slate-500">
                 Verificando existência de cadastro comercial NOVO compatível ou exemplares USADOS da edição.
@@ -310,7 +311,7 @@ export default function MagazordStatusCard({
             </div>
             <div className="flex-1">
               <h4 className="text-sm font-bold text-red-900">
-                Erro ao verificar na Magazord
+                Erro ao verificar no simulador Magazord
               </h4>
               <p className="text-xs text-red-700 mt-0.5">{checkError}</p>
               <div className="mt-3 flex gap-2">
@@ -344,7 +345,7 @@ export default function MagazordStatusCard({
                   </span>
                 </div>
                 <p className="text-xs sm:text-sm text-emerald-800 mt-1 font-medium">
-                  Este produto novo já possui cadastro compatível na Magazord. Uma nova entrada poderá ser vinculada ao cadastro existente.
+                  Este produto novo já possui cadastro compatível no simulador Magazord. Uma nova entrada simulada poderá ser vinculada ao cadastro existente.
                 </p>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Não é necessário criar novo Produto Pai, novo Código Filho ou novo formulário completo de cadastro.
@@ -385,7 +386,7 @@ export default function MagazordStatusCard({
                 </span>
               </div>
               <div>
-                <span className="text-slate-500 block text-[11px]">Estoque Atual</span>
+                <span className="text-slate-500 block text-[11px]">Estoque simulado</span>
                 <span className="font-mono font-bold text-slate-800">
                   {checkResult.currentStock !== undefined
                     ? `${checkResult.currentStock} UN`
@@ -456,7 +457,7 @@ export default function MagazordStatusCard({
                 <div className="flex items-center gap-2 text-xs text-emerald-900 font-medium">
                   <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0" />
                   <span>
-                    {stockLinkSuccess.message} (Novo saldo simulado: {stockLinkSuccess.newStock} UN).
+                    {magazordPresentation.message(stockLinkSuccess.message)} (Novo saldo simulado: {stockLinkSuccess.newStock} UN).
                   </span>
                 </div>
                 <button
@@ -501,7 +502,7 @@ export default function MagazordStatusCard({
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <h4 className="text-base font-bold text-slate-900">
-                      Edição conhecida no catálogo Magazord
+                      Edição conhecida no catálogo simulado Magazord
                     </h4>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
                       Novo Exemplar Usado
@@ -604,7 +605,7 @@ export default function MagazordStatusCard({
                     </h5>
                   </div>
                   <span className="text-xs font-semibold text-emerald-800">
-                    Estoque Atual: <strong className="font-mono text-sm">{novoMatch.stock ?? checkResult.currentStock ?? 3} UN</strong>
+                    Estoque simulado: <strong className="font-mono text-sm">{novoMatch.stock ?? checkResult.currentStock ?? 3} UN</strong>
                   </span>
                 </div>
 
@@ -688,7 +689,7 @@ export default function MagazordStatusCard({
                   <div className="bg-emerald-100 border border-emerald-300 rounded-lg p-3 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-emerald-900 font-medium">
                     <div className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-                      <span>{stockLinkSuccess.message} (Saldo: {stockLinkSuccess.newStock} UN).</span>
+                      <span>{magazordPresentation.message(stockLinkSuccess.message)} (Saldo: {stockLinkSuccess.newStock} UN).</span>
                     </div>
                     <button
                       type="button"
@@ -744,7 +745,7 @@ export default function MagazordStatusCard({
                       <div className="flex items-center gap-3 text-[11px] font-mono text-slate-700 shrink-0">
                         {used.price && <span>Preço: R$ {used.price}</span>}
                         <span className="px-1.5 py-0.5 rounded bg-slate-100 font-semibold">
-                          Estoque: {used.stock ?? 1} UN
+                          Estoque simulado: {used.stock ?? 1} UN
                         </span>
                       </div>
                     </div>
@@ -809,7 +810,7 @@ export default function MagazordStatusCard({
                   <div>
                     <div className="flex items-center gap-2">
                       <h4 className="text-base font-bold text-slate-900">
-                        Produto não encontrado na Magazord
+                        Produto não encontrado no simulador Magazord
                       </h4>
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
                         Pendente de Cadastro

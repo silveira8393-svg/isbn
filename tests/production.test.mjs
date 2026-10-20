@@ -116,7 +116,7 @@ test('Period SELECT uses completed_at first and created_at only when completion 
   const api = service(fake), fixed = new Date('2026-10-02T12:00:00Z');
   assert.equal(api.productionPeriodBounds('all', fixed).start, null);
   assert.equal(api.productionPeriodBounds('30days', fixed).start, '2026-09-02T12:00:00.000Z');
-  assert.equal(new Date(api.productionPeriodBounds('today', fixed).start).getHours(), 0);
+  assert.equal(api.productionPeriodBounds('today', fixed).start, '2026-10-02T03:00:00.000Z');
 });
 
 test('Structured fields classify Novo, reused Novo and old Usado despite incorrect registrationMode', () => {

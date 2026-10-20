@@ -4,6 +4,7 @@
  */
 
 import { SearchHistoryItem } from '../types';
+import { formatStoreDateTime, formatStoreTime } from '../utils/storeTime';
 import { History, Trash2, Download, BookOpen, Clock, AlertCircle, User as UserIcon } from 'lucide-react';
 
 interface SearchHistoryGroupProps {
@@ -20,8 +21,7 @@ export default function SearchHistoryGroup({
   onExport,
 }: SearchHistoryGroupProps) {
   const formatTime = (timestamp: number) => {
-    const d = new Date(timestamp);
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    return formatStoreTime(timestamp);
   };
 
   if (items.length === 0) {
@@ -32,7 +32,7 @@ export default function SearchHistoryGroup({
         </div>
         <p className="text-sm font-semibold text-slate-800">Nenhum livro consultado</p>
         <p className="text-xs text-slate-500 mt-1 max-w-[210px] leading-relaxed">
-          As consultas realizadas no balcão ficarão salvas aqui para acesso rápido.
+          As consultas deste usuário e loja ficam salvas neste navegador para acesso rápido. Horários de São Paulo.
         </p>
       </div>
     );
@@ -45,7 +45,7 @@ export default function SearchHistoryGroup({
         <div className="flex items-center gap-2">
           <History className="w-4 h-4 text-blue-600" />
           <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-            Histórico Recente
+            Histórico deste usuário e loja
           </h2>
           <span className="bg-blue-50 text-blue-700 text-[11px] font-mono px-1.5 py-0.2 rounded font-bold border border-blue-100">
             {items.length}
@@ -147,11 +147,11 @@ export default function SearchHistoryGroup({
                     </span>
                   ) : item.magazordStatus === 'cadastrado_simulado' ? (
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      Cadastrado Magazord
+                      Cadastrado no simulador
                     </span>
                   ) : item.magazordStatus === 'localizado' ? (
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                      Localizado Magazord
+                      Localizado no simulador
                     </span>
                   ) : null}
 
@@ -191,7 +191,7 @@ export default function SearchHistoryGroup({
 
               <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400 font-mono">
                 <span className="text-blue-700 font-medium">ISBN {item.isbn}</span>
-                <span className="flex items-center gap-1">
+                <span className="flex items-center gap-1" title={`${formatStoreDateTime(item.timestamp)} (São Paulo)`}>
                   <Clock className="w-2.5 h-2.5" />
                   {formatTime(item.timestamp)}
                 </span>

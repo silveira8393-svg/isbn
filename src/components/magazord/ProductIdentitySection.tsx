@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { BookCondition, RegistrationDraft } from '../../types';
+import { registrationModeForCondition } from '../../utils/draft';
 import {
   Tag,
   Barcode,
@@ -43,6 +44,7 @@ export default function ProductIdentitySection({
       const autoChild = draft.isbn13 || draft.ean || '';
       onChange({
         condition: 'novo',
+        registrationMode: registrationModeForCondition('novo'),
         childCode: autoChild,
         category: draft.category.replace('Usado >', 'Novo >'),
       });
@@ -52,6 +54,7 @@ export default function ProductIdentitySection({
         draft.childCode === draft.isbn13 || draft.childCode === draft.ean;
       onChange({
         condition: 'usado',
+        registrationMode: registrationModeForCondition('usado'),
         childCode: currentChildIsIsbn ? '' : draft.childCode,
         category: draft.category.replace('Novo >', 'Usado >'),
       });

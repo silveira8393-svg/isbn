@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { useUser } from '../contexts/UserContext';
 import MagazordTestMode from './magazord/MagazordTestMode';
 import UserManagement from './users/UserManagement';
+import InfrastructureEntry from './infrastructure/InfrastructureEntry';
 import {
   Settings,
   Store,
@@ -19,10 +20,10 @@ import {
   Info,
 } from 'lucide-react';
 
-type SettingsTab = 'loja' | 'magazord' | 'amazon' | 'parametros' | 'usuarios';
+type SettingsTab = 'loja' | 'magazord' | 'amazon' | 'parametros' | 'usuarios' | 'infraestrutura';
 
 export default function SettingsView() {
-  const { currentUser } = useUser();
+  const { currentUser, canViewDeveloperTools } = useUser();
   const [activeSubTab, setActiveSubTab] = useState<SettingsTab>('loja');
 
   return (
@@ -56,6 +57,10 @@ export default function SettingsView() {
 
       {/* Navegação entre seções de configuração */}
       <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-2">
+        {canViewDeveloperTools && <button type="button" onClick={() => setActiveSubTab('infraestrutura')}
+          className={`rounded-lg px-3.5 py-2 text-xs font-semibold ${activeSubTab === 'infraestrutura' ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}>
+          Infraestrutura
+        </button>}
         <button
           type="button"
           onClick={() => setActiveSubTab('loja')}
@@ -124,6 +129,7 @@ export default function SettingsView() {
 
       {/* Conteúdo Conforme Subaba */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs space-y-4">
+        {activeSubTab === 'infraestrutura' && canViewDeveloperTools && <InfrastructureEntry />}
         {/* 1. LOJA */}
         {activeSubTab === 'loja' && (
           <div className="space-y-4">

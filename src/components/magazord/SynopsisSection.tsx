@@ -101,8 +101,8 @@ export default function SynopsisSection({
             </h3>
             <p className="text-xs text-slate-500">
               {isUsado
-                ? 'Campo único de descrição no Magazord: estado físico do exemplar + linha em branco + sinopse'
-                : 'Texto comercial único exibido na página do produto na Magazord e marketplaces'}
+                ? 'Descrição no simulador: estado físico do exemplar + linha em branco + sinopse'
+                : 'Texto comercial do cadastro simulado, sem publicação na Magazord ou marketplaces'}
             </p>
           </div>
         </div>
@@ -150,7 +150,7 @@ export default function SynopsisSection({
               Essas informações serão unidas na descrição final do produto.
             </p>
             <p className="text-[11px] text-amber-800 leading-relaxed">
-              O Magazord utiliza um campo único de descrição. No envio, o <strong>Estado do exemplar</strong> será posicionado no topo, seguido de uma <strong>linha em branco</strong> e da <strong>sinopse da obra</strong>.
+              O cadastro simulado mantém o formato de descrição da Magazord. O <strong>Estado do exemplar</strong> será posicionado no topo, seguido de uma <strong>linha em branco</strong> e da <strong>sinopse da obra</strong>.
             </p>
           </div>
         </div>
@@ -221,7 +221,7 @@ export default function SynopsisSection({
         />
 
         <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
-          <span>Preserva parágrafos limpos para envio à API Magazord.</span>
+          <span>Preserva parágrafos no cadastro simulado, sem envio à API Magazord.</span>
           <span>{draft.synopsis ? `${draft.synopsis.length} caracteres` : '0 caracteres'}</span>
         </div>
       </div>

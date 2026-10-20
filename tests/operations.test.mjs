@@ -72,7 +72,7 @@ const componentMocks = [
   [/\/services\/brasilApi$/, 'exports.searchBookByIsbnBrasilApi=(...args)=>deps.brasil(...args)'],
   [/\/services\/distribuidoraCuritiba$/, 'exports.searchBookByIsbnDistribuidoraCuritiba=(...args)=>deps.curitiba(...args);exports.mergeBookWithDistribuidora=(a,b)=>({...a,...b})'],
   [/\/services\/magazordMockService$/, 'exports.magazordMockService=deps.magazord'],
-  [/\/utils\/draft$/, 'exports.createRegistrationDraft=(book)=>({...book,condition:"novo"});exports.buildFinalDescription=()=>"description"'],
+  [/\/utils\/draft$/, 'exports.createRegistrationDraft=(book,condition="novo")=>({...book,condition});exports.buildFinalDescription=()=>"description";exports.registrationModeForCondition=(condition,mode)=>condition==="usado"?"new_used_from_known_edition":mode==="reuse_existing_new"?mode:"new_product"'],
   [/\/utils\/metrics$/, 'exports.CANONICAL_CSV_DATASET=[]'],
 ];
 async function component(entry) {
