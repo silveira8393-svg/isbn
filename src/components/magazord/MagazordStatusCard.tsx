@@ -34,6 +34,7 @@ interface MagazordStatusCardProps {
   isChecking: boolean;
   checkError: string | null;
   book: BookInfo;
+  manualEntry?: boolean;
   onOpenRegistration: (condition?: BookCondition) => void;
   onRetryCheck: () => void;
   onResetForNextBook: () => void;
@@ -48,6 +49,7 @@ export default function MagazordStatusCard({
   isChecking,
   checkError,
   book,
+  manualEntry = false,
   onOpenRegistration,
   onRetryCheck,
   onResetForNextBook,
@@ -817,7 +819,7 @@ export default function MagazordStatusCard({
                       </span>
                     </div>
                     <p className="text-xs sm:text-sm text-slate-600 mt-1">
-                      Os dados bibliográficos foram pré-carregados automaticamente. Revise e cadastre em tela única.
+                      {manualEntry ? 'O ISBN foi preservado. Preencha os dados bibliográficos manualmente no formulário de cadastro.' : 'Os dados bibliográficos foram pré-carregados automaticamente. Revise e cadastre em tela única.'}
                     </p>
                   </div>
                 </div>
@@ -831,7 +833,7 @@ export default function MagazordStatusCard({
                     className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm shadow-md hover:shadow-lg transition-all cursor-pointer transform hover:-translate-y-0.5"
                   >
                     <Sparkles className="w-4 h-4 fill-white/20" />
-                    <span>CRIAR NOVO CADASTRO</span>
+                    <span>{manualEntry ? 'Continuar com cadastro manual' : 'CRIAR NOVO CADASTRO'}</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
@@ -842,7 +844,7 @@ export default function MagazordStatusCard({
                 <span className="flex items-center gap-1.5">
                   <BookOpen className="w-3.5 h-3.5 text-blue-700 shrink-0" />
                   <span>
-                    Título, autores, medidas, peso, capa e descrição já foram pré-preenchidos a partir da pesquisa ISBN.
+                    {manualEntry ? 'Título, autores e demais dados ausentes devem ser informados pelo operador. Nenhum dado bibliográfico foi criado automaticamente.' : 'Título, autores, medidas, peso, capa e descrição já foram pré-preenchidos a partir da pesquisa ISBN.'}
                   </span>
                 </span>
                 <div className="flex items-center gap-2 shrink-0">

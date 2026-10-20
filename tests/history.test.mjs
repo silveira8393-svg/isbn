@@ -10,7 +10,8 @@ const output = await build({
       export { default as RegistrationForm } from './src/components/magazord/ProductRegistrationForm.tsx';
       export { default as HistoryGroup } from './src/components/SearchHistoryGroup.tsx';
       export { default as StatusCard } from './src/components/magazord/MagazordStatusCard.tsx';
-      export { magazordMockService } from './src/services/magazordMockService';`,
+      export { magazordMockService } from './src/services/magazordMockService';
+      export { mergeBookWithDistribuidora as realMerge } from './src/services/distribuidoraCuritiba.ts';`,
     resolveDir: process.cwd(), sourcefile: 'history-test-entry.ts', loader: 'ts',
   },
   bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic',
@@ -22,7 +23,7 @@ const output = await build({
       [/^lucide-react$/, 'module.exports=new Proxy({},{get:(_,key)=>String(key)})'],
       [/\/contexts\/UserContext$/, 'exports.useUser=()=>deps.user'],
       [/\/services\/brasilApi$/, 'exports.searchBookByIsbnBrasilApi=(...args)=>deps.brasil(...args)'],
-      [/\/services\/distribuidoraCuritiba$/, 'exports.searchBookByIsbnDistribuidoraCuritiba=async()=>({book:null,diagnostic:{status:404}});exports.mergeBookWithDistribuidora=(a,b)=>({...a,...b})'],
+      [/\/services\/distribuidoraCuritiba$/, 'exports.searchBookByIsbnDistribuidoraCuritiba=(...args)=>deps.curitiba(...args);exports.mergeBookWithDistribuidora=(a,b)=>deps.merge(a,b)'],
       [/\/lib\/supabase$/, 'exports.supabase=deps.supabase'],
     ];
     for (const name of ['Header', 'SearchForm', 'BookDetailsCard', 'SearchHistoryGroup', 'CameraScannerModal',
@@ -89,6 +90,7 @@ function setup(t, mode = 'auto', initialHistory = []) {
     user: { currentUser: { id: actor, storeId, active: true, name: 'Developer', role: 'developer' },
       isDeveloper: true, canViewSettings: true, canViewProduction: true, operationEnvironment: 'development' },
     brasil: async target => ({ book: { ...book, isbn13: target }, diagnostic: { status: 200 } }),
+    curitiba: async () => ({ book: null, diagnostic: { status: 404, state: 'not_found' } }),
     supabase: {
       auth: { getSession: async () => ({ data: { session: { user: { id: deps.user.currentUser.id } } }, error: null }) },
       from(table) {
@@ -130,6 +132,7 @@ function setup(t, mode = 'auto', initialHistory = []) {
   }
   new Function('deps', 'module', 'exports', 'setTimeout', 'console', 'document', 'URL', output.outputFiles[0].text)(
     deps, module, module.exports, timer, { error: (...args) => logs.push(args), warn: (...args) => logs.push(args) }, document, TestURL);
+  deps.merge = module.exports.realMerge;
   function mount(component, props) {
     const slots = [];
     let tree;
@@ -187,6 +190,133 @@ function setup(t, mode = 'auto', initialHistory = []) {
   };
 }
 
+const problemIsbn = '9780440333869';
+const fallbackBook = { title: 'Título da Curitiba', authors: ['Autor da Curitiba'], publisher: 'Editora da Curitiba', language: 'en' };
+for (const scenario of [
+  { name: 'normal result retains BrasilAPI priority and Curitiba enrichment', bStatus: 200, bBook: { title: 'Título da BrasilAPI', language: 'en' }, cStatus: 200, cBook: fallbackBook },
+  { name: 'BrasilAPI 404 falls back to Curitiba', bStatus: 404, cStatus: 200, cBook: fallbackBook },
+  { name: 'reported HTTP 400 falls back to Curitiba', bStatus: 400, cStatus: 200, cBook: fallbackBook },
+  { name: 'neither source finds the ISBN', bStatus: 404, cStatus: 404 },
+  { name: 'reported HTTP 400 and no Curitiba result allow manual entry', bStatus: 400, cStatus: 404 },
+  { name: 'a rejected first source still permits Curitiba fallback', bThrows: true, cStatus: 200, cBook: fallbackBook },
+  { name: 'Curitiba failure preserves BrasilAPI data', bStatus: 200, bBook: { title: 'Título da BrasilAPI', language: 'en' }, cThrows: true },
+  { name: 'both source failures allow manual entry', bThrows: true, cThrows: true },
+  { name: 'Curitiba HTTP 400 is a technical failure rather than absence', bStatus: 404, cStatus: 400 },
+]) {
+  test('Search continuation: ' + scenario.name, async t => {
+    const app = setup(t), calls = [];
+    app.setRole('operator');
+    app.deps.brasil = async target => {
+      calls.push(['brasil', target]);
+      if (scenario.bThrows) throw new Error('Synthetic source failure');
+      return { book: scenario.bBook ? { id: 'source-book', ...scenario.bBook, isbn13: 'different-source-identifier' } : null,
+        diagnostic: { status: scenario.bStatus } };
+    };
+    app.deps.curitiba = async target => {
+      calls.push(['curitiba', target]);
+      if (scenario.cThrows) throw new Error('Synthetic source failure');
+      return { book: scenario.cBook ? { ...scenario.cBook, isbn13: 'different-secondary-identifier' } : null,
+        diagnostic: { status: scenario.cStatus, state: scenario.cBook ? 'success' : scenario.cStatus === 404 ? 'not_found' : 'unavailable' } };
+    };
+    await app.search('978-0440333869');
+    assert.deepEqual(calls, [['brasil', problemIsbn], ['curitiba', problemIsbn]]);
+    const hasBook = Boolean(scenario.bBook || scenario.cBook);
+    const technicalFailure = Boolean(scenario.bThrows || scenario.cThrows || scenario.bStatus === 400 || scenario.cStatus === 400);
+    const cardProps = app.prop('MagazordStatusCard');
+    assert.equal(cardProps.book.isbn13, problemIsbn);
+    assert.equal(cardProps.manualEntry, !hasBook);
+    assert.equal(cardProps.checkResult.status, 'NOT_FOUND');
+    assert.equal(Boolean(app.prop('BookDetailsCard')), hasBook);
+    if (technicalFailure || !hasBook) {
+      const heading = app.view.find(n => n.type === 'h3' && (typeof n.props.children === 'string')
+        && /Consulta bibliográfica parcial|Falha na consulta bibliográfica|Obra não localizada nas fontes consultadas/.test(n.props.children));
+      assert.equal(heading.props.children, hasBook ? 'Consulta bibliográfica parcial' : technicalFailure ? 'Falha na consulta bibliográfica' : 'Obra não localizada nas fontes consultadas');
+    }
+    const card = app.mountStatusCard(cardProps);
+    if (!hasBook) assert.ok(card.find(n => n.type === 'span' && n.props.children === 'Continuar com cadastro manual'));
+    card.find(n => n.props?.id === 'btn-open-magazord-registration').props.onClick();
+    app.view.render();
+    const draft = app.prop('ProductRegistrationForm').draft;
+    assert.equal(draft.ean, problemIsbn);
+    assert.equal(draft.isbn13, problemIsbn);
+    assert.equal(draft.childCode, problemIsbn);
+    assert.equal(draft.parentCode, '');
+    assert.equal(draft.title, scenario.bBook?.title || scenario.cBook?.title || '');
+    if (!hasBook) {
+      assert.deepEqual(draft.authors, []);
+      assert.equal(draft.publisher, '');
+      assert.equal(draft.language, '');
+      assert.equal(draft.format, '');
+      assert.equal(draft.synopsis, '');
+      assert.equal(draft.mainImageUrl, undefined);
+    } else if (scenario.cBook) assert.deepEqual(draft.authors, fallbackBook.authors);
+    assert.equal(app.rows[0].metadata.resultFound, hasBook);
+    assert.equal(app.rows[0].metadata.sources.brasilApi.resultFound, Boolean(scenario.bBook));
+    assert.equal(app.rows[0].metadata.sources.distribuidoraCuritiba.resultFound, Boolean(scenario.cBook));
+    app.prop('ProductRegistrationForm').onUpdateDraft({ title: draft.title || 'Título informado pelo operador', parentCode: 'MANUAL-P', price: '25', quantity: 2 });
+    app.view.render();
+    const form = app.mountRegistration(app.prop('ProductRegistrationForm'));
+    await form.find(n => n.props?.id === 'btn-submit-magazord-registration').props.onClick();
+    await flush(); app.view.render();
+    assert.equal(app.service.getRecordsForEan(problemIsbn, 'auto')[0].title, draft.title || 'Título informado pelo operador');
+    assert.equal(app.rows.filter(row => row.operation_type === 'new_product_created').length, 1);
+    await app.tab('consultar');
+    await app.search(problemIsbn);
+    assert.equal(app.prop('MagazordStatusCard').checkResult.status, 'NEW_PRODUCT_FOUND');
+    assert.equal(app.service.getRecordsForEan(problemIsbn, 'auto').length, 1);
+  });
+}
+
+test('Manual ISBN-10 entry keeps the original identifier and the existing new/used child-code rules', async t => {
+  const app = setup(t);
+  app.setRole('operator');
+  app.deps.brasil = async () => ({ book: null, diagnostic: { status: 404 } });
+  await app.search('0440333865');
+  app.prop('MagazordStatusCard').onOpenRegistration('usado');
+  app.view.render();
+  const draft = app.prop('ProductRegistrationForm').draft;
+  assert.equal(draft.isbn10, '0440333865');
+  assert.equal(draft.isbn13, '');
+  assert.equal(draft.ean, '0440333865');
+  assert.equal(draft.childCode, '');
+  assert.equal(draft.parentCode, '');
+  assert.equal(draft.condition, 'usado');
+  assert.equal(draft.title, '');
+});
+
+test('A bibliography failure still recognizes an existing commercial Novo and permits stock reuse', async t => {
+  const app = setup(t);
+  app.setRole('operator');
+  await app.service.createProduct({ condition: 'novo', ean: problemIsbn, isbn13: problemIsbn, parentCode: 'EXISTING-P',
+    childCode: problemIsbn, title: 'Produto já cadastrado', price: '25', quantity: 2 });
+  app.deps.brasil = async () => ({ book: null, diagnostic: { status: 400 } });
+  await app.search(problemIsbn);
+  const props = app.prop('MagazordStatusCard');
+  assert.equal(props.checkResult.status, 'NEW_PRODUCT_FOUND');
+  assert.equal(props.checkResult.canReuseCommercialRegistration, true);
+  const card = app.mountStatusCard(props);
+  assert.ok(card.find(n => n.props?.id === 'btn-link-stock'));
+  assert.equal(card.find(n => n.props?.id === 'btn-open-magazord-registration'), null);
+  await props.onLinkStock(1);
+  await flush(); app.view.render();
+  assert.equal(app.service.getRecordsForEan(problemIsbn, 'auto')[0].stock, 3);
+  assert.equal(app.service.getRecordsForEan(problemIsbn, 'auto').length, 1);
+  assert.equal(app.rows.at(-1).operation_type, 'new_product_reused');
+});
+
+test('BrasilAPI maps HTTP 400 to a technical diagnostic without inventing a book', async () => {
+  const result = await build({ entryPoints: ['src/services/brasilApi.ts'], bundle: true, write: false, platform: 'node', format: 'cjs' });
+  const module = { exports: {} }, calls = [];
+  new Function('fetch', 'module', 'exports', result.outputFiles[0].text)(async url => {
+    calls.push(url); return new Response(null, { status: 400 });
+  }, module, module.exports);
+  const response = await module.exports.searchBookByIsbnBrasilApi(problemIsbn);
+  assert.deepEqual(calls, [`https://brasilapi.com.br/api/isbn/v1/${problemIsbn}`]);
+  assert.equal(response.book, null);
+  assert.equal(response.diagnostic.status, 400);
+  assert.equal(response.diagnostic.apiErrorMessage, 'Erro inesperado na API: HTTP Status 400');
+});
+
 test('Developer + Auto persists operational history and its Magazord result in both views', async t => {
   const app = setup(t);
   await app.search();
@@ -233,7 +363,7 @@ test('No-result and bibliographic errors retain operational/test classification 
       assert.equal(app.history()[0].operationType, 'erro_consulta');
       assert.equal(app.history()[0].success, false);
       app.assertOldEntries();
-      assert.equal(app.rows.length, 1);
+      assert.equal(app.rows.length, mode === 'force_error' ? 2 : 1);
       assert.equal(app.rows[0].operation_type, status === 404 ? 'isbn_search' : 'operation_error');
     }
   }

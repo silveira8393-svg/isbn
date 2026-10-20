@@ -136,7 +136,8 @@ test('Multiple bibliographic sources, including enrichment failure, produce one 
 
 test('Normal no-result lookup is success; fatal source failure is operation_error', async () => {
   for (const status of [404, 500, 'FALHA_CONEXAO']) {
-    const deps = dependencies({ brasil: async () => ({ book: null, diagnostic: { status } }) });
+    const deps = dependencies({ brasil: async () => ({ book: null, diagnostic: { status } }),
+      curitiba: async () => ({ book: null, diagnostic: { status: 404, state: 'not_found' } }) });
     const view = mount(app, deps); await search(view);
     assert.equal(deps.records.length, 1); assert.equal(deps.records[0].operationType, status === 404 ? 'isbn_search' : 'operation_error');
     assert.equal(deps.records[0].metadata.resultFound, false);
@@ -250,6 +251,7 @@ test('Lost INSERT response can be retried with the same UUID and confirmed under
 test('Pending audit warns and retries the identical event without repeating the ISBN search', async () => {
   let calls = 0, searches = 0;
   const deps = dependencies({ record: async row => { deps.records.push(row); return ++calls > 1; },
+    curitiba: async () => ({ book: null, diagnostic: { status: 404, state: 'not_found' } }),
     brasil: async () => { searches++; return { book: { title: 'Livro' }, diagnostic: { status: 200 } }; } });
   const view = mount(app, deps); await search(view);
   const initial = structuredClone(deps.records[0]);

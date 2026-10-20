@@ -52,6 +52,8 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [foundBook, setFoundBook] = useState<BookInfo | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [bibliographicState, setBibliographicState] = useState<'found' | 'not_found' | 'error' | null>(null);
+  const manualEntry = bibliographicState === 'not_found' || bibliographicState === 'error';
   const [searchedTerm, setSearchedTerm] = useState<string>('');
   const [rawSearchedTerm, setRawSearchedTerm] = useState<string>('');
   const { history, setHistory, clearHistory, storageWarning: historyStorageWarning } = useLocalHistory(currentUser);
@@ -102,7 +104,8 @@ export default function App() {
   const runMagazordCheck = async (
     cleanedIsbn: string,
     book: BookInfo,
-    actionMode: MagazordSimulationMode = captureActionMode()
+    actionMode: MagazordSimulationMode = captureActionMode(),
+    updateSearchHistory = true
   ) => {
     setIsCheckingMagazord(true);
     setMagazordCheckError(null);
@@ -114,6 +117,7 @@ export default function App() {
         setMagazordCheckResult(check);
       }
 
+      if (!updateSearchHistory) return;
       // Atualiza o registro no histórico com status da Magazord (apenas em consultas pendentes)
       setHistory((prevHistory) => {
         const updated = prevHistory.map((item) => {
@@ -159,6 +163,7 @@ export default function App() {
     const actionMode = captureActionMode();
     setIsLoading(true);
     setErrorText(null);
+    setBibliographicState(null);
     setFoundBook(null);
     setRegistrationDraft(null);
     setMagazordCheckResult(null);
@@ -168,19 +173,43 @@ export default function App() {
     setActiveTab('consultar');
 
     try {
-      const result = await searchBookByIsbnBrasilApi(cleaned);
-
-      if (result.book) {
-        const distribuidoraResult = await searchBookByIsbnDistribuidoraCuritiba(cleaned);
-        const enrichedBook = distribuidoraResult.book
-          ? mergeBookWithDistribuidora(result.book, distribuidoraResult.book)
-          : result.book;
-
-        setFoundBook(enrichedBook);
-
-        // Prepara automaticamente o rascunho de cadastro com os dados reais
-        const draft = createRegistrationDraft(enrichedBook);
+      const result = await searchBookByIsbnBrasilApi(cleaned).catch(() => ({
+        book: null, diagnostic: { status: 'FALHA_CONEXAO' },
+      }));
+      // Preserve the source order and enrichment rules, including when BrasilAPI has no book.
+      const distribuidoraResult = await searchBookByIsbnDistribuidoraCuritiba(cleaned).catch(() => ({
+        book: null, diagnostic: { status: 'FALHA_CONEXAO', state: 'unavailable' },
+      }));
+      const identifiers = cleaned.length === 13 ? { isbn13: cleaned } : { isbn10: cleaned };
+      const isbnBook: BookInfo = { id: `isbn-${cleaned}`, title: '', ...identifiers };
+      const enrichedBook = result.book || distribuidoraResult.book ? {
+        ...(distribuidoraResult.book ? mergeBookWithDistribuidora(result.book || isbnBook, distribuidoraResult.book) : result.book!),
+        ...identifiers,
+      } : null;
+      const failedStatus = (status: number | string) => status !== 404 && !(typeof status === 'number' && status >= 200 && status < 300);
+      const brasilFailure = failedStatus(result.diagnostic.status);
+      const curitibaFailure = distribuidoraResult.diagnostic.state === 'unavailable' || failedStatus(distribuidoraResult.diagnostic.status);
+      const technicalFailure = brasilFailure || curitibaFailure;
+      setBibliographicState(enrichedBook ? 'found' : technicalFailure ? 'error' : 'not_found');
+      if (technicalFailure) {
+        const sources = [brasilFailure ? `BrasilAPI (${typeof result.diagnostic.status === 'number' ? 'HTTP ' : ''}${result.diagnostic.status})` : null,
+          curitibaFailure ? `Distribuidora Curitiba (${typeof distribuidoraResult.diagnostic.status === 'number' ? 'HTTP ' : ''}${distribuidoraResult.diagnostic.status})` : null].filter(Boolean).join('; ');
+        setErrorText(`Falha na consulta bibliográfica: ${sources}. Isso não confirma que a obra inexiste. ${enrichedBook
+          ? 'Os dados disponíveis foram preservados; complete os campos ausentes no cadastro.'
+          : 'Você pode continuar com cadastro manual após a verificação do simulador abaixo.'}`);
+      } else if (!enrichedBook) {
+        setErrorText('Nenhuma das fontes bibliográficas consultadas localizou a obra. Você pode continuar com cadastro manual após a verificação do simulador abaixo.');
+      }
+      const lookupBook = enrichedBook || (isValidIsbnFormat(cleaned) ? isbnBook : null);
+      setFoundBook(lookupBook);
+      if (lookupBook) {
+        const draft = createRegistrationDraft(lookupBook);
+        draft.language = lookupBook.language || '';
+        draft.format = lookupBook.format || '';
         setRegistrationDraft(draft);
+      }
+
+      if (enrichedBook) {
 
         // Add item to history with thumbnail support and audit info
         const newItem: SearchHistoryItem = {
@@ -220,30 +249,17 @@ export default function App() {
           isbn: cleaned, title: enrichedBook.title, operationType: 'isbn_search', status: 'success',
           completedAt: new Date(newItem.timestamp).toISOString(),
           metadata: { resultFound: true, sources: {
-            brasilApi: { status: result.diagnostic.status, resultFound: true },
+            brasilApi: { status: result.diagnostic.status, resultFound: Boolean(result.book), partialFailure: brasilFailure },
             distribuidoraCuritiba: { status: distribuidoraResult.diagnostic.status, resultFound: Boolean(distribuidoraResult.book),
-              partialFailure: distribuidoraResult.diagnostic.state === 'unavailable' || distribuidoraResult.diagnostic.status === 'FALHA_CONEXAO' },
+              partialFailure: curitibaFailure },
           } },
         });
-        void runMagazordCheck(cleaned, enrichedBook, actionMode);
       } else {
-        let localError = 'ISBN não encontrado na base de dados.';
-        if (result.diagnostic.status === 404) {
-          localError = 'ISBN não encontrado no registro nacional.';
-        } else if (result.diagnostic.status === 500) {
-          localError = 'Instabilidade temporária no serviço de consulta.';
-        } else if (result.diagnostic.status === 'FALHA_CONEXAO') {
-          localError = 'Não foi possível conectar ao serviço de consulta.';
-        } else if (result.diagnostic.apiErrorMessage) {
-          localError = result.diagnostic.apiErrorMessage;
-        }
-        setErrorText(localError);
-
         const newItem: SearchHistoryItem = {
           timestamp: Date.now(),
           historyKind: actionMode === 'auto' ? 'operational' : 'test',
           isbn: cleaned,
-          title: `Não localizado (${cleaned})`,
+          title: technicalFailure ? `Falha na consulta (${cleaned})` : `Não localizado (${cleaned})`,
           authors: undefined,
           success: false,
           operationType: 'erro_consulta',
@@ -259,21 +275,24 @@ export default function App() {
         });
         if (isValidIsbnFormat(cleaned)) {
           const status = result.diagnostic.status;
-          const normalCompletion = status === 404 || (typeof status === 'number' && status >= 200 && status < 300);
+          const normalCompletion = !technicalFailure;
           saveOperation({
             isbn: cleaned, operationType: normalCompletion ? 'isbn_search' : 'operation_error',
             status: normalCompletion ? 'success' : 'error',
             errorMessage: normalCompletion ? undefined : 'Falha do serviço na consulta bibliográfica.',
             completedAt: new Date(newItem.timestamp).toISOString(),
             metadata: { flow: 'isbn_search', resultFound: false, sources: {
-              brasilApi: { status, resultFound: false }, distribuidoraCuritiba: { consulted: false },
+              brasilApi: { status, resultFound: false },
+              distribuidoraCuritiba: { consulted: true, status: distribuidoraResult.diagnostic.status, resultFound: false, partialFailure: curitibaFailure },
             } },
           });
         }
       }
+      if (lookupBook) void runMagazordCheck(cleaned, lookupBook, actionMode, Boolean(enrichedBook));
     } catch (err: any) {
       console.error('Falha ao concluir pesquisa bibliográfica.');
       setErrorText('Não foi possível conectar ao serviço de consulta.');
+      setBibliographicState('error');
       if (isValidIsbnFormat(cleaned)) saveOperation({
         isbn: cleaned, operationType: 'operation_error', status: 'error',
         errorMessage: 'Falha fatal ao concluir a consulta bibliográfica.',
@@ -309,6 +328,8 @@ export default function App() {
       visibleMagazordCheck?.existingCondition ||
       'novo';
     const draft = createRegistrationDraft(foundBook, targetCondition);
+    draft.language = foundBook.language || '';
+    draft.format = foundBook.format || '';
     setRegistrationDraft(draft);
     setActiveTab('cadastro');
   };
@@ -471,6 +492,7 @@ export default function App() {
     setMagazordCheckError(null);
     setIsbnValue('');
     setErrorText(null);
+    setBibliographicState(null);
     setActiveTab('consultar');
 
     // Foca suavemente no input de ISBN
@@ -638,14 +660,14 @@ export default function App() {
 
               {/* Error State */}
               {errorText && !isLoading && (
-                <div className="bg-white rounded-xl border border-red-200 shadow-xs p-6 animate-fade-in">
+                <div role={bibliographicState === 'not_found' ? 'status' : 'alert'} className="bg-white rounded-xl border border-red-200 shadow-xs p-6 animate-fade-in">
                   <div className="flex items-start gap-3.5">
                     <div className="p-2.5 bg-red-50 text-red-600 rounded-lg border border-red-100 shrink-0">
                       <AlertCircle className="w-5 h-5" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="text-base font-bold text-slate-900">
-                        Obra não localizada
+                        {bibliographicState === 'found' ? 'Consulta bibliográfica parcial' : bibliographicState === 'not_found' ? 'Obra não localizada nas fontes consultadas' : 'Falha na consulta bibliográfica'}
                       </h3>
                       <p className="text-sm text-slate-600 mt-1 leading-relaxed">
                         {errorText}
@@ -671,14 +693,15 @@ export default function App() {
                     isChecking={isCheckingMagazord}
                     checkError={canViewCheck ? magazordCheckError : null}
                     book={foundBook}
+                    manualEntry={manualEntry}
                     onOpenRegistration={handleOpenRegistration}
-                    onRetryCheck={() => runMagazordCheck(searchedTerm, foundBook)}
+                    onRetryCheck={() => runMagazordCheck(searchedTerm, foundBook, captureActionMode(), !manualEntry)}
                     onResetForNextBook={handleProcessNextBook}
                     onLinkStock={handleLinkStock}
                   />
 
                   {/* Ficha Bibliográfica Completa (Preservada do projeto original) */}
-                  <BookDetailsCard book={foundBook} />
+                  {!manualEntry && <BookDetailsCard book={foundBook} />}
                 </div>
               )}
 
