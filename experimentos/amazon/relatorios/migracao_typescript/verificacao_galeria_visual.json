@@ -1,0 +1,45 @@
+{
+  "resultado": "aprovado",
+  "contexto": "componentes reais, extrator TypeScript, slots DIV sanitizados e SVGs autorais interceptados localmente",
+  "capa": 1,
+  "adicionais": 3,
+  "confirmacoes": 0,
+  "selecao_miniatura": true,
+  "pesquisas_sucessivas": true,
+  "diagnostico_recolhido": true,
+  "imagens_servidas_por_interceptacao_local": 5,
+  "consultas_externas_pagina_livro": 0,
+  "carregamentos_remotos": [],
+  "dimensoes_renderizadas": [
+    {
+      "referencia": "https://m.media-amazon.com/images/I/91Sb5HdDL3L._SL1500_.jpg",
+      "largura": 160,
+      "altura": 240
+    },
+    {
+      "referencia": "https://m.media-amazon.com/images/I/61cFRircgZL._SY445_SX342_ML2_.jpg",
+      "largura": 40,
+      "altura": 60
+    },
+    {
+      "referencia": "https://m.media-amazon.com/images/I/91pv+3HSGRL._SL1500_.jpg",
+      "largura": 160,
+      "altura": 240
+    },
+    {
+      "referencia": "https://m.media-amazon.com/images/I/81YiEHsaX1L._SL1500_.jpg",
+      "largura": 160,
+      "altura": 240
+    },
+    {
+      "referencia": "https://m.media-amazon.com/images/I/31Epa894dmL.jpg",
+      "largura": 40,
+      "altura": 60
+    }
+  ],
+  "conexoes_externas": 0,
+  "hosts_bloqueados": [
+    "fonts.googleapis.com"
+  ],
+  "erros_javascript": []
+}

@@ -1,0 +1,235 @@
+{
+  "natureza": "real_html_sanitizado",
+  "arquivo": "amazon_o_alquimista_9788584390670.html",
+  "isbn_pesquisado": "9788584390670",
+  "isbn_encontrado": {
+    "isbn10": {
+      "valor": "8584390677",
+      "valido": true,
+      "conflito": false,
+      "evidencias": [
+        {
+          "valor": "8584390677",
+          "origem": "#detailBullets_feature_div / li (linha 74)",
+          "tipo": "bibliografico"
+        },
+        {
+          "valor": "8584390677",
+          "origem": "#rpi-attribute-book_details-isbn10",
+          "tipo": "bibliografico"
+        }
+      ]
+    },
+    "isbn13": {
+      "valor": "9788584390670",
+      "valido": true,
+      "conflito": false,
+      "evidencias": [
+        {
+          "valor": "978-8584390670",
+          "origem": "#detailBullets_feature_div / li (linha 84)",
+          "tipo": "bibliografico"
+        },
+        {
+          "valor": "978-8584390670",
+          "origem": "#rpi-attribute-book_details-isbn13",
+          "tipo": "bibliografico"
+        }
+      ]
+    }
+  },
+  "correspondencia": "corresponde",
+  "titulo": "O alquimista",
+  "campos": {
+    "titulo": {
+      "valor": "O alquimista",
+      "estado": "valido",
+      "motivos": [],
+      "origens": [
+        "#productTitle"
+      ],
+      "evidencias": [
+        {
+          "valor": "O alquimista",
+          "origem": "#productTitle",
+          "tipo": "bibliografico"
+        }
+      ],
+      "revisao_humana": false
+    },
+    "autores": {
+      "valor": [
+        "Paulo Coelho"
+      ],
+      "estado": "valido",
+      "motivos": [],
+      "origens": [
+        "#bylineInfo (papel Autor/Autora/Author)"
+      ],
+      "evidencias": [
+        {
+          "valor": [
+            "Paulo Coelho"
+          ],
+          "origem": "#bylineInfo (papel Autor/Autora/Author)",
+          "tipo": "bibliografico"
+        }
+      ],
+      "revisao_humana": false
+    },
+    "editora": {
+      "valor": "Paralela",
+      "estado": "valido",
+      "motivos": [],
+      "origens": [
+        "#detailBullets_feature_div / li (linha 24)",
+        "#rpi-attribute-book_details-publisher"
+      ],
+      "evidencias": [
+        {
+          "valor": "Paralela",
+          "origem": "#detailBullets_feature_div / li (linha 24)",
+          "tipo": "bibliografico"
+        },
+        {
+          "valor": "Paralela",
+          "origem": "#rpi-attribute-book_details-publisher",
+          "tipo": "bibliografico"
+        }
+      ],
+      "revisao_humana": false
+    },
+    "ano": {
+      "valor": 2017,
+      "estado": "valido",
+      "motivos": [],
+      "origens": [
+        "#detailBullets_feature_div / li (linha 34)",
+        "#rpi-attribute-book_details-publication_date"
+      ],
+      "evidencias": [
+        {
+          "valor": "5 abril 2017",
+          "origem": "#detailBullets_feature_div / li (linha 34)",
+          "tipo": "bibliografico"
+        },
+        {
+          "valor": "5 abril 2017",
+          "origem": "#rpi-attribute-book_details-publication_date",
+          "tipo": "bibliografico"
+        }
+      ],
+      "revisao_humana": false
+    },
+    "edicao": {
+      "valor": "1ª",
+      "estado": "valido",
+      "motivos": [],
+      "origens": [
+        "#detailBullets_feature_div / li (linha 44)",
+        "#rpi-attribute-book_details-edition"
+      ],
+      "evidencias": [
+        {
+          "valor": "1ª",
+          "origem": "#detailBullets_feature_div / li (linha 44)",
+          "tipo": "bibliografico"
+        },
+        {
+          "valor": "1ª",
+          "origem": "#rpi-attribute-book_details-edition",
+          "tipo": "bibliografico"
+        }
+      ],
+      "revisao_humana": false
+    },
+    "idioma": {
+      "valor": "Português",
+      "estado": "valido",
+      "motivos": [],
+      "origens": [
+        "#detailBullets_feature_div / li (linha 54)",
+        "#rpi-attribute-language"
+      ],
+      "evidencias": [
+        {
+          "valor": "Português",
+          "origem": "#detailBullets_feature_div / li (linha 54)",
+          "tipo": "bibliografico"
+        },
+        {
+          "valor": "Português",
+          "origem": "#rpi-attribute-language",
+          "tipo": "bibliografico"
+        }
+      ],
+      "revisao_humana": false
+    },
+    "formato": {
+      "valor": "CC - Capa Convencional",
+      "estado": "valido",
+      "motivos": [],
+      "origens": [
+        "#bylineInfo (Formato)"
+      ],
+      "evidencias": [
+        {
+          "valor": "Capa comum",
+          "origem": "#bylineInfo (Formato)",
+          "tipo": "bibliografico"
+        }
+      ],
+      "revisao_humana": false
+    },
+    "paginas": {
+      "valor": 208,
+      "estado": "valido",
+      "motivos": [],
+      "origens": [
+        "#detailBullets_feature_div / li (linha 64)",
+        "#rpi-attribute-book_details-fiona_pages"
+      ],
+      "evidencias": [
+        {
+          "valor": "208 páginas",
+          "origem": "#detailBullets_feature_div / li (linha 64)",
+          "tipo": "bibliografico"
+        },
+        {
+          "valor": "208 páginas",
+          "origem": "#rpi-attribute-book_details-fiona_pages",
+          "tipo": "bibliografico"
+        }
+      ],
+      "revisao_humana": false
+    },
+    "sinopse": {
+      "valor": "O alquimista - um clássico contemporâneo sobre o poder transformador dos sonhos. Combinando espiritualidade, sabedoria e misticismo, O alquimista é uma inspiradora e emocionante história de autodescoberta que vem transformando a vida de milhões de leitores ao redor do mundo há mais de trinta anos. Santiago, um jovem pastor da Andaluzia, parte rumo ao Egito em busca de um tesouro escondido entre as Pirâmides. O que ele não sabe é que sua jornada o levará a riquezas muito diferentes – e mais satisfatórias – do que ele estava esperando. Ao longo do caminho, uma cigana, um homem que se diz rei e um alquimista lhe indicam a direção em que deve seguir e o ajudam a perceber que o maior tesouro se encontra dentro dele mesmo. Com a prosa poética de Paulo Coelho, este romance encantador nos recorda da sabedoria de ouvir nossos corações, reconhecer as oportunidades da vida e, mais importante, sempre seguir nossos sonhos. “O alquimista é esperançoso e inspirador. Sua história ensina que devemos acreditar em nós mesmo e continuar nossa jornada” – Malala Yousafzai, Prêmio Nobel da Paz e autora de Eu sou Malala “Acreditemos nas palavras de Paulo Coelho: ‘Com a força de nosso amor, de nossa vontade, podemos mudar nosso destino e o destino de muita gente.’” – Barack Obama, ex-presidente dos Estados Unidos",
+      "estado": "inconsistente",
+      "motivos": [
+        "Descrição curta/comercial ou mista; não comprova sinopse."
+      ],
+      "origens": [
+        "#bookDescription_feature_div"
+      ],
+      "evidencias": [
+        {
+          "valor": "O alquimista - um clássico contemporâneo sobre o poder transformador dos sonhos. Combinando espiritualidade, sabedoria e misticismo, O alquimista é uma inspiradora e emocionante história de autodescoberta que vem transformando a vida de milhões de leitores ao redor do mundo há mais de trinta anos. Santiago, um jovem pastor da Andaluzia, parte rumo ao Egito em busca de um tesouro escondido entre as Pirâmides. O que ele não sabe é que sua jornada o levará a riquezas muito diferentes – e mais satisfatórias – do que ele estava esperando. Ao longo do caminho, uma cigana, um homem que se diz rei e um alquimista lhe indicam a direção em que deve seguir e o ajudam a perceber que o maior tesouro se encontra dentro dele mesmo. Com a prosa poética de Paulo Coelho, este romance encantador nos recorda da sabedoria de ouvir nossos corações, reconhecer as oportunidades da vida e, mais importante, sempre seguir nossos sonhos. “O alquimista é esperançoso e inspirador. Sua história ensina que devemos acreditar em nós mesmo e continuar nossa jornada” – Malala Yousafzai, Prêmio Nobel da Paz e autora de Eu sou Malala “Acreditemos nas palavras de Paulo Coelho: ‘Com a força de nosso amor, de nossa vontade, podemos mudar nosso destino e o destino de muita gente.’” – Barack Obama, ex-presidente dos Estados Unidos",
+          "origem": "#bookDescription_feature_div",
+          "tipo": "descricao_comercial"
+        }
+      ],
+      "revisao_humana": true
+    }
+  },
+  "preenchidos": 9,
+  "validos_locais": 8,
+  "total_campos": 9,
+  "percentual_preenchimento": 100.0,
+  "percentual_validos_locais": 88.89,
+  "atribuicao_ao_isbn_autorizada": false,
+  "alertas": [
+    "sinopse: Descrição curta/comercial ou mista; não comprova sinopse.",
+    "Validade local é heurística; não confirma identidade editorial nem autoriza integração."
+  ]
+}

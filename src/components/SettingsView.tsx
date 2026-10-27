@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { lazy, Suspense, useState } from 'react';
+import { isAmazonLabAvailable } from '../services/amazonLabClient';
 import { useUser } from '../contexts/UserContext';
 import MagazordTestMode from './magazord/MagazordTestMode';
 import UserManagement from './users/UserManagement';
@@ -20,11 +21,13 @@ import {
   Info,
 } from 'lucide-react';
 
-type SettingsTab = 'loja' | 'magazord' | 'amazon' | 'parametros' | 'usuarios' | 'infraestrutura';
+const AmazonLab = lazy(() => import('./AmazonLab'));
+type SettingsTab = 'loja' | 'magazord' | 'amazon' | 'amazon-lab' | 'parametros' | 'usuarios' | 'infraestrutura';
 
 export default function SettingsView() {
   const { currentUser, canViewDeveloperTools } = useUser();
   const [activeSubTab, setActiveSubTab] = useState<SettingsTab>('loja');
+  const showAmazonLab = isAmazonLabAvailable(currentUser.role, currentUser.active);
 
   return (
     <div className="w-full max-w-5xl mx-auto space-y-6 animate-fade-in pb-12">
@@ -60,6 +63,10 @@ export default function SettingsView() {
         {canViewDeveloperTools && <button type="button" onClick={() => setActiveSubTab('infraestrutura')}
           className={`rounded-lg px-3.5 py-2 text-xs font-semibold ${activeSubTab === 'infraestrutura' ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}>
           Infraestrutura
+        </button>}
+        {showAmazonLab && <button type="button" onClick={() => setActiveSubTab('amazon-lab')}
+          className={`rounded-lg px-3.5 py-2 text-xs font-semibold ${activeSubTab === 'amazon-lab' ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}>
+          Laboratório Amazon
         </button>}
         <button
           type="button"
@@ -130,6 +137,9 @@ export default function SettingsView() {
       {/* Conteúdo Conforme Subaba */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs space-y-4">
         {activeSubTab === 'infraestrutura' && canViewDeveloperTools && <InfrastructureEntry />}
+        {activeSubTab === 'amazon-lab' && showAmazonLab && AmazonLab && <Suspense fallback={<p role="status">Carregando laboratório Amazon…</p>}>
+          <AmazonLab key={currentUser.id} />
+        </Suspense>}
         {/* 1. LOJA */}
         {activeSubTab === 'loja' && (
           <div className="space-y-4">

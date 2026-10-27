@@ -1,0 +1,66 @@
+{
+  "resultado": "aprovado",
+  "contexto": "componentes reais, resposta extraída offline da evidência sanitizada e imagens reais via CDN",
+  "capa": 1,
+  "adicionais": 3,
+  "confirmacoes": 0,
+  "selecao_miniatura": true,
+  "pesquisas_sucessivas": true,
+  "diagnostico_recolhido": true,
+  "imagens_servidas_por_interceptacao_local": 0,
+  "consultas_externas_pagina_livro": 0,
+  "carregamentos_remotos": [
+    {
+      "referencia": "https://m.media-amazon.com/images/I/61cFRircgZL._SY445_SX342_ML2_.jpg",
+      "status_http": 200
+    },
+    {
+      "referencia": "https://m.media-amazon.com/images/I/91Sb5HdDL3L._SL1500_.jpg",
+      "status_http": 200
+    },
+    {
+      "referencia": "https://m.media-amazon.com/images/I/91pv+3HSGRL._SL1500_.jpg",
+      "status_http": 200
+    },
+    {
+      "referencia": "https://m.media-amazon.com/images/I/81YiEHsaX1L._SL1500_.jpg",
+      "status_http": 200
+    },
+    {
+      "referencia": "https://m.media-amazon.com/images/I/31Epa894dmL.jpg",
+      "status_http": 200
+    }
+  ],
+  "dimensoes_renderizadas": [
+    {
+      "referencia": "https://m.media-amazon.com/images/I/91Sb5HdDL3L._SL1500_.jpg",
+      "largura": 970,
+      "altura": 1500
+    },
+    {
+      "referencia": "https://m.media-amazon.com/images/I/61cFRircgZL._SY445_SX342_ML2_.jpg",
+      "largura": 287,
+      "altura": 445
+    },
+    {
+      "referencia": "https://m.media-amazon.com/images/I/91pv+3HSGRL._SL1500_.jpg",
+      "largura": 968,
+      "altura": 1500
+    },
+    {
+      "referencia": "https://m.media-amazon.com/images/I/81YiEHsaX1L._SL1500_.jpg",
+      "largura": 936,
+      "altura": 1500
+    },
+    {
+      "referencia": "https://m.media-amazon.com/images/I/31Epa894dmL.jpg",
+      "largura": 375,
+      "altura": 500
+    }
+  ],
+  "conexoes_externas": 5,
+  "hosts_bloqueados": [
+    "fonts.googleapis.com"
+  ],
+  "erros_javascript": []
+}

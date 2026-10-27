@@ -1,0 +1,1237 @@
+{
+  "escopo": "offline_sem_rede",
+  "data": "2026-10-27T02:11:44.325Z",
+  "casos": 72,
+  "aprovados": 72,
+  "reprovados": 0,
+  "comparacao": "Igualdade estrutural integral: valores, estados, motivos, evidências, origens, ISBNs, métricas, BookInfo e imagens; contrato HTTP sem duração variável.",
+  "resultados": [
+    {
+      "caso": "fixtures/amazon_1984_9788535914849.html",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 8,
+      "imagens": []
+    },
+    {
+      "caso": "fixtures/amazon_o_alquimista_9788584390670.html",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 8,
+      "imagens": []
+    },
+    {
+      "caso": "tests/fixtures/amazon_estrangeiro_9788501014863_galeria_sanitizada.html",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": [
+        {
+          "referencia": "https://m.media-amazon.com/images/I/91Sb5HdDL3L._SL1500_.jpg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://m.media-amazon.com/images/I/91pv+3HSGRL._SL1500_.jpg",
+          "papel": "adicional",
+          "origem": "#imageBlock / data-mb-pv-slot-index=1 (linha 6)"
+        },
+        {
+          "referencia": "https://m.media-amazon.com/images/I/81YiEHsaX1L._SL1500_.jpg",
+          "papel": "adicional",
+          "origem": "#imageBlock / data-mb-pv-slot-index=2 (linha 7)"
+        },
+        {
+          "referencia": "https://m.media-amazon.com/images/I/31Epa894dmL.jpg",
+          "papel": "adicional",
+          "origem": "#imageBlock / data-mb-pv-slot-index=3 (linha 8)"
+        }
+      ]
+    },
+    {
+      "caso": "tests/fixtures/1984_sintetico.html",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 8,
+      "imagens": []
+    },
+    {
+      "caso": "tests/fixtures/alquimista_sintetico.html",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 8,
+      "imagens": []
+    },
+    {
+      "caso": "tests/fixtures/complementares_sinteticos.html",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "tests/fixtures/galeria_dom_sintetica.html",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 1,
+      "validos_locais": 1,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 10)"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/miolo-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 11)"
+        }
+      ]
+    },
+    {
+      "caso": "tests/fixtures/galeria_script_sintetica.html",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 1,
+      "validos_locais": 1,
+      "imagens": [
+        {
+          "referencia": "https://m.media-amazon.com/images/I/ISBNFixtureCapa.jpg",
+          "papel": "principal",
+          "origem": "script / galeria inicial[0] (linha 14)"
+        },
+        {
+          "referencia": "https://m.media-amazon.com/images/I/ISBNFixtureVerso.jpg",
+          "papel": "adicional",
+          "origem": "script / galeria inicial[1] (linha 14)"
+        },
+        {
+          "referencia": "https://m.media-amazon.com/images/I/ISBNFixtureLombada.jpg",
+          "papel": "adicional",
+          "origem": "script / galeria inicial[2] (linha 14)"
+        }
+      ]
+    },
+    {
+      "caso": "isbn:8535914846",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "isbn:9788584390670",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "isbn:9788535914840",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": null,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "isbn:ISBN 8535914846",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": null,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "isbn:0000000000",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": null,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "isbn:0-8044-2957-x",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "isbn:9791090636071",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:21 de julho de 2009:2009",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:21 de julho de 2009:2009-07-21",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:21 de julho de 2009:21/07/2009",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:21 de julho de 2009:31 fevereiro 2009",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 8,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:21 de julho de 2009:2009-02-30",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 8,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:140 x 210 x 25 mm (L x A x P):14 x 21 x 2,5 cm",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:140 x 210 x 25 mm (L x A x P):14 x 21 x 2,5",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:140 x 210 x 25 mm (L x A x P):14 x 21 x 2,5 cm (C x L x A)",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:140 x 210 x 25 mm (L x A x P):14 x 21 x 2,5 cm (L x L x A)",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:140 x 210 x 25 mm (L x A x P):14 x 21 x 0 cm (L x A x P)",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:140 x 210 x 25 mm (L x A x P):14 x 21 x 1 in (W x H x D)",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:0,502 kg:502",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:0,502 kg:-5 g",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:0,502 kg:0 kg",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:0,502 kg:1 kg ou 502 g",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:0,502 kg:502 gramas",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:pt-BR:eng",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:pt-BR:desconhecido",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:pt-BR:Português / Inglês",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:1ª:2 edição",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:1ª:3rd",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 8,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:1ª:reimpressão",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 8,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:416 páginas:0 páginas",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 8,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:416 páginas:vinte",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 8,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:416 páginas:20001 pages",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 8,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:8535914846:8584390677",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:8535914846:8535914847",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:Editora Sintética:cookie=SECRET_SESSION",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 8,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:Editora Sintética:1234",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 8,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "substituir:Editora Sintética:Compre agora",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 8,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "conflito:<tr><th>Edição</th><td>2ª</td></tr>",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 8,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "conflito:<tr><th>Ano</th><td>2010</td></tr>",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 8,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "conflito:<tr><th>Largura</th><td>15 cm</td></tr>",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "conflito:<tr><th>ISBN-13</th><td>9788584390670</td></tr>",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "campos vazios",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": []
+    },
+    {
+      "caso": "texto fora dos painéis",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": []
+    },
+    {
+      "caso": "ocultos/scripts/controles",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "entidades numéricas",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 9,
+      "validos_locais": 9,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 18)"
+        }
+      ]
+    },
+    {
+      "caso": "dynamic inválido:{bad",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        }
+      ]
+    },
+    {
+      "caso": "dynamic inválido:[]",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        }
+      ]
+    },
+    {
+      "caso": "dynamic inválido:{\"https://isbn-fixtures.invalid/capa-autoral.svg\":[false,20]}",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        }
+      ]
+    },
+    {
+      "caso": "dynamic maior resolução",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        }
+      ]
+    },
+    {
+      "caso": "slot excluído:videoThumbnail",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        }
+      ]
+    },
+    {
+      "caso": "slot excluído:sponsored",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        }
+      ]
+    },
+    {
+      "caso": "slot excluído:a-icon",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        }
+      ]
+    },
+    {
+      "caso": "slot oculto",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        }
+      ]
+    },
+    {
+      "caso": "slot externo",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        }
+      ]
+    },
+    {
+      "caso": "slot repetido",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "#imageBlock / data-mb-pv-slot-index=1 (linha 1)"
+        }
+      ]
+    },
+    {
+      "caso": "script sem âncora",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": []
+    },
+    {
+      "caso": "script ISBN divergente",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 1,
+      "validos_locais": 1,
+      "imagens": [
+        {
+          "referencia": "https://m.media-amazon.com/images/I/ISBNFixtureCapa._SX342_.jpg",
+          "papel": "principal",
+          "origem": "#landingImage"
+        },
+        {
+          "referencia": "https://m.media-amazon.com/images/I/ISBNFixtureVerso._SX38_.jpg",
+          "papel": "adicional",
+          "origem": "#altImages / img (linha 8)"
+        }
+      ]
+    },
+    {
+      "caso": "script MAIN sem DOM",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 1,
+      "validos_locais": 1,
+      "imagens": [
+        {
+          "referencia": "https://m.media-amazon.com/images/I/ISBNFixtureCapa.jpg",
+          "papel": "principal",
+          "origem": "script / galeria inicial[0] (linha 14)"
+        },
+        {
+          "referencia": "https://m.media-amazon.com/images/I/ISBNFixtureVerso.jpg",
+          "papel": "adicional",
+          "origem": "script / galeria inicial[1] (linha 14)"
+        },
+        {
+          "referencia": "https://m.media-amazon.com/images/I/ISBNFixtureLombada.jpg",
+          "papel": "adicional",
+          "origem": "script / galeria inicial[2] (linha 14)"
+        }
+      ]
+    },
+    {
+      "caso": "script não JSON:function(){throw new Error(\"nao executar\");}",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": []
+    },
+    {
+      "caso": "script não JSON:__import__(\"os\")",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": []
+    },
+    {
+      "caso": "script não JSON:{\"large\":\"https://invalid.local/x\"},",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": []
+    },
+    {
+      "caso": "array literal:var imageGalleryData = ",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "script / galeria inicial[0] (linha 1)"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "script / galeria inicial[1] (linha 1)"
+        }
+      ]
+    },
+    {
+      "caso": "array literal:var data={\"imageGalleryData\":",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": [
+        {
+          "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+          "papel": "principal",
+          "origem": "script / galeria inicial[0] (linha 1)"
+        },
+        {
+          "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+          "papel": "adicional",
+          "origem": "script / galeria inicial[1] (linha 1)"
+        }
+      ]
+    },
+    {
+      "caso": "eixos individuais",
+      "extrator_equivalente": true,
+      "contrato_laboratorio_equivalente": true,
+      "preenchidos": 0,
+      "validos_locais": 0,
+      "imagens": []
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "resultado": "aprovado",
+  "builder": "@vercel/node",
+  "versao_builder": "10.0.0",
+  "runtime": "nodejs24.x",
+  "maxDuration": 45,
+  "handler": "api\\amazon.js",
+  "arquivos_compilados": 28,
+  "inicializacao_artefato_real": true,
+  "consulta_anonima": 401,
+  "instalacao": false,
+  "deploy": false,
+  "consultas_externas": 0
+}

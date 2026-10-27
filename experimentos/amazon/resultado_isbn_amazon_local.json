@@ -1,0 +1,46 @@
+[
+  {
+    "arquivo": "Texto colado(3).txt",
+    "isbn10": "8535914846",
+    "isbn13": "9788535914849",
+    "isbn13_digito_verificador_valido": true,
+    "data_publicacao_original": "21 julho 2009",
+    "campos": {
+      "titulo": "1984 - Tradução de Alexandre Hubner e Heloisa Jahn",
+      "autores": [
+        "George Orwell"
+      ],
+      "editora": "Companhia das Letras",
+      "ano": 2009,
+      "edicao": "1ª",
+      "idioma": "Português",
+      "formato": "CC - Capa Convencional",
+      "paginas": 416,
+      "sinopse": "[Texto presente no HTML; 1994 caracteres — conteúdo omitido no relatório]"
+    },
+    "preenchidos": 9,
+    "total_campos": 9
+  },
+  {
+    "arquivo": "Texto colado(4).txt",
+    "isbn10": "8584390677",
+    "isbn13": "9788584390670",
+    "isbn13_digito_verificador_valido": true,
+    "data_publicacao_original": "5 abril 2017",
+    "campos": {
+      "titulo": "O alquimista",
+      "autores": [
+        "Paulo Coelho"
+      ],
+      "editora": "Paralela",
+      "ano": 2017,
+      "edicao": "1ª",
+      "idioma": "Português",
+      "formato": "CC - Capa Convencional",
+      "paginas": 208,
+      "sinopse": "[Texto presente no HTML; 1319 caracteres — conteúdo omitido no relatório]"
+    },
+    "preenchidos": 9,
+    "total_campos": 9
+  }
+]

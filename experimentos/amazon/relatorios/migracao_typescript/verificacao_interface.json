@@ -1,0 +1,18 @@
+{
+  "resultado": "aprovado",
+  "origem": "contexto_sintetico_de_perfis_com_componentes_reais",
+  "fluxo": "SettingsView -> AmazonLab -> proxy Vite -> servidor TypeScript -> extrator TypeScript -> fixtures",
+  "fixtures": [
+    "9788584390670",
+    "8535914846"
+  ],
+  "campos_por_livro": 9,
+  "validos_por_livro": 8,
+  "perfis_sem_acesso": [
+    "admin",
+    "operator"
+  ],
+  "http_real": "disponível; ensaio usa somente fixtures",
+  "erros_javascript": [],
+  "requisicoes_de_pesquisa": 2
+}

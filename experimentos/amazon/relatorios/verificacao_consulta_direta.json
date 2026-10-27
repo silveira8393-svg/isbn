@@ -1,0 +1,13 @@
+{
+  "status_api": 200,
+  "status": "concluida",
+  "status_http": 200,
+  "correspondencia": "corresponde",
+  "isbn": "9788501014863",
+  "capa": 1,
+  "adicionais": 3,
+  "confirmacao_enviada": false,
+  "origens_preservadas": true,
+  "book_info_capa": true,
+  "book_info_adicionais": 3
+}

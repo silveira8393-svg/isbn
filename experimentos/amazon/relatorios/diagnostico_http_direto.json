@@ -1,0 +1,141 @@
+{
+  "instante_utc": "2026-10-26T18:50:08.322107+00:00",
+  "url_solicitada": "https://www.amazon.com.br/dp/8584390677",
+  "isbn_pesquisado": "9788584390670",
+  "metodo": "GET",
+  "tentativas_http": 1,
+  "status_http": 200,
+  "duracao_ms": 4913.24,
+  "tamanho_resposta_bytes": 1695131,
+  "url_final": "https://www.amazon.com.br/dp/8584390677",
+  "tipo_conteudo": "text/html;charset=UTF-8",
+  "elementos": {
+    "productTitle": true,
+    "detailBullets_feature_div": true,
+    "bookDescription_feature_div": true
+  },
+  "campos_identificados": 9,
+  "correspondencia_isbn": "corresponde",
+  "comparacao_referencia_chrome_sanitizada": {
+    "titulo": {
+      "valor_diferente": false,
+      "estado_anterior": "valido",
+      "estado_atual": "valido"
+    },
+    "autores": {
+      "valor_diferente": false,
+      "estado_anterior": "valido",
+      "estado_atual": "valido"
+    },
+    "editora": {
+      "valor_diferente": false,
+      "estado_anterior": "valido",
+      "estado_atual": "valido"
+    },
+    "ano": {
+      "valor_diferente": false,
+      "estado_anterior": "valido",
+      "estado_atual": "valido"
+    },
+    "edicao": {
+      "valor_diferente": false,
+      "estado_anterior": "valido",
+      "estado_atual": "valido"
+    },
+    "idioma": {
+      "valor_diferente": false,
+      "estado_anterior": "valido",
+      "estado_atual": "valido"
+    },
+    "formato": {
+      "valor_diferente": false,
+      "estado_anterior": "valido",
+      "estado_atual": "valido"
+    },
+    "paginas": {
+      "valor_diferente": false,
+      "estado_anterior": "valido",
+      "estado_atual": "valido"
+    },
+    "sinopse": {
+      "valor_diferente": false,
+      "estado_anterior": "inconsistente",
+      "estado_atual": "inconsistente"
+    }
+  },
+  "autorizacao_uso_comercial": "nao_estabelecida_pelo_diagnostico",
+  "resultado": "html_recebido",
+  "isbn_encontrado": {
+    "isbn10": {
+      "valor": "8584390677",
+      "valido": true,
+      "conflito": false
+    },
+    "isbn13": {
+      "valor": "9788584390670",
+      "valido": true,
+      "conflito": false
+    }
+  },
+  "campos_validos_locais": 8,
+  "campos": {
+    "titulo": {
+      "estado": "valido",
+      "revisao_humana": false,
+      "valor": "O alquimista",
+      "caracteres": null
+    },
+    "autores": {
+      "estado": "valido",
+      "revisao_humana": false,
+      "valor": [
+        "Paulo Coelho"
+      ],
+      "caracteres": null
+    },
+    "editora": {
+      "estado": "valido",
+      "revisao_humana": false,
+      "valor": "Paralela",
+      "caracteres": null
+    },
+    "ano": {
+      "estado": "valido",
+      "revisao_humana": false,
+      "valor": 2017,
+      "caracteres": null
+    },
+    "edicao": {
+      "estado": "valido",
+      "revisao_humana": false,
+      "valor": "1ª",
+      "caracteres": null
+    },
+    "idioma": {
+      "estado": "valido",
+      "revisao_humana": false,
+      "valor": "Português",
+      "caracteres": null
+    },
+    "formato": {
+      "estado": "valido",
+      "revisao_humana": false,
+      "valor": "CC - Capa Convencional",
+      "caracteres": null
+    },
+    "paginas": {
+      "estado": "valido",
+      "revisao_humana": false,
+      "valor": 208,
+      "caracteres": null
+    },
+    "sinopse": {
+      "estado": "inconsistente",
+      "revisao_humana": true,
+      "valor": "[texto omitido]",
+      "caracteres": 1309
+    }
+  },
+  "processo_executado": true,
+  "autorizacao_teste_pontual": "confirmada_pelo_usuario_antes_do_GET"
+}

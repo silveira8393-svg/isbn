@@ -1,0 +1,179 @@
+{
+  "requisicoes_desta_execucao": 1,
+  "isbn": "9788501014863",
+  "status_http": 200,
+  "tamanho_bytes": 1390570,
+  "marcadores": {
+    "landingImage": 1,
+    "altImages": 1,
+    "mbAltImage_em_atributos": 0,
+    "mbAltImage_no_html": true,
+    "data-mb-pv-slot-index": 4
+  },
+  "slots": [
+    {
+      "indice": "0",
+      "tag": "img",
+      "atributos_publicos": {
+        "id": "landingImage",
+        "class": "a-dynamic-image media-block-image-tag",
+        "data-mb-pv-slot-index": "0",
+        "src": "https://m.media-amazon.com/images/I/61cFRircgZL._SY445_SX342_ML2_.jpg",
+        "data-old-hires": "https://m.media-amazon.com/images/I/91Sb5HdDL3L._SL1500_.jpg",
+        "data-a-dynamic-image": "{\"https://m.media-amazon.com/images/I/91Sb5HdDL3L._SY342_.jpg\": [342, 221], \"https://m.media-amazon.com/images/I/91Sb5HdDL3L._SY385_.jpg\": [385, 249], \"https://m.media-amazon.com/images/I/91Sb5HdDL3L._SY425_.jpg\": [425, 275], \"https://m.media-amazon.com/images/I/91Sb5HdDL3L._SY466_.jpg\": [466, 301], \"https://m.media-amazon.com/images/I/91Sb5HdDL3L._SY522_.jpg\": [522, 337]}"
+      },
+      "imagens_descendentes": 1,
+      "ancestrais_publicos": [
+        {
+          "class": "image"
+        },
+        {
+          "class": "a-dynamic-image-container"
+        },
+        {
+          "class": "regularImageBlockViewLayout"
+        },
+        {
+          "id": "imageBlock",
+          "class": "imageBlockRearch"
+        },
+        {
+          "id": "imageBlock_feature_div"
+        }
+      ]
+    },
+    {
+      "indice": "1",
+      "tag": "div",
+      "atributos_publicos": {
+        "class": "a-image-wrapper a-dynamic-image media-block-image-tag",
+        "data-mb-pv-slot-index": "1",
+        "data-old-hires": "https://m.media-amazon.com/images/I/91pv+3HSGRL._SL1500_.jpg",
+        "data-a-dynamic-image": "{\"https://m.media-amazon.com/images/I/91pv+3HSGRL._SY342_.jpg\": [342, 221], \"https://m.media-amazon.com/images/I/91pv+3HSGRL._SY385_.jpg\": [385, 248], \"https://m.media-amazon.com/images/I/91pv+3HSGRL._SY425_.jpg\": [425, 274], \"https://m.media-amazon.com/images/I/91pv+3HSGRL._SY466_.jpg\": [466, 301], \"https://m.media-amazon.com/images/I/91pv+3HSGRL._SY522_.jpg\": [522, 337]}"
+      },
+      "imagens_descendentes": 0,
+      "ancestrais_publicos": [
+        {
+          "class": "image"
+        },
+        {
+          "class": "a-dynamic-image-container"
+        },
+        {
+          "class": "regularImageBlockViewLayout"
+        },
+        {
+          "id": "imageBlock",
+          "class": "imageBlockRearch"
+        },
+        {
+          "id": "imageBlock_feature_div"
+        }
+      ]
+    },
+    {
+      "indice": "2",
+      "tag": "div",
+      "atributos_publicos": {
+        "class": "a-image-wrapper a-dynamic-image media-block-image-tag",
+        "data-mb-pv-slot-index": "2",
+        "data-old-hires": "https://m.media-amazon.com/images/I/81YiEHsaX1L._SL1500_.jpg",
+        "data-a-dynamic-image": "{\"https://m.media-amazon.com/images/I/81YiEHsaX1L._SY342_.jpg\": [342, 213], \"https://m.media-amazon.com/images/I/81YiEHsaX1L._SY385_.jpg\": [385, 240], \"https://m.media-amazon.com/images/I/81YiEHsaX1L._SY425_.jpg\": [425, 265], \"https://m.media-amazon.com/images/I/81YiEHsaX1L._SY466_.jpg\": [466, 291], \"https://m.media-amazon.com/images/I/81YiEHsaX1L._SY522_.jpg\": [522, 326]}"
+      },
+      "imagens_descendentes": 0,
+      "ancestrais_publicos": [
+        {
+          "class": "image"
+        },
+        {
+          "class": "a-dynamic-image-container"
+        },
+        {
+          "class": "regularImageBlockViewLayout"
+        },
+        {
+          "id": "imageBlock",
+          "class": "imageBlockRearch"
+        },
+        {
+          "id": "imageBlock_feature_div"
+        }
+      ]
+    },
+    {
+      "indice": "3",
+      "tag": "div",
+      "atributos_publicos": {
+        "class": "a-image-wrapper a-dynamic-image media-block-image-tag",
+        "data-mb-pv-slot-index": "3",
+        "data-a-dynamic-image": "{\"https://m.media-amazon.com/images/I/31Epa894dmL._SY342_.jpg\": [342, 257], \"https://m.media-amazon.com/images/I/31Epa894dmL._SY385_.jpg\": [385, 289], \"https://m.media-amazon.com/images/I/31Epa894dmL._SY425_.jpg\": [425, 319], \"https://m.media-amazon.com/images/I/31Epa894dmL._SY466_.jpg\": [466, 350], \"https://m.media-amazon.com/images/I/31Epa894dmL.jpg\": [500, 375]}"
+      },
+      "imagens_descendentes": 0,
+      "ancestrais_publicos": [
+        {
+          "class": "image"
+        },
+        {
+          "class": "a-dynamic-image-container"
+        },
+        {
+          "class": "regularImageBlockViewLayout"
+        },
+        {
+          "id": "imageBlock",
+          "class": "imageBlockRearch"
+        },
+        {
+          "id": "imageBlock_feature_div"
+        }
+      ]
+    }
+  ],
+  "scripts": [
+    {
+      "colorImages_presente": true,
+      "initial_presente": true,
+      "arrays_reconhecidos": 0,
+      "entradas": 0
+    },
+    {
+      "colorImages_presente": true,
+      "initial_presente": false,
+      "arrays_reconhecidos": 0,
+      "entradas": 0
+    }
+  ],
+  "extrator_antes": {
+    "capas": 1,
+    "adicionais": 0
+  },
+  "fixture": "amazon_estrangeiro_9788501014863_galeria_sanitizada.html",
+  "fixture_antes": {
+    "capas": 1,
+    "adicionais": 0
+  },
+  "requisicoes_autorizadas_totais": 2,
+  "primeira_requisicao": {
+    "status_http": 200,
+    "correspondencia": "corresponde",
+    "capas": 1,
+    "adicionais": 0,
+    "fixture_salva": false,
+    "html_descartado_ao_encerrar_processo": true
+  },
+  "extrator_depois_fixture": {
+    "capas": 1,
+    "adicionais": 3
+  },
+  "validacao_depois_da_correcao": "Somente offline sobre fixture derivada do segundo GET; nenhum novo acesso externo.",
+  "fixture_bytes": 3844,
+  "html_bruto_armazenado": false,
+  "imagens_baixadas": false,
+  "causa_comprovada": "Slots 1, 2 e 3 sao DIVs com referencias declaradas e sem IMG descendente, fora de altImages; from_node aceitava somente IMG. Miniaturas altImages estao sob aria-hidden.",
+  "testes": {
+    "python": 64,
+    "node": 18,
+    "novos_testes_galeria": 4,
+    "consultas_externas_nos_testes": 0
+  }
+}

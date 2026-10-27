@@ -1,0 +1,45 @@
+{
+  "resultado": "aprovado",
+  "contexto": "componentes reais e fixture autoral local",
+  "capa": 1,
+  "adicionais": 3,
+  "confirmacoes": 0,
+  "selecao_miniatura": true,
+  "pesquisas_sucessivas": true,
+  "diagnostico_recolhido": true,
+  "imagens_servidas_por_interceptacao_local": 4,
+  "consultas_externas_pagina_livro": 0,
+  "carregamentos_remotos": [],
+  "dimensoes_renderizadas": [
+    {
+      "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+      "largura": 160,
+      "altura": 240
+    },
+    {
+      "referencia": "https://isbn-fixtures.invalid/capa-autoral.svg",
+      "largura": 160,
+      "altura": 240
+    },
+    {
+      "referencia": "https://isbn-fixtures.invalid/contracapa-autoral.svg",
+      "largura": 160,
+      "altura": 240
+    },
+    {
+      "referencia": "https://isbn-fixtures.invalid/miolo-autoral.svg",
+      "largura": 160,
+      "altura": 240
+    },
+    {
+      "referencia": "https://isbn-fixtures.invalid/capa-miniatura-autoral.svg",
+      "largura": 40,
+      "altura": 60
+    }
+  ],
+  "conexoes_externas": 0,
+  "hosts_bloqueados": [
+    "fonts.googleapis.com"
+  ],
+  "erros_javascript": []
+}

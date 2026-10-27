@@ -1,0 +1,24 @@
+PROJETO ISBN — FIXTURES OFFLINE SANITIZADAS DA AMAZON
+
+ORIGEM
+- amazon_1984_9788535914849.html deriva de "Texto colado(3).txt" enviado nesta conversa.
+- amazon_o_alquimista_9788584390670.html deriva de "Texto colado(4).txt" enviado nesta conversa.
+
+Estes documentos NAO sao o HTML integral: preservam os blocos HTML de titulo,
+autor, detalhes, informacoes editoriais e descricao do produto (incluindo seus
+identificadores e classes), mas removem scripts, elementos de imagem,
+URLs, cabecalhos e identificadores de sessao. Sao fixtures SANITIZADAS de
+HTML REAL, nao fixtures sinteticas. A integridade desses blocos foi conferida
+com o prototipo Python offline para os nove campos.
+
+USO PRETENDIDO
+- Colocar estes dois arquivos em C:\Desenvolv\isbn\experimentos\amazon\fixtures\
+- Usar SOMENTE em testes locais, sem requisicoes a Amazon.
+- Marcar os testes como 'real_html_sanitizado', nao 'integracao_em_producao'.
+- Nao integrar ao fluxo produtivo ate que permissao de consulta/reutilizacao
+  seja confirmada e dados sejam homologados.
+
+AVISO
+O conteudo editorial permanece com sua origem e possiveis restricoes de uso.
+A presenca desses dados em paginas publicas nao garante permissao para
+armazenamento ou republicacao comercial.
