@@ -102,11 +102,53 @@ test('published client sends only the current session token to the same-origin F
   await client.getAmazonLabHealth(controller.signal);
   await client.searchAmazonLab('9788501014863', 'http', controller.signal);
   assert.deepEqual(calls.map(call => call.url), ['/api/amazon?acao=health', '/api/amazon?acao=search']);
-  assert.ok(calls.every(call => call.init.headers.Authorization === 'Bearer synthetic-session' && call.init.credentials === 'omit' && call.init.redirect === 'error'));
+  assert.ok(calls.every(call => call.init.headers.Authorization === 'Bearer synthetic-session' && call.init.credentials === 'same-origin' && call.init.redirect === 'error'));
   assert.deepEqual(JSON.parse(calls[1].init.body), {isbn: '9788501014863', modo: 'http'});
   globalThis.__amazonLabSession = { data: { session: null }, error: null };
   await assert.rejects(client.getAmazonLabHealth(controller.signal), /Entre novamente/);
   assert.equal(calls.length, 2);
+});
+
+test('published transport failures explain Preview authentication without retry; abort remains cancellable', async t => {
+  hooks(t);
+  t.after(() => { delete globalThis.__amazonLabSession; });
+  globalThis.__amazonLabSession = { data: { session: { access_token: 'synthetic-session' } }, error: null };
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => { calls++; throw new TypeError('Failed to fetch'); });
+  const { exports: client } = await compile('src/services/amazonLabClient.ts', false);
+  await assert.rejects(client.getAmazonLabHealth(new AbortController().signal), /conexão.*autenticação.*Preview.*Vercel/);
+  assert.equal(calls, 1);
+  const cancelled = new AbortController();
+  cancelled.abort();
+  const reason = new DOMException('Cancelled', 'AbortError');
+  t.mock.method(globalThis, 'fetch', async () => { throw reason; });
+  await assert.rejects(client.getAmazonLabHealth(cancelled.signal), error => error === reason);
+});
+
+test('published health preserves controlled 401/403 diagnostics after passing Preview protection', async t => {
+  hooks(t);
+  t.after(() => { delete globalThis.__amazonLabSession; });
+  globalThis.__amazonLabSession = { data: { session: { access_token: 'synthetic-session' } }, error: null };
+  const { exports: client } = await compile('src/services/amazonLabClient.ts', false);
+  for (const status of [401, 403]) {
+    t.mock.method(globalThis, 'fetch', async () => json({ mensagem: 'Acesso recusado.', diagnostico: { id: 'safe-reference' } }, status));
+    await assert.rejects(client.getAmazonLabHealth(new AbortController().signal), /Acesso recusado.*Referência: safe-reference/);
+  }
+});
+
+test('failed initial health leaves checking state and local requests keep omitting cookies', async t => {
+  const ui = hooks(t), calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, init) => { calls.push({ url, init }); throw new TypeError('Failed to fetch'); });
+  const { exports: { default: Panel } } = await compile('src/components/AmazonLab.tsx');
+  assert.match(text(ui.render(Panel)), /Verificando conexão/);
+  await ui.effects();
+  const tree = ui.render(Panel);
+  assert.doesNotMatch(text(tree), /Verificando conexão/);
+  assert.match(text(tree), /Conexão com o laboratório não confirmada/);
+  assert.match(text(find(tree, node => node.props?.role === 'alert')), /Serviço local indisponível/);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].init.credentials, 'omit');
+  assert.equal(calls[0].init.headers.Authorization, undefined);
 });
 
 test('fixture search renders nine fields, provenance, ISBN, duration and synopsis review', async t => {

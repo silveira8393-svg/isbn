@@ -69,11 +69,21 @@ async function request<T>(path: string, signal: AbortSignal, body?: object): Pro
     if (error || !data.session?.access_token) throw new Error('Entre novamente para acessar o Laboratório Amazon.');
     headers.Authorization = `Bearer ${data.session.access_token}`;
   }
-  const response = await fetch(local ? `/__amazon_lab/${path}` : `/api/amazon?acao=${path}`, {
-    method: body ? 'POST' : 'GET', signal: AbortSignal.any([signal, AbortSignal.timeout(40000)]), credentials: 'omit', cache: 'no-store', redirect: 'error',
-    headers,
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
+  const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(40000)]);
+  let response: Response;
+  try {
+    response = await fetch(local ? `/__amazon_lab/${path}` : `/api/amazon?acao=${path}`, {
+      // A proteção do Preview usa cookie próprio; o Bearer continua obrigatório na Function.
+      method: body ? 'POST' : 'GET', signal: requestSignal, credentials: local ? 'omit' : 'same-origin', cache: 'no-store', redirect: 'error',
+      headers,
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+  } catch (failure) {
+    if (signal.aborted) throw failure;
+    if (requestSignal.aborted) throw new Error('Tempo de conexão com o Laboratório Amazon excedido.');
+    throw new Error(local ? 'Serviço local indisponível. Inicie npm run lab:amazon em outro terminal.'
+      : 'Não foi possível acessar a Function Amazon. Verifique a conexão e a autenticação deste Preview na Vercel.');
+  }
   if (!response.headers.get('content-type')?.includes('application/json')) {
     throw new Error(local ? 'Serviço local indisponível. Inicie npm run lab:amazon em outro terminal.' : 'Function Amazon indisponível ou resposta inesperada.');
   }

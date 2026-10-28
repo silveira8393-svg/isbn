@@ -28,6 +28,7 @@ export default function AmazonLab() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<LabResult | null>(null);
   const [error, setError] = useState('');
+  const [checkingHealth, setCheckingHealth] = useState(true);
   const inFlight = useRef(false);
   const searchController = useRef<AbortController | null>(null);
   const foundIsbns = result?.isbn_encontrado
@@ -37,6 +38,8 @@ export default function AmazonLab() {
     const controller = new AbortController();
     void getAmazonLabHealth(controller.signal).then(value => { if (!controller.signal.aborted) setHealth(value); }).catch(failure => {
       if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : 'Serviço do laboratório indisponível.');
+    }).finally(() => {
+      if (!controller.signal.aborted) setCheckingHealth(false);
     });
     return () => { controller.abort(); searchController.current?.abort(); };
   }, []);
@@ -88,7 +91,8 @@ export default function AmazonLab() {
       <p id="amazon-lab-help" className="text-xs text-slate-500">{import.meta.env.DEV
         ? 'Fixtures disponíveis: 9788535914849 (1984), 9788584390670 (O Alquimista) e 9788501014863 (O estrangeiro, galeria), ou seus ISBNs-10.'
         : 'Consulta individual por ISBN no servidor. Aguarde a conclusão antes de iniciar outra consulta.'}</p>
-      <p className="text-sm text-slate-600">{health ? (import.meta.env.DEV ? 'Serviço local conectado.' : 'Function Amazon conectada.') : 'Verificando conexão com o laboratório…'}</p>
+      <p className="text-sm text-slate-600">{health ? (import.meta.env.DEV ? 'Serviço local conectado.' : 'Function Amazon conectada.')
+        : checkingHealth ? 'Verificando conexão com o laboratório…' : 'Conexão com o laboratório não confirmada.'}</p>
       <button type="submit" disabled={busy || !isbn.trim()}
         className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
         {busy ? 'Pesquisando…' : 'Pesquisar'}
