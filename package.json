@@ -14,7 +14,8 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test:spapi": "node --test tests/spapiOfficial.test.mjs",
+    "test:spapi": "node --test tests/spapiOfficial.test.mjs tests/spapiProvision.test.mjs",
+    "spapi:provision-self": "node scripts/provision-self-authorization.mjs",
     "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {

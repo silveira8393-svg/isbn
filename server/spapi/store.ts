@@ -1,4 +1,5 @@
 import { type Config, type Principal, type Envelope, fail, jsonRequest, limitedJson, UUID } from './core.js';
+import { serviceHeaders } from './supabaseHeaders.js';
 
 export type State = Principal & { state_hash: string; browser_hash: string; seller_id: string; phase: 'start' | 'callback'; expires_at: string };
 export type Authorization = Envelope & { store_id: string; selling_partner_id: string };
@@ -10,7 +11,7 @@ export interface Store {
   active(principal: Principal): Promise<void>;
 }
 export function createStore(config: Config, fetcher: typeof fetch): Store {
-  const headers = { apikey: config.service, Authorization: `Bearer ${config.service}`, 'Content-Type': 'application/json' };
+  const headers = serviceHeaders(config.service);
   const call = (path: string, init: RequestInit = {}) => jsonRequest(fetcher, `${config.supabase}/rest/v1/${path}`, { ...init, headers: { ...headers, ...init.headers } }, 65536);
   return {
     async issue(value) { await call('amazon_spapi_oauth_states', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(value) }); },
