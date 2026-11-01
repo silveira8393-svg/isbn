@@ -4,6 +4,8 @@
 
 # Run and deploy your AI Studio app
 
+Preparação da integração oficial Amazon: [OAuth LWA, Catalog Items e configuração](docs/amazon-spapi-official.md). Recurso desligado por padrão; SQL somente para revisão, sem execução automática.
+
 This contains everything you need to run your app locally.
 
 View your app in AI Studio: https://ai.studio/apps/c8962a6b-b669-48b0-8e31-c586d19e29f3
