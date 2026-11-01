@@ -29,7 +29,7 @@ export function configuration(env: NodeJS.ProcessEnv) {
     try { publicKey = JSON.parse(Buffer.from(env.SUPABASE_PUBLISHABLE_KEY.split('.')[1], 'base64url').toString()).role === 'anon'; }
     catch { publicKey = false; }
   }
-  if (required.some(k => !env[k]) || !/^amzn1\.sellerapps\.app\.[A-Za-z0-9-]+$/.test(env.AMAZON_SPAPI_APP_ID!)
+  if (required.some(k => !env[k]) || !/^amzn1\.(?:sellerapps\.app|sp\.solution)\.[A-Za-z0-9-]+$/.test(env.AMAZON_SPAPI_APP_ID!)
     || !/^[0-9a-f]{64}$/i.test(env.AMAZON_SPAPI_TOKEN_KEY || '') || !UUID.test(env.AMAZON_SPAPI_STORE_ID || '')
     || !SELLER.test(env.AMAZON_SPAPI_SELLER_ID || '') || !publicKey) fail(503, 'configuration');
   return { origin, redirect: `${origin}/api/amazon/oauth/callback`, supabase: supabase.origin,

@@ -226,6 +226,21 @@ test('real authorization rejects inactive profile, absent membership, operator/a
   await assert.rejects(store.active(principal), /developer_required/);
   await assert.rejects(store.active({ ...principal, store_id: uid }), /developer_required/);
 });
+for (const prefix of ['amzn1.sellerapps.app.', 'amzn1.sp.solution.']) {
+  test(`configuration accepts application ID prefix ${prefix}`, () => {
+    const app = prefix + 'synthetic-01234567-89AB-cdef';
+    assert.equal(api.configuration({ ...env, AMAZON_SPAPI_APP_ID: app }).app, app);
+  });
+}
+test('configuration rejects empty, unknown, incomplete and malformed application IDs', () => {
+  for (const app of ['', 'synthetic', 'amzn1.other.app.synthetic', 'amzn1.sellerapps.synthetic', 'amzn1.sp.synthetic',
+    'amzn1.sellerapps.app.', 'amzn1.sp.solution.', 'amzn1.sellerapps.app.synthetic_extra', 'amzn1.sp.solution.synthetic_extra',
+    'amzn1.sp.solution.synthetic.extra', 'amzn1XspXsolution.synthetic', 'AMZN1.sp.solution.synthetic',
+    ' amzn1.sp.solution.synthetic', 'amzn1.sp.solution.synthetic ', 'amzn1.sp.solution.synthetic/token']) {
+    assert.throws(() => api.configuration({ ...env, AMAZON_SPAPI_APP_ID: app }),
+      error => error instanceof api.SpapiError && error.status === 503 && error.code === 'configuration', app);
+  }
+});
 test('configuration rejects HTTP, public administrative key, missing seller and invalid encryption key', () => {
   for (const override of [{ AMAZON_SPAPI_ORIGIN: 'http://isbn.example.invalid' }, { SUPABASE_URL: 'https://user:pass@db.example.invalid' },
     { SUPABASE_PUBLISHABLE_KEY: 'sb_secret_invalid' }, { AMAZON_SPAPI_SELLER_ID: '' }, { AMAZON_SPAPI_TOKEN_KEY: 'bad' }])
