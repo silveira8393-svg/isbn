@@ -1,5 +1,6 @@
 import type { BookInfo, User } from '../types';
 import { cleanIsbn } from '../utils/isbn';
+import { normalizePublicationDate, publicationYear } from '../../shared/publicationDate';
 
 const LAB_STORE = '492af2ad-905c-42f8-90f4-aa6c1dc142f3';
 export const canUseAmazonOfficial = (user: Pick<User, 'active' | 'role' | 'storeId'>) =>
@@ -28,7 +29,7 @@ export async function searchAmazonOfficial(isbn: string, user: User, signal?: Ab
     const book: BookInfo = { id: `amazon-spapi-${item.asin}`, title: text(item.title) || '',
       ...(cleanIsbn(isbn).length === 13 ? { isbn13: cleanIsbn(isbn) } : { isbn10: cleanIsbn(isbn) }),
       authors: Array.isArray(item.authors) ? item.authors.map(text).filter((v): v is string => Boolean(v)) : undefined,
-      publisher: text(item.publisher), publishedDate: text(item.publicationDate), language: text(item.language),
+      publisher: text(item.publisher), publishedDate: normalizePublicationDate(item.publicationDate), year: publicationYear(item.publicationDate), language: text(item.language),
       format: text(item.binding), edition: text(item.edition), pageCount: Number.isInteger(item.pageCount) && item.pageCount! > 0 ? item.pageCount : undefined,
       provider: 'Amazon SP-API',
       // Never import Amazon images, HTML, synopsis, offers or raw attributes into the registration flow.
@@ -48,6 +49,11 @@ export function complementWithAmazon(base: BookInfo | null, amazon: BookInfo | n
     if (missing && value != null && value !== '' && (!Array.isArray(value) || value.length)) {
       merged[key] = value as never; merged.provenance![key] = 'amazon_spapi_catalog_2022-04-01';
     }
+  }
+  // Derive an Amazon year only when Amazon supplied the date. A priority source's date/year wins.
+  if (!merged.year && merged.provenance?.publishedDate === 'amazon_spapi_catalog_2022-04-01') {
+    merged.year = publicationYear(merged.publishedDate);
+    if (merged.year) merged.provenance.year = 'amazon_spapi_catalog_2022-04-01';
   }
   return merged;
 }

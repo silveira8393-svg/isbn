@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
-const serverBuild = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts', contents: `export * from './server/spapi/core'; export * from './server/spapi/handler';` },
+const serverBuild = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts', contents: `export * from './server/spapi/core'; export * from './server/spapi/handler'; export * from './shared/publicationDate'; export {createRegistrationDraft} from './src/utils/draft';` },
   bundle: true, write: false, platform: 'node', format: 'esm' });
 const api = await import('data:text/javascript;base64,' + Buffer.from(serverBuild.outputFiles[0].text).toString('base64'));
 const uid = '11111111-1111-4111-8111-111111111111', sid = api.PRIVATE_STORE_ID, isbn = '9788535914849';
@@ -165,4 +165,68 @@ test('late Amazon result is discarded after role/store change during the normal 
   await new Promise(resolve => setImmediate(resolve));
   view.deps.user.currentUser = { ...view.deps.user.currentUser, storeId: uid }; view.render(); release(); await work; view.render();
   assert.equal(view.find('BookDetailsCard').props.book.publisher, undefined);
+});
+
+test('ISO publication dates normalize without timezone shifts and invalid dates cannot enter the year field', () => {
+  for (const raw of ['2013', '2013-05', '2013-05-07', '2013-05-07T00:00:01Z', '2013-05-07T00:00:01.123Z', '2013-01-01T00:30:00+14:00']) {
+    assert.equal(api.publicationYear(raw), '2013'); assert.doesNotMatch(api.normalizePublicationDate(raw), /T/);
+  }
+  assert.equal(api.normalizePublicationDate('2013-05-07T00:00:01Z'), '2013-05-07');
+  assert.equal(api.normalizePublicationDate('2024-02-29T23:59:59Z'), '2024-02-29');
+  assert.equal(api.publicationYear('0999'), '0999');
+  assert.equal(api.normalizePublicationDate('0096-02-29'), '0096-02-29');
+  for (const raw of ['', null, '0000', '07T00:00:01Z/05/2013', '2013-02-29', '2013-13-01', '2013-05-07Tgarbage', '2013-05-07T25:00:00Z'])
+    assert.equal(api.publicationYear(raw), undefined);
+});
+test('Amazon timestamp for reported ISBN becomes year 2013 through the official handler, client and registration draft', async t => {
+  const reportedIsbn = '9780515154559';
+  const h = server({ item: { ...item, identifiers: [{ marketplaceId: api.MARKETPLACE, identifiers: [{ identifierType: 'ISBN', identifier: reportedIsbn }] }],
+    attributes: { ...item.attributes, publication_date: [{ marketplace_id: api.MARKETPLACE, value: '2013-05-07T00:00:01Z' }] } } });
+  const data = await (await h.handler(h.request('/api/amazon/spapi/catalog?isbn=' + reportedIsbn))).json();
+  assert.equal(data.items[0].publicationDate, '2013-05-07');
+  globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
+  t.after(() => { delete globalThis.__spapiSession; });
+  t.mock.method(globalThis, 'fetch', async () => Response.json(data));
+  const result = await client.searchAmazonOfficial(reportedIsbn, user);
+  assert.equal(result.book.year, '2013'); assert.equal(result.book.publishedDate, '2013-05-07');
+  const merged = client.complementWithAmazon(null, result.book);
+  assert.equal(merged.year, '2013'); assert.equal(api.createRegistrationDraft(merged).year, '2013');
+  const priority = { id: 'priority', title: 'Priority title', isbn13: reportedIsbn, publishedDate: '1998-03-02', year: '1998' };
+  assert.deepEqual(client.complementWithAmazon(priority, result.book), { ...priority, authors: ['Synthetic Author'], publisher: 'Synthetic Publisher', provenance: { authors: 'amazon_spapi_catalog_2022-04-01', publisher: 'amazon_spapi_catalog_2022-04-01' } });
+  const noYear = { ...priority, year: undefined };
+  assert.equal(client.complementWithAmazon(noYear, result.book).publishedDate, '1998-03-02');
+  assert.equal(client.complementWithAmazon(noYear, result.book).year, undefined, 'Amazon year must not override a priority source date');
+});
+
+const cardBuild = await build({ entryPoints: ['src/components/BookDetailsCard.tsx'], bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic',
+  plugins: [{ name: 'date-render', setup(b) {
+    const mocks = [[/^react$/, 'exports.useState=v=>[v,()=>{}];exports.useEffect=()=>{}'],
+      [/^react\/jsx-runtime$/, 'exports.jsx=exports.jsxs=(type,props)=>({type,props})'], [/^lucide-react$/, 'module.exports=new Proxy({},{get:(_,key)=>String(key)})']];
+    b.onResolve({ filter: /.*/ }, args => { const mock = mocks.find(([pattern]) => pattern.test(args.path)); return mock ? { path: args.path, namespace: 'mock', pluginData: mock[1] } : undefined; });
+    b.onLoad({ filter: /.*/, namespace: 'mock' }, args => ({ contents: args.pluginData }));
+  } }] });
+test('book card renders Ano: 2013 for ISO timestamp, never the malformed reversed timestamp', () => {
+  const module = { exports: {} }; new Function('module', 'exports', cardBuild.outputFiles[0].text)(module, module.exports);
+  const text = node => node == null ? '' : Array.isArray(node) ? node.map(text).join('') : typeof node === 'object' ? text(node.props?.children) : String(node);
+  for (const book of [{ id: 'synthetic', title: 'Synthetic', publishedDate: '2013-05-07T00:00:01Z' },
+    { id: 'synthetic', title: 'Synthetic', publishedDate: '2013-05-07', year: '2013' }]) {
+    const rendered = text(module.exports.default({ book }));
+    assert.match(rendered, /Ano: 2013/); assert.doesNotMatch(rendered, /07T|00:00:01|\/05\/2013/);
+  }
+});
+test('recorded Preview response for Jack Reacher retains bibliographic fields and yields year 2013', async t => {
+  // Public bibliographic JSON supplied from the user's Network tab; no credentials or headers.
+  const response = { isbn: '9780515154559', items: [{ asin: '0515154555', isbn: '9780515154559', title: 'Jack Reacher Boxed Set',
+    authors: ['Child, Lee'], publisher: null, publicationDate: '2013-05-07T00:00:01Z', language: 'english', binding: 'paperback',
+    edition: null, pageCount: null, synopsis: null, images: [], source: 'amazon_spapi_catalog_2022-04-01', marketplaceId: 'A2Q3Y263D00KWC' }],
+    hasMore: false, requiresReview: true, contentPolicy: 'images_and_synopsis_omitted' };
+  globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
+  t.after(() => { delete globalThis.__spapiSession; });
+  t.mock.method(globalThis, 'fetch', async () => Response.json(response));
+  const result = await client.searchAmazonOfficial(response.isbn, user);
+  assert.equal(result.book.title, 'Jack Reacher Boxed Set'); assert.deepEqual(result.book.authors, ['Child, Lee']);
+  assert.equal(result.book.language, 'english'); assert.equal(result.book.format, 'paperback');
+  assert.equal(result.book.publishedDate, '2013-05-07'); assert.equal(result.book.year, '2013');
+  assert.equal(api.createRegistrationDraft(client.complementWithAmazon(null, result.book)).year, '2013');
+  assert.equal(result.book.publisher, undefined); assert.equal(result.book.coverUrl, undefined); assert.equal(result.book.synopsis, undefined);
 });

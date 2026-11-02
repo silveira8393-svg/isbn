@@ -1,4 +1,5 @@
 import { type Config, MARKETPLACE, fail, jsonRequest } from './core.js';
+import { normalizePublicationDate } from '../../shared/publicationDate.js';
 
 export function normalizeIsbn(input: string) {
   if (input.length > 32 || !/^[0-9Xx\s-]+$/.test(input)) return fail(422, 'invalid_isbn');
@@ -42,7 +43,8 @@ export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, f
     const value = (name: string) => text(attr(name)[0]?.value);
     return { asin: text(item.asin), isbn, title: text(summary?.itemName) || value('item_name'),
       authors: attr('author').map((a: any) => text(a.name) || text(a.value)).filter(Boolean), publisher: value('publisher'),
-      publicationDate: value('publication_date') || value('street_date'), language: value('language'), binding: value('binding'), edition: value('edition'),
+      publicationDate: normalizePublicationDate(value('publication_date')) || normalizePublicationDate(value('street_date')) || null,
+      language: value('language'), binding: value('binding'), edition: value('edition'),
       pageCount: typeof attr('number_of_pages')[0]?.value === 'number' ? attr('number_of_pages')[0].value : null,
       // No assumed license for Amazon descriptions/images in an external registration flow.
       synopsis: null, images: [], source: 'amazon_spapi_catalog_2022-04-01', marketplaceId: MARKETPLACE };

@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import { BookInfo } from '../types';
+import { publicationYear } from '../../shared/publicationDate';
 import {
   Building2,
   Calendar,
@@ -83,13 +84,7 @@ export default function BookDetailsCard({ book }: BookDetailsCardProps) {
   };
 
   const formatPublishedDate = (rawDate?: string, year?: number | string) => {
-    if (year) return String(year);
-    if (!rawDate) return undefined;
-    const parts = rawDate.split('-');
-    if (parts.length === 3) {
-      return `${parts[2]}/${parts[1]}/${parts[0]}`;
-    }
-    return rawDate;
+    return publicationYear(year) || publicationYear(rawDate);
   };
 
   const formatLanguage = (lang?: string) => {
