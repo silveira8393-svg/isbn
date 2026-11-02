@@ -48,9 +48,9 @@ test('Preview uses environment refresh token without AES, APP_ID, service role, 
   const h = server(), response = await h.handler(h.request());
   assert.equal(response.status, 200); const data = await response.json();
   assert.equal(data.items[0].title, 'Synthetic title'); assert.deepEqual(data.items[0].authors, ['Synthetic Author']);
-  assert.deepEqual(data.items[0].images, []); assert.equal(data.items[0].synopsis, null);
-  assert.equal(data.contentPolicy, 'images_and_synopsis_omitted');
-  assert.doesNotMatch(JSON.stringify(data), /Atzr|synthetic-secret|synthetic-access|Restricted description|cover.jpg/);
+  assert.deepEqual(data.items[0].images, [{ variant: 'MAIN', link: 'https://images.example.invalid/cover.jpg', width: null, height: null }]); assert.equal(data.items[0].synopsis, null);
+  assert.equal(data.contentPolicy, 'synopsis_omitted');
+  assert.doesNotMatch(JSON.stringify(data), /Atzr|synthetic-secret|synthetic-access|Restricted description/);
   assert.equal(h.calls.length, 5); assert.equal(response.headers.get('cache-control'), 'private, no-store');
 });
 test('private token cannot serve another store or an operator; no Amazon call on denied access', async () => {
@@ -141,7 +141,7 @@ function mountApp(options = {}) {
   function render() { cursor = 0; effects = []; tree = module.exports.default(); effects.forEach(fn => fn()); }
   function nodes(node) { if (!node || typeof node !== 'object') return []; if (Array.isArray(node)) return node.flatMap(n => nodes(n)); return [node, ...nodes(node.props?.children)]; }
   const find = type => nodes(tree).find(n => n.type === type); render();
-  return { deps, render, find, search: () => find('SearchForm').props.onSearch(isbn) };
+  return { deps, render, find, search: (value = isbn) => find('SearchForm').props.onSearch(value) };
 }
 test('existing ISBN form automatically complements missing fields without replacing sources or adding operator actions', async t => {
   let calls = 0; t.mock.method(globalThis, 'fetch', async () => { calls++; return Response.json({ isbn, items: [{ isbn, asin: 'SYNTHETIC1', marketplaceId: api.MARKETPLACE, title: 'Amazon title', publisher: 'Amazon Publisher' }] }); });
@@ -181,7 +181,7 @@ test('ISO publication dates normalize without timezone shifts and invalid dates 
 test('Amazon timestamp for reported ISBN becomes year 2013 through the official handler, client and registration draft', async t => {
   const reportedIsbn = '9780515154559';
   const h = server({ item: { ...item, identifiers: [{ marketplaceId: api.MARKETPLACE, identifiers: [{ identifierType: 'ISBN', identifier: reportedIsbn }] }],
-    attributes: { ...item.attributes, publication_date: [{ marketplace_id: api.MARKETPLACE, value: '2013-05-07T00:00:01Z' }] } } });
+    attributes: { ...item.attributes, publication_date: [{ marketplace_id: api.MARKETPLACE, value: '2013-05-07T00:00:01Z' }] }, images: [] } });
   const data = await (await h.handler(h.request('/api/amazon/spapi/catalog?isbn=' + reportedIsbn))).json();
   assert.equal(data.items[0].publicationDate, '2013-05-07');
   globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
@@ -263,12 +263,12 @@ test('catalog projects publisher, pages, edition, authors, exact ISBN identifier
   assert.doesNotMatch(JSON.stringify(data), /Wrong marketplace|999|Not an author|Restricted prose|list_price|diagnostics/);
 });
 
-test('image presence, variants and pixel sizes are projected without URLs, downloads or description content', async () => {
+test('authorized image references and metadata are projected without downloads, secrets or description content', async () => {
   const h = server({ item: expandedItem }), data = await (await h.handler(h.request())).json();
   assert.deepEqual(data.items[0].imageMetadata, { datasetReturned: true, count: 2, entries: [
     { variant: 'MAIN', width: 300, height: 400, hasUrl: true }, { variant: 'PT01', width: 600, height: 800, hasUrl: true }] });
-  assert.deepEqual(data.items[0].images, []); assert.equal(data.items[0].synopsis, null);
-  assert.doesNotMatch(JSON.stringify(data), /https?:\/\/|restricted\.jpg|Restricted prose|synthetic-secret|synthetic-access|Atzr\|/);
+  assert.deepEqual(data.items[0].images, expandedItem.images[1].images); assert.equal(data.items[0].synopsis, null);
+  assert.doesNotMatch(JSON.stringify(data), /other\.jpg|Restricted prose|synthetic-secret|synthetic-access|Atzr\|/);
   assert.equal(h.calls.length, 5);
   for (const [images, returned] of [[undefined, false], [[], true]]) {
     const empty = server({ item: { ...expandedItem, images } }), result = await (await empty.handler(empty.request())).json();
@@ -276,7 +276,7 @@ test('image presence, variants and pixel sizes are projected without URLs, downl
   }
 });
 
-test('client fills physical/bibliographic fields in existing book flow, keeps original units and never imports restricted content', async t => {
+test('client fills physical/bibliographic fields and authorized images in the existing book flow, preserving units and omitting synopsis', async t => {
   const h = server({ item: expandedItem }), payload = await (await h.handler(h.request())).json();
   globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
   t.after(() => { delete globalThis.__spapiSession; });
@@ -294,7 +294,7 @@ test('client fills physical/bibliographic fields in existing book flow, keeps or
   assert.equal(merged.provenance.weight, undefined); assert.equal(merged.provenance.weightUnit, undefined);
   const draft = api.createRegistrationDraft(merged);
   assert.equal(draft.weight, 500); assert.equal(draft.weightUnit, 'g'); assert.equal(draft.depth, 2);
-  assert.equal(draft.amazonPhysical, undefined); assert.equal(book.coverUrl, undefined); assert.equal(book.synopsis, undefined); assert.equal(book.imageMetadata, undefined);
+  assert.equal(draft.amazonPhysical, undefined); assert.equal(book.coverUrl, expandedItem.images[1].images[0].link); assert.equal(book.synopsis, undefined); assert.equal(book.imageMetadata, undefined);
 });
 
 test('attribute measurements and explicit publisher aliases supplement missing datasets without inventing publisher or pages', async () => {
@@ -329,4 +329,122 @@ test('package-only, invalid and unsupported measurements never masquerade as ite
   }
   const invalidId = server({ item: { ...item, identifiers: [{ marketplaceId: api.MARKETPLACE, identifiers: [{ identifierType: 'ISBN', identifier: '8535914847' }] }] } });
   assert.deepEqual((await (await invalidId.handler(invalidId.request())).json()).items, []);
+});
+
+for (const [reportedIsbn, width, height] of [['9780515154559', 1400, 1900], ['9780593984215', 1435, 2560]]) {
+  test(`MAIN ${width}x${height} for ${reportedIsbn} reaches the existing ISBN form without an extra Amazon request`, async t => {
+    // Real reported dimensions, synthetic public references; no credentials or downloaded image files.
+    const cover = `https://images.example.invalid/${reportedIsbn}-main.jpg`, back = `https://images.example.invalid/${reportedIsbn}-back.jpg`;
+    const raw = [{ variant: 'MAIN', link: cover.replace('-main', '-small'), width: 42, height: 75 },
+      { variant: 'MAIN', link: cover, width, height }, { variant: 'MAIN', link: cover.replace('-main', '-medium'), width: 280, height: 500 },
+      { variant: 'PT01', link: back.replace('-back', '-small-back'), width: 100, height: 200 },
+      { variant: 'PT01', link: back, width: 600, height: 800 }, { variant: 'PT02', link: cover, width, height }];
+    const h = server({ item: { ...item, identifiers: [{ marketplaceId: api.MARKETPLACE, identifiers: [{ identifierType: 'ISBN', identifier: reportedIsbn }] }],
+      images: [{ marketplaceId: api.MARKETPLACE, images: raw }] } });
+    const data = await (await h.handler(h.request('/api/amazon/spapi/catalog?isbn=' + reportedIsbn))).json();
+    assert.deepEqual(data.items[0].images, raw); assert.equal(h.calls.length, 5);
+    assert.equal(h.calls.filter(c => c.url.pathname.includes('/catalog/')).length, 1);
+    let clientCalls = 0;
+    t.mock.method(globalThis, 'fetch', async url => { clientCalls++; assert.equal(url, '/api/amazon/spapi/catalog?isbn=' + reportedIsbn); return Response.json(data); });
+    const app = mountApp(); await app.search(reportedIsbn); app.render();
+    assert.equal(app.find('BookDetailsCard').props.book.coverUrl, cover);
+    app.find('Header').props.onTabChange('cadastro'); app.render();
+    const draft = app.find('ProductRegistrationForm').props.draft;
+    assert.equal(draft.mainImageUrl, cover); assert.deepEqual(draft.additionalImageUrls, [back]);
+    assert.equal(clientCalls, 1, 'no lookup, probe or download for image URLs');
+  });
+}
+
+test('image URL projection rejects credentials, signed references, HTML and executable schemes; malformed images cannot break ISBN', async t => {
+  const cover = 'https://images.example.invalid/public.jpg';
+  const unsafe = ['javascript:alert(1)', 'data:image/svg+xml,<svg/>', 'http://images.example.invalid/a.jpg',
+    'https://user:pass@images.example.invalid/a.jpg', 'https://images.example.invalid/a.jpg?token=synthetic-secret',
+    'https://images.example.invalid/a.jpg#synthetic-secret', 'https://images.example.invalid/index.html', 'https://images.example.invalid/images/'];
+  const h = server({ item: { ...item, images: [{ marketplaceId: api.MARKETPLACE, images: [
+    ...unsafe.map(link => ({ variant: 'MAIN', link, width: 9000, height: 9000 })),
+    null, { variant: 'UNKNOWN', link: cover }, { variant: 'MAIN', link: cover, width: 500, height: 600 }] }] } });
+  const data = await (await h.handler(h.request())).json();
+  assert.deepEqual(data.items[0].images, [{ variant: 'MAIN', link: cover, width: 500, height: 600 }]);
+  assert.doesNotMatch(JSON.stringify(data), /synthetic-secret|user:pass|javascript:|<svg|index\.html/);
+  globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
+  t.after(() => { delete globalThis.__spapiSession; });
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ ...data, items: [{ ...data.items[0], images: [
+    ...unsafe.map(link => ({ variant: 'MAIN', link, width: 9000, height: 9000 })), null, 'invalid', ...data.items[0].images] }] }));
+  assert.equal((await client.searchAmazonOfficial(isbn, user)).book.coverUrl, cover);
+});
+
+test('Amazon joins other source images without replacing the existing cover, repeating variants or mutating primary data', () => {
+  const old = 'https://example.invalid/primary.jpg', thumb = 'https://example.invalid/thumbnail.jpg', extra = 'https://example.invalid/extra.jpg';
+  const cover = 'https://images.example.invalid/main.jpg', back = 'https://images.example.invalid/back.jpg';
+  const base = { id: 'base', title: 'Priority', coverUrl: old, thumbnailUrl: thumb, additionalImages: [extra, old, extra] };
+  const amazon = { id: 'amazon', title: 'Amazon', coverUrl: cover, additionalImages: [back, cover, extra] };
+  const before = structuredClone(base), merged = client.complementWithAmazon(base, amazon);
+  assert.equal(merged.coverUrl, old); assert.deepEqual(merged.additionalImages, [thumb, extra, cover, back]);
+  assert.deepEqual(base, before); assert.equal(merged.provenance.coverUrl, undefined);
+  const draft = api.createRegistrationDraft(merged);
+  assert.equal(draft.mainImageUrl, old); assert.deepEqual(draft.additionalImageUrls, [thumb, extra, cover, back]);
+  const thumbnailOnly = client.complementWithAmazon({ id: 'base', title: 'Priority', thumbnailUrl: thumb }, amazon);
+  assert.equal(api.createRegistrationDraft(thumbnailOnly).mainImageUrl, thumb); assert.equal(thumbnailOnly.provenance.coverUrl, undefined);
+  const noCover = client.complementWithAmazon({ id: 'base', title: 'Priority', additionalImages: [extra] }, amazon);
+  assert.equal(noCover.coverUrl, cover); assert.equal(noCover.provenance.coverUrl, 'amazon_spapi_catalog_2022-04-01');
+  assert.deepEqual(api.createRegistrationDraft(noCover).additionalImageUrls, [extra, back]);
+});
+
+const registrationBuild = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts', contents: `
+  export { default as Form } from './src/components/magazord/ProductRegistrationForm';
+  export { default as Images } from './src/components/magazord/ImagesSection';` },
+  bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic', plugins: [{ name: 'registration-images', setup(b) {
+    const mocks = [[/^react$/, 'module.exports=deps.react'], [/^react\/jsx-runtime$/, 'exports.jsx=exports.jsxs=(type,props)=>({type,props})'],
+      [/^lucide-react$/, 'module.exports=new Proxy({},{get:(_,key)=>String(key)})'],
+      [/\/services\/magazordMockService$/, 'exports.magazordMockService=deps.service']];
+    for (const name of ['ProductIdentitySection', 'CategoryAndBrandSection', 'CommercialSection', 'BibliographicSection', 'PhysicalAttributesSection', 'SynopsisSection', 'AdvancedFiscalSection'])
+      mocks.push([new RegExp(`(?:^|/)${name}$`), `module.exports=${JSON.stringify(name)}`]);
+    b.onResolve({ filter: /.*/ }, args => { const mock = mocks.find(([pattern]) => pattern.test(args.path)); return mock ? { path: args.path, namespace: 'mock', pluginData: mock[1] } : undefined; });
+    b.onLoad({ filter: /.*/, namespace: 'mock' }, args => ({ contents: args.pluginData }));
+  } }] });
+const imageNodes = node => !node || typeof node !== 'object' ? [] : Array.isArray(node) ? node.flatMap(imageNodes) : [node, ...imageNodes(node.props?.children)];
+const imageText = node => node == null || typeof node === 'boolean' ? '' : typeof node !== 'object' ? String(node) : Array.isArray(node) ? node.map(imageText).join('') : imageText(node.props?.children);
+function mountRegistration(component, initialProps, service) {
+  let props = initialProps, cursor = 0, effects = [], tree; const slots = [], deps = { service };
+  deps.react = {
+    useState(initial) { const i = cursor++; if (!(i in slots)) slots[i] = typeof initial === 'function' ? initial() : initial; return [slots[i], next => { slots[i] = typeof next === 'function' ? next(slots[i]) : next; }]; },
+    useRef(initial) { const i = cursor++; return slots[i] ??= { current: initial }; },
+    useEffect(fn, dependencies) { const i = cursor++; if (!slots[i] || dependencies.some((v, n) => !Object.is(v, slots[i][n]))) { slots[i] = dependencies; effects.push(fn); } },
+  };
+  const module = { exports: {} }; new Function('deps', 'module', 'exports', 'document', registrationBuild.outputFiles[0].text)(deps, module, module.exports, { querySelector: () => null });
+  function render(updates = {}) { props = { ...props, ...updates }; cursor = 0; effects = []; tree = module.exports[component](props); effects.forEach(fn => fn()); }
+  render(); return { render, all: predicate => imageNodes(tree).filter(predicate), find: predicate => imageNodes(tree).find(predicate), text: () => imageText(tree) };
+}
+
+test('existing image gallery renders automatic cover, permits manual replacement without duplicates and submits current URLs to Magazord', async () => {
+  const cover = 'https://images.example.invalid/main.jpg', back = 'https://images.example.invalid/back.jpg', manual = 'https://example.invalid/operator.jpg';
+  const book = { id: 'amazon', title: 'Fixture', isbn13: isbn, coverUrl: cover, additionalImages: [back] };
+  for (const mode of ['automatic', 'manual', 'without-images']) {
+    let draft = { ...api.createRegistrationDraft(mode === 'without-images' ? { ...book, coverUrl: undefined, additionalImages: [] } : book), parentCode: 'IMG-P', price: '10' };
+    let gallery;
+    const onChange = updates => { draft = { ...draft, ...updates }; gallery.render({ draft }); };
+    gallery = mountRegistration('Images', { draft, onChange });
+    if (mode !== 'without-images') assert.equal(gallery.find(n => n.type === 'img' && n.props.alt === 'Capa principal').props.src, cover);
+    else assert.match(gallery.text(), /Sem fotos no momento/);
+    if (mode === 'manual') {
+      gallery.find(n => n.props.title === 'Tornar capa principal').props.onClick();
+      assert.equal(draft.mainImageUrl, back); assert.deepEqual(draft.additionalImageUrls, [cover]);
+      gallery.find(n => n.type === 'button' && imageText(n) === 'Adicionar URL').props.onClick(); gallery.render();
+      const enter = value => { gallery.find(n => n.type === 'input' && n.props.type === 'url').props.onChange({ target: { value } }); gallery.render();
+        gallery.find(n => n.type === 'input' && n.props.type === 'url').props.onKeyDown({ key: 'Enter', preventDefault() {} }); gallery.render(); };
+      enter(back); assert.deepEqual(draft.additionalImageUrls, [cover], 'pasting the current main URL cannot add a duplicate');
+      gallery.find(n => n.type === 'button' && imageText(n) === 'Adicionar URL').props.onClick(); gallery.render(); enter(manual);
+      gallery.all(n => n.props.title === 'Tornar capa principal').at(-1).props.onClick();
+      assert.equal(draft.mainImageUrl, manual); assert.deepEqual(draft.additionalImageUrls, [back, cover]);
+      assert.equal(gallery.find(n => n.type === 'img' && n.props.alt === 'Capa principal').props.src, manual);
+    }
+    const calls = [], service = { getSimulationConfig: () => ({ mode: 'auto' }), createProduct: async (payload, actionMode) => {
+      calls.push({ payload, actionMode }); return { success: true, parentCode: 'IMG-P', childCode: isbn, registeredAt: 1 }; } };
+    const form = mountRegistration('Form', { draft, originalBook: book, onSuccessRegistration() {}, onUpdateDraft() {} }, service);
+    const imageSection = form.find(n => typeof n.type === 'function' && n.type.name === 'ImagesSection');
+    assert.equal(imageSection.props.draft.mainImageUrl, draft.mainImageUrl);
+    await form.find(n => n.props.id === 'btn-submit-magazord-registration').props.onClick();
+    assert.equal(calls.length, 1); assert.equal(calls[0].payload.mainImageUrl, draft.mainImageUrl);
+    assert.deepEqual(calls[0].payload.additionalImageUrls, draft.additionalImageUrls); assert.equal(calls[0].actionMode, 'auto');
+  }
 });

@@ -46,7 +46,7 @@ export default function ImagesSection({
 
   const handleSetMain = (url: string) => {
     const currentMain = draft.mainImageUrl;
-    const newAdditionals = draft.additionalImageUrls.filter((u) => u !== url);
+    const newAdditionals = [...new Set(draft.additionalImageUrls.filter((u) => u !== url && u !== currentMain))];
     if (currentMain && currentMain !== url) {
       newAdditionals.unshift(currentMain);
     }
@@ -79,7 +79,7 @@ export default function ImagesSection({
     setUrlError('');
     if (!draft.mainImageUrl) {
       onChange({ mainImageUrl: trimmed });
-    } else if (!draft.additionalImageUrls.includes(trimmed)) {
+    } else if (trimmed !== draft.mainImageUrl && !draft.additionalImageUrls.includes(trimmed)) {
       onChange({ additionalImageUrls: [...draft.additionalImageUrls, trimmed] });
     }
     setNewImageUrl('');

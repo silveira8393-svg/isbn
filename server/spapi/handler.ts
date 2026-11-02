@@ -104,7 +104,7 @@ function createCatalogHandler(options: { env?: NodeJS.ProcessEnv; fetcher?: type
       await authorizeCatalog(request, config, fetcher);
       const isbn = normalizeIsbn(url.searchParams.get('isbn') || '');
       const token = await lwa(config, fetcher, { grant_type: 'refresh_token', refresh_token: config.refresh });
-      return reply({ ...await searchCatalog(config, fetcher, isbn, token.access_token), contentPolicy: 'images_and_synopsis_omitted' });
+      return reply({ ...await searchCatalog(config, fetcher, isbn, token.access_token), contentPolicy: 'synopsis_omitted' });
     } catch (error) {
       const safe = error instanceof SpapiError ? error : new SpapiError(503, 'spapi_unavailable');
       if (safe.status === 429) headers['Retry-After'] = '2';

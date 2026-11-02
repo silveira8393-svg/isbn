@@ -88,6 +88,14 @@ export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, f
     const images = (Array.isArray(item.images) ? item.images : []).filter((g: any) => g?.marketplaceId === MARKETPLACE)
       .flatMap((g: any) => Array.isArray(g.images) ? g.images : []);
     const pixels = (n: unknown) => typeof n === 'number' && Number.isSafeInteger(n) && n > 0 ? n : null;
+    const imageUrl = (value: unknown): string | null => {
+      if (typeof value !== 'string' || value.length > 2048 || /[\x00-\x20\x7f]/.test(value)) return null;
+      try {
+        const url = new URL(value);
+        return url.protocol === 'https:' && !url.username && !url.password && !url.port && !url.search && !url.hash
+          && !url.pathname.endsWith('/') && !/\.html?$/i.test(url.pathname) ? url.href : null;
+      } catch { return null; }
+    };
     return { asin: text(item.asin), isbn, title: text(summary?.itemName) || value('item_name'),
       authors: [...new Set(authors)], publisher: value('publisher') || value('publisher_name'),
       publicationDate: normalizePublicationDate(value('publication_date')) || normalizePublicationDate(value('street_date')) || null,
@@ -101,8 +109,11 @@ export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, f
       imageMetadata: { datasetReturned: Array.isArray(item.images), count: images.length,
         entries: images.map((image: any) => ({ variant: /^(MAIN|PT\d{2}|SWCH)$/.test(image?.variant) ? image.variant : 'other',
           width: pixels(image?.width), height: pixels(image?.height), hasUrl: typeof image?.link === 'string' && Boolean(image.link) })) },
-      // No assumed license for Amazon descriptions/images in an external registration flow.
-      synopsis: null, images: [], source: 'amazon_spapi_catalog_2022-04-01', marketplaceId: MARKETPLACE };
+      // Image use was authorized by the project owner. Return public references only, without fetching files.
+      // Synopsis/HTML and all other raw attributes remain outside the registration flow.
+      synopsis: null, images: images.filter((image: any) => /^(MAIN|PT\d{2}|SWCH)$/.test(image?.variant))
+        .map((image: any) => ({ variant: image.variant, link: imageUrl(image.link), width: pixels(image.width), height: pixels(image.height) }))
+        .filter((image: any) => image.link), source: 'amazon_spapi_catalog_2022-04-01', marketplaceId: MARKETPLACE };
   });
   return { isbn, items, hasMore: Boolean(data.pagination?.nextToken), requiresReview: true };
 }

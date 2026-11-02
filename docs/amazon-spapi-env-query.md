@@ -4,7 +4,7 @@ Este é o fluxo vigente da PR #1. `GET /api/amazon/spapi/catalog?isbn=...` usa `
 
 ## Fluxo existente
 
-O mesmo formulário ISBN consulta BrasilAPI e Curitiba com a prioridade anterior, e inicia a Amazon em paralelo quando o usuário é Desenvolvimento ativo da loja de homologação Silveira Lab. A Amazon preenche somente campos ausentes: título, autores, editora, data/ano, idioma, acabamento, edição, páginas, ISBNs e medidas físicas do item. Não substitui dados válidos das outras fontes nem escolhe automaticamente entre múltiplos ASINs correspondentes. Falha/timeout da fonte preserva as outras fontes e o cadastro manual. Não há novos botões, telas, consentimento, escrita de catálogo, preços ou estoque.
+O mesmo formulário ISBN consulta BrasilAPI e Curitiba com a prioridade anterior, e inicia a Amazon em paralelo quando o usuário é Desenvolvimento ativo da loja de homologação Silveira Lab. A Amazon preenche somente campos ausentes: título, autores, editora, data/ano, idioma, acabamento, edição, páginas, ISBNs, medidas físicas e capa. Imagens Amazon adicionais entram na galeria existente sem substituir uma capa válida das outras fontes. Não substitui dados válidos das outras fontes nem escolhe automaticamente entre múltiplos ASINs correspondentes. Falha/timeout da fonte preserva as outras fontes e o cadastro manual. Não há novos botões, telas, consentimento, escrita de catálogo, preços ou estoque.
 
 O servidor normaliza e valida ISBN-10/13 com dígito verificador, consulta Catalog Items v2022-04-01 no marketplace Brasil e filtra o resultado pelos identificadores retornados pela Amazon. ISBN-10 e sua equivalência 978 são aceitos. A ficha identifica a origem dos campos complementados. Histórico e auditoria mantêm o fluxo já existente, sem gravações administrativas adicionais. Troca de conta/loja/perfil descarta o complemento Amazon tardio.
 
@@ -26,8 +26,8 @@ A mesma operação `searchCatalogItems` solicita `summaries,attributes,identifie
 | Dimensões | `dimensions[].item.height/width/length`, `attributes.item_dimensions[]` | Preserva valor/unidade originais; converte unidades conhecidas para cm; `length` corresponde a `depth`, sem ordenar ou trocar eixos |
 | Embalagem | `dimensions[].package`, `attributes.item_package_dimensions[]`, `attributes.item_package_weight[]` | Preservada separadamente em `physical.package`/`amazonPhysical.package`; não substitui as medidas do item nem é exportada como metadado de embalagem |
 | ISBNs | `identifiers[].identifiers[]`, atributos explícitos `externally_assigned_product_identifier`, `isbn`, `isbn_10`, `isbn_13` | Mantém somente ISBNs válidos e equivalentes ao consultado; expõe ISBN-10/13 e identificadores efetivamente retornados; não deduz ISBN de ASIN |
-| Imagens | `images[].images[]` | Só `imageMetadata`: presença do dataset, quantidade, variantes, largura/altura em pixels e indicador de URL; nenhum link |
-| Descrição | Atributos como `product_description` | Conteúdo descartado; `synopsis=null` e `images=[]` permanecem no contrato |
+| Imagens | `images[].images[]` | Preserva `imageMetadata` e projeta URLs públicas HTTPS com variante/dimensões em `images`; cliente escolhe a maior `MAIN` e uma resolução por variante |
+| Descrição | Atributos como `product_description` | Conteúdo descartado; `synopsis=null` permanece no contrato |
 
 O dataset `dimensions` tem preferência por medida sobre os atributos equivalentes. Unidades desconhecidas são preservadas nos metadados físicos, mas não são rotuladas como g/cm. Peso e unidade são complementados juntos; medidas válidas das fontes prioritárias e suas unidades não são reinterpretadas. `amazonPhysical` não integra a exportação do rascunho.
 
@@ -77,11 +77,28 @@ O navegador usa URL relativa, Bearer da sessão Supabase e cookie de mesma orige
 
 `AMAZON_SPAPI_TOKEN_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `AMAZON_SPAPI_APP_ID`, tabelas/RPC OAuth e `npm run spapi:provision-self` **não são requisitos para esta consulta**. Permanecem necessários somente aos caminhos históricos que os utilizam; não é preciso configurá-los para testar ISBN.
 
-## Imagens, sinopses e condições Amazon
+## Imagens autorizadas no cadastro existente
 
-O fluxo solicita o dataset de imagens apenas para verificar a presença e projetar metadados sem URLs. Não baixa arquivos, não devolve URLs de imagens/sinopses da Amazon e não as copia para ficha, rascunho, histórico ou Magazord. Conteúdo de descrição que venha no dataset de atributos é descartado. `imageMetadata` não é importado para `BookInfo` ou rascunho. Imagens e sinopses já fornecidas pelas outras fontes são preservadas. A reutilização de conteúdo segue bloqueada até a confirmação das permissões aplicáveis.
+O responsável pelo projeto confirmou a autorização de utilização das imagens, conforme solicitação desta etapa. A implementação usa as referências já presentes na mesma resposta de `searchCatalogItems`, sem criar autenticação, configuração, rota, script, diagnóstico, proxy ou consulta extra.
 
-A [AUP oficial](https://sellercentral.amazon.com/solution-provider/policy?policyType=AUP&locale=en_US) limita o uso a atividades Amazon permitidas e a usuários que tenham autorizado o acesso, com restrições de compartilhamento (seções 1.1, 3.4, 4.6). A consulta técnica privada não comprova que a reutilização dos metadados para um cadastro externo seja permitida. Antes de usar os resultados comercialmente fora da finalidade Amazon autorizada, confirmar esse uso com a Amazon e a autorização da conta relevante. Não se confunde SP-API com uma licença genérica de catálogo, nem com regras de Product Advertising API.
+O backend devolve `images[]` com `variant`, `link`, `width` e `height`, além dos metadados anteriores. São aceitas referências HTTPS sem credenciais na URL, porta não padrão, query string, fragmento, diretório ou página HTML. Referências inválidas são ignoradas sem impedir a pesquisa. O backend não baixa nem copia os arquivos. `contentPolicy` agora informa `synopsis_omitted`; sinopses, descrições HTML e atributos brutos continuam descartados.
+
+O cliente escolhe a `MAIN` de maior área em pixels, com desempate pela largura. Só a maior resolução de cada variante entra no cadastro, eliminando miniaturas repetidas da mesma capa e URLs duplicadas. Nenhuma transformação do endereço ou inferência de resolução é feita. `imageMetadata` continua fora de `BookInfo`/rascunho; apenas as referências escolhidas entram nos campos de imagem já existentes.
+
+Se BrasilAPI/Curitiba já forneceram uma capa válida, ela permanece principal e a Amazon aparece entre as adicionais. Sem capa válida, a maior `MAIN` da Amazon preenche `coverUrl` automaticamente. As demais imagens das fontes prioritárias permanecem na galeria. Sem `MAIN`, o fallback existente pode usar outra referência disponível; sem qualquer imagem, o cadastro continua normalmente.
+
+`createRegistrationDraft` reaproveita `coverUrl`, `thumbnailUrl` e `additionalImages` nos campos `mainImageUrl`/`additionalImageUrls`. A galeria existente mostra a capa, permite adicionar URL própria, remover imagens e tornar uma adicional a capa principal. A troca preserva a capa anterior entre as adicionais e impede URLs duplicadas, inclusive ao colar a URL da capa atual. O formulário envia os valores atuais, incluindo uma eventual substituição manual.
+
+O formulário atual chama `magazordMockService.createProduct` com o rascunho completo. As URLs estão disponíveis nesse payload e no snapshot de cadastro existente. **Esse serviço é um simulador local; esta alteração não cria um conector HTTP real, upload de arquivos ou publicação na Magazord.** O envio real dependerá do conector correspondente, quando for executado e autorizado. Não foi alterado o serviço Magazord, preços, estoque ou registros existentes.
+
+Os testes reais de metadados informados pelo usuário confirmaram:
+
+| ISBN | Entradas `MAIN` / links presentes | Resoluções em pixels | Maior resolução |
+| --- | --- | --- | --- |
+| `9780515154559` | 3 / todas `hasUrl=true` | 1400×1900, 368×500, 55×75 | 1400×1900 |
+| `9780593984215` | 3 / todas `hasUrl=true` | 1435×2560, 280×500, 42×75 | 1435×2560 |
+
+Esses números são metadados reais reportados pelo usuário, não URLs ou arquivos guardados no repositório. Os testes automatizados usam as mesmas dimensões com referências sintéticas. A exibição online do novo mapeamento ainda requer disponibilizar e conferir um Preview do novo commit. A autorização de utilização das imagens não altera o vínculo privado Desenvolvimento/Silveira Lab nem autoriza outra conta/loja.
 
 ## Homologação do mapeamento ampliado
 
@@ -89,14 +106,14 @@ A autenticação LWA e a consulta real já foram comprovadas no Preview, conform
 
 Resta disponibilizar separadamente um Preview do novo commit e conferir os campos efetivamente retornados na pesquisa normal por ISBN, com a mesma sessão Desenvolvimento/Silveira Lab. `vercel.json` ainda desabilita deployments Git automáticos desta branch; o envio da PR não publica um Preview. Nenhum deploy foi feito nesta etapa e produção permanece fora do escopo. A presença de novos campos no schema ou nas fixtures não comprova sua disponibilidade real para o livro consultado.
 
-Permissões de reutilização de imagens/descrições e autorização própria para atender outra loja continuam independentes desta validação técnica. O token privado da Silveira Lab permanece limitado à homologação autorizada.
+A utilização de imagens foi autorizada pelo responsável; descrições/sinopses continuam fora desta etapa. A autorização própria para atender outra loja permanece independente. O token privado da Silveira Lab continua limitado à homologação autorizada.
 
 Fontes: [Catalog Items API](https://developer-docs.amazon/sp-api/docs/catalog-items-api-v2022-04-01-reference), [LWA e conexão SP-API](https://developer-docs.amazon/sp-api/docs/connecting-to-the-selling-partner-api), [políticas Amazon](https://developer-docs.amazon/sp-api/docs/policies-and-agreements), [variáveis de sistema Vercel](https://vercel.com/docs/environment-variables/system-environment-variables).
 
 ## Validação desta etapa
 
-Node 24.19.0: `npm.cmd run test:spapi` com **56/56 testes aprovados**, TypeScript, lint (`tsc --noEmit`) e build aprovados. Suíte geral: **571 testes, 567 aprovados e as mesmas quatro falhas preexistentes** (três mocks de React.lazy nos testes de infraestrutura e um marcador de fonte ausente no teste Magazord). Permanecem os avisos conhecidos de tamanho do bundle e import Supabase estático/dinâmico.
+Node 24.19.0: `npm.cmd run test:spapi` com **61/61 testes aprovados**, TypeScript, lint (`tsc --noEmit`) e build aprovados. Regressão de galeria, consulta de cadastros, isolamento Magazord e operações: **66/66 aprovados**. Suíte geral: **576 testes, 572 aprovados e as mesmas quatro falhas preexistentes** (três mocks de React.lazy nos testes de infraestrutura e um marcador de fonte ausente no teste Magazord). Permanecem os avisos conhecidos de tamanho do bundle e import Supabase estático/dinâmico.
 
-Os testes exercitam o handler real com Auth/LWA/Catalog simulados, ausência completa de AES/tabela/service role/APP_ID, host Preview diferente de produção, bloqueio de outra loja e perfis, ISBN correspondente/incompatível e dígitos verificadores inválidos, supressão de imagens/sinopses, cliente com sessão, ambiguidade e o formulário ISBN existente até o rascunho. A ampliação cobre editora global/alias, autores por função, páginas numéricas/string, edição, peso/dimensões por dataset e atributos, conversão g/cm com preservação das unidades originais, separação da embalagem e metadados de imagens sem links. As outras fontes mantêm seus valores e unidades; falhas e respostas tardias não transferem complemento Amazon entre contas. O bundle frontend não contém módulos de servidor nem entradas de segredos Amazon.
+Os testes exercitam o handler real com Auth/LWA/Catalog simulados, ausência completa de AES/tabela/service role/APP_ID, host Preview diferente de produção, bloqueio de outra loja e perfis, ISBN correspondente/incompatível e dígitos verificadores inválidos, supressão de sinopses, cliente com sessão, ambiguidade e o formulário ISBN existente até o rascunho. A ampliação cobre editora global/alias, autores por função, páginas numéricas/string, edição, peso/dimensões por dataset e atributos, conversão g/cm com preservação das unidades originais e separação da embalagem. Os novos testes de imagens cobrem maior `MAIN` nos dois ISBNs, variantes/URLs repetidas, referências inseguras, entrada automática no formulário, renderização da galeria real, substituição manual e payload entregue ao serviço Magazord atual, inclusive sem imagens. As outras fontes mantêm seus valores e unidades; falhas e respostas tardias não transferem complemento Amazon entre contas. O bundle frontend não contém módulos de servidor nem entradas de segredos Amazon.
 
 Nenhuma credencial real foi lida, impressa ou usada nos testes. Nenhuma chamada real, migração, registro de produto, alteração Magazord ou publicação foi feita. O diff de `supabase/`, `experimentos/`, Amazon experimental e componentes/serviço Magazord nesta etapa é vazio.

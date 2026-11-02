@@ -1,6 +1,7 @@
 import type { BookInfo, User } from '../types';
 import { cleanIsbn } from '../utils/isbn';
 import { normalizePublicationDate, publicationYear } from '../../shared/publicationDate';
+import { imageReferences, isImageReference } from '../utils/imageUrls';
 
 const LAB_STORE = '492af2ad-905c-42f8-90f4-aa6c1dc142f3';
 export const canUseAmazonOfficial = (user: Pick<User, 'active' | 'role' | 'storeId'>) =>
@@ -61,7 +62,23 @@ function amazonPhysicalFields(physical?: AmazonPhysical) {
 }
 type CatalogItem = { isbn: string; asin: string; title?: string; authors?: string[]; publisher?: string;
   publicationDate?: string; language?: string; binding?: string; edition?: string; pageCount?: number; marketplaceId: string;
-  isbn10?: string; isbn13?: string; identifiers?: { type: string; identifier: string }[]; physical?: AmazonPhysical };
+  isbn10?: string; isbn13?: string; identifiers?: { type: string; identifier: string }[]; physical?: AmazonPhysical;
+  images?: { variant: string; link: string; width?: number; height?: number }[] };
+function catalogImages(images: CatalogItem['images']) {
+  const pixels = (n: unknown) => typeof n === 'number' && Number.isSafeInteger(n) && n > 0 ? n : 0;
+  const best = new Map<string, { link: string; area: number; width: number }>();
+  for (const image of Array.isArray(images) ? images : []) {
+    if (!image || !/^(MAIN|PT\d{2}|SWCH)$/.test(image.variant) || !isImageReference(image.link)) continue;
+    const url = new URL(image.link);
+    if (url.protocol !== 'https:' || url.port || url.search || url.hash || /[\x00-\x20\x7f]/.test(image.link)) continue;
+    const width = pixels(image.width), area = width * pixels(image.height), prior = best.get(image.variant);
+    if (!prior || area > prior.area || (area === prior.area && width > prior.width)) best.set(image.variant, { link: url.href, area, width });
+  }
+  const cover = best.get('MAIN')?.link;
+  const additional = imageReferences([...best.entries()].filter(([variant]) => variant !== 'MAIN')
+    .sort(([a], [b]) => a.localeCompare(b)).map(([, image]) => image.link)).filter(url => url !== cover);
+  return { coverUrl: cover, additionalImages: additional };
+}
 export type AmazonOfficialResult = { book: BookInfo | null; status: 'success' | 'not_found' | 'ambiguous' | 'unavailable' | 'skipped' };
 export async function searchAmazonOfficial(isbn: string, user: User, signal?: AbortSignal): Promise<AmazonOfficialResult> {
   if (!canUseAmazonOfficial(user)) return { book: null, status: 'skipped' };
@@ -92,6 +109,7 @@ export async function searchAmazonOfficial(isbn: string, user: User, signal?: Ab
     };
     const identifiers = actualIdentifiers.filter(id => equivalent13(id.identifier) === equivalent13(cleanIsbn(isbn)));
     const physical = amazonPhysical(item.physical);
+    const images = catalogImages(item.images);
     const book: BookInfo = { id: `amazon-spapi-${item.asin}`, title: text(item.title) || '',
       ...(cleanIsbn(isbn).length === 13 ? { isbn13: cleanIsbn(isbn) } : { isbn10: cleanIsbn(isbn) }),
       ...(identifiers.find(id => id.type === 'ISBN_10') ? { isbn10: identifiers.find(id => id.type === 'ISBN_10')!.identifier } : {}),
@@ -101,11 +119,13 @@ export async function searchAmazonOfficial(isbn: string, user: User, signal?: Ab
       publisher: text(item.publisher), publishedDate: normalizePublicationDate(item.publicationDate), year: publicationYear(item.publicationDate), language: amazonLanguage(item.language),
       format: amazonBinding(item.binding), edition: text(item.edition), pageCount: Number.isInteger(item.pageCount) && item.pageCount! > 0 ? item.pageCount : undefined,
       ...(physical ? { amazonPhysical: physical, ...amazonPhysicalFields(physical) } : {}),
+      ...(images.coverUrl ? { coverUrl: images.coverUrl } : {}),
+      ...(images.additionalImages.length ? { additionalImages: images.additionalImages } : {}),
       provider: 'Amazon SP-API',
-      // Never import Amazon images, HTML, synopsis, offers or raw attributes into the registration flow.
+      // Only public image references; never import HTML, synopsis, offers or raw attributes.
     };
     if (!book.title && !book.authors?.length && !book.publisher && !book.publishedDate && !book.language && !book.format && !book.edition && !book.pageCount
-      && !book.weight && !book.width && !book.height && !book.depth)
+      && !book.weight && !book.width && !book.height && !book.depth && !book.coverUrl && !book.additionalImages?.length)
       return { book: null, status: 'not_found' };
     return { status: 'success', book };
   } catch { return { book: null, status: 'unavailable' }; }
@@ -137,5 +157,18 @@ export function complementWithAmazon(base: BookInfo | null, amazon: BookInfo | n
     if (!merged.dimensionsUnit && ['width', 'height', 'depth'].some(key => merged.provenance?.[key] === 'amazon_spapi_catalog_2022-04-01')) filled('dimensionsUnit', 'cm');
   }
   if (!merged.amazonPhysical && amazon.amazonPhysical) filled('amazonPhysical', amazon.amazonPhysical);
+  // Keep a valid primary-source cover; Amazon fills a missing cover and joins the existing gallery.
+  const existing = imageReferences([merged.coverUrl, merged.thumbnailUrl, ...(merged.additionalImages || [])]);
+  const amazonImages = imageReferences([amazon.coverUrl, ...(amazon.additionalImages || [])]);
+  if (amazonImages.length) {
+    const existingCover = isImageReference(merged.coverUrl) ? merged.coverUrl : isImageReference(merged.thumbnailUrl) ? merged.thumbnailUrl : undefined;
+    const cover = existingCover || (isImageReference(amazon.coverUrl) ? amazon.coverUrl : undefined) || existing[0] || amazonImages[0];
+    if (!existingCover && isImageReference(amazon.coverUrl)) filled('coverUrl', amazon.coverUrl);
+    const additional = imageReferences([...existing, ...amazonImages]).filter(url => url !== cover);
+    if (additional.length || merged.additionalImages) {
+      merged.additionalImages = additional;
+      if (additional.some(url => !existing.includes(url))) merged.provenance!.additionalImages = 'amazon_spapi_catalog_2022-04-01';
+    }
+  }
   return merged;
 }
