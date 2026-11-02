@@ -159,13 +159,13 @@ test('HTTP blocks, CAPTCHA and unexpected content stop without retry or raw body
 });
 
 test('Function uses real transport MIME handling: HTTP 200 may complete, lack a usable format/body, or be a CAPTCHA', async () => {
-  for (const [mime, body, expectedStatus, expectedCode, message] of [
+  for (const [mime, body, expectedStatus, expectedCode, message, reason] of [
     ['Text/HTML ; charset=UTF-8', html, 'concluida', 'completed'],
-    [undefined, html, 'interrompida', 'amazon_unexpected', /Content-Type ausente/],
-    ['synthetic-private-header', html, 'interrompida', 'amazon_unexpected', /Content-Type inválido/],
-    ['application/json', '{"private":"synthetic-body"}', 'interrompida', 'amazon_unexpected', /Content-Type não HTML/],
-    ['text/html', '', 'interrompida', 'amazon_unexpected', /Corpo HTML vazio/],
-    ['text/html ; charset=UTF-8', '<html>robot check captcha synthetic-body</html>', 'interrompida', 'amazon_captcha', /CAPTCHA/],
+    [undefined, html, 'interrompida', 'amazon_unexpected', /Content-Type ausente/, 'content_type_missing'],
+    ['synthetic-private-header', html, 'interrompida', 'amazon_unexpected', /Content-Type inválido/, 'content_type_invalid'],
+    ['application/json', '{"private":"synthetic-body"}', 'interrompida', 'amazon_unexpected', /Content-Type não HTML/, 'content_type_not_html'],
+    ['text/html', '', 'interrompida', 'amazon_unexpected', /Corpo HTML vazio/, 'body_empty'],
+    ['text/html ; charset=UTF-8', '<html>robot check captcha synthetic-body</html>', 'interrompida', 'amazon_captcha', /CAPTCHA/, 'blocked'],
   ]) {
     let calls = 0;
     const h = harness({ fetchHtml: value => fetchHtml(value, (options, callback) => {
@@ -183,11 +183,25 @@ test('Function uses real transport MIME handling: HTTP 200 may complete, lack a 
     const response = await h.handler(request({ isbn, modo: 'http' })), result = await response.json();
     assert.equal(response.status, 200); assert.equal(result.status, expectedStatus); assert.equal(result.status_http, 200);
     assert.equal(result.diagnostico.codigo, expectedCode); assert.equal(calls, 1);
+    assert.equal(result.diagnostico.motivo, reason);
+    const log = JSON.parse(h.logs.at(-1)); assert.equal(log.motivo, reason);
+    if (!message) {
+      assert.equal(log.imagens_principais + log.imagens_adicionais, result.imagens.itens.length);
+      assert.ok(log.imagens_adicionais > 0);
+    }
     if (message) { assert.match(result.mensagem, message); assert.equal(result.book_info, undefined); }
     else assert.equal(result.imagens.itens.length, 4, 'normalized MIME reaches the unchanged extractor');
     assert.doesNotMatch(JSON.stringify(result), /synthetic-private-header|synthetic-body|<html/);
     assert.doesNotMatch(h.logs.join(''), /synthetic-private-header|synthetic-body|<html|landingImage/);
   }
+});
+
+test('interruption logs reject arbitrary reasons and never log upstream messages, body, image URLs or query identifiers', async () => {
+  const h = harness({ fetchHtml: async () => ({ html: null, status_http: 200, motivo: 'synthetic-private-reason', mensagem: 'Content-Type não HTML.' }) });
+  const result = await (await h.handler(request({ isbn, modo: 'http' }))).json();
+  assert.equal(result.diagnostico.codigo, 'amazon_unexpected'); assert.equal(result.diagnostico.motivo, undefined);
+  assert.doesNotMatch(h.logs.join(''), /synthetic-private-reason|Content-Type|https?:|<html|9781419762109/);
+  assert.ok(!h.logs.join('').includes(isbn));
 });
 
 test('timeout, network failure and internal exception are sanitized in response and logs', async () => {

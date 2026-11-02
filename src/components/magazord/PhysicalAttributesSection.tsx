@@ -43,7 +43,7 @@ export default function PhysicalAttributesSection({
               Peso & Dimensões do Exemplar
             </h3>
             <p className="text-xs text-slate-500">
-              Medidas informadas pelas fontes. Confira a orientação antes de utilizar no cálculo de frete.
+              Peso e medidas editáveis para este exemplar, nas unidades indicadas.
             </p>
           </div>
         </div>
@@ -104,7 +104,7 @@ export default function PhysicalAttributesSection({
               cm
             </span>
           </div>
-          <span className="text-[10px] text-slate-400 block mt-0.5">Largura da capa</span>
+          <span className="text-[10px] text-slate-400 block mt-0.5">Largura informada pela fonte</span>
           {errors.width && <p className="mt-1 text-xs font-medium text-red-600">{errors.width}</p>}
         </div>
 
@@ -131,7 +131,7 @@ export default function PhysicalAttributesSection({
               cm
             </span>
           </div>
-          <span className="text-[10px] text-slate-400 block mt-0.5">Altura vertical</span>
+          <span className="text-[10px] text-slate-400 block mt-0.5">Altura informada pela fonte</span>
           {errors.height && <p className="mt-1 text-xs font-medium text-red-600">{errors.height}</p>}
         </div>
 
@@ -140,7 +140,7 @@ export default function PhysicalAttributesSection({
           <label className="block text-xs font-bold text-slate-800 mb-1.5">
             <span className="flex items-center gap-1">
               <Ruler className="w-3.5 h-3.5 text-blue-600" />
-              <span>Espessura (cm)</span>
+              <span>Espessura / profundidade (cm)</span>
             </span>
           </label>
           <div className="relative">
@@ -158,7 +158,7 @@ export default function PhysicalAttributesSection({
               cm
             </span>
           </div>
-          <span className="text-[10px] text-slate-400 block mt-0.5">Lombada / espessura</span>
+          <span className="text-[10px] text-slate-400 block mt-0.5">Profundidade informada pela fonte</span>
           {errors.depth && <p className="mt-1 text-xs font-medium text-red-600">{errors.depth}</p>}
         </div>
       </div>

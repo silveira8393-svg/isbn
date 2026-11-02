@@ -222,13 +222,6 @@ export function validateRegistrationDraft(draft: RegistrationDraft, source?: Boo
     if (!Number.isFinite(value) || value <= 0 || value > 100) warn(field, 'Dimensão possivelmente incorreta. Confira o valor em centímetros.');
     else if (source?.[field] != null && roundPhysicalMeasurement(source[field]) === roundPhysicalMeasurement(value) && source.dimensionsUnit !== 'cm') warn(field, 'A fonte não declarou centímetros; confirme a unidade antes de utilizar.');
   }
-  const amazonAxis = (field: 'height' | 'depth') => source?.amazonPhysical?.item && source[field] != null && draft[field] != null
-    && (source.provider === 'Amazon SP-API' || source.provenance?.[field] === 'amazon_spapi_catalog_2022-04-01')
-    && roundPhysicalMeasurement(source[field]!) === roundPhysicalMeasurement(draft[field]!);
-  if (amazonAxis('height') && amazonAxis('depth') && draft.height! > 0 && draft.depth! > draft.height!) {
-    const orientation = `Confira a orientação: height da Amazon foi importado como altura (${formatPhysicalMeasurement(draft.height!)} cm) e length como profundidade (${formatPhysicalMeasurement(draft.depth!)} cm). Esses eixos não confirmam a espessura bibliográfica; não fazemos troca automática.`;
-    warn('height', orientation); warn('depth', orientation);
-  }
   for (const field of ['mainImageUrl', 'additionalImageUrls'] as const) {
     const references = field === 'mainImageUrl' ? [draft.mainImageUrl].filter(Boolean) as string[] : draft.additionalImageUrls || [];
     required(field, references.some(url => !isImageReference(url) || !!new URL(url).search || !!new URL(url).hash), 'Remova ou substitua a referência de imagem inválida ou com parâmetros que não podem ser preservados com segurança. Não é necessário testar a disponibilidade da URL.');

@@ -4,6 +4,7 @@
  */
 
 import { RegistrationDraft } from '../../types';
+import { useState } from 'react';
 import { formatRegistrationPriceInput } from '../../utils/draft';
 import { DollarSign, Package, MapPin, AlertCircle } from 'lucide-react';
 
@@ -18,8 +19,10 @@ export default function CommercialSection({
   onChange,
   errors,
 }: CommercialSectionProps) {
+  const [editingPrice, setEditingPrice] = useState(false);
   // Keep the caret and partial input intact; format only after leaving the field.
   const handlePriceChange = (val: string) => {
+    setEditingPrice(true);
     // Permite digitação livre de números e vírgula/ponto
     onChange({ price: val });
   };
@@ -56,12 +59,14 @@ export default function CommercialSection({
             </span>
             <input
               type="text"
-              value={draft.price}
+              value={editingPrice ? draft.price : formatRegistrationPriceInput(draft.price)}
               data-registration-field="price"
               inputMode="decimal"
+              onFocus={() => setEditingPrice(true)}
               onChange={(e) => handlePriceChange(e.target.value)}
               onBlur={(e) => {
                 const price = formatRegistrationPriceInput(e.target.value);
+                setEditingPrice(false);
                 if (price !== e.target.value) onChange({ price });
               }}
               placeholder="0,00"

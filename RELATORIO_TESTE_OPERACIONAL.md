@@ -453,3 +453,63 @@ Banco, Storage, políticas, credenciais e integração real Magazord não foram 
 Não houve merge ou deploy de produção. O novo Preview serve para conferir códigos,
 preço e medidas; a existência de fotos adicionais em uma resposta futura continua
 dependendo do conteúdo disponibilizado pelo Laboratório, sem garantia artificial.
+
+## Ajustes finais da Etapa 2 — 02/11/2026
+
+Base: `3599034c117389b7bf164b49b10c02862957378d`, PR #1.
+
+### Laboratório: evidência real e ponto de interrupção
+
+- A pesquisa normal de `App.tsx` chama `complementAmazonImages` após consolidar
+  BrasilAPI, Curitiba e SP-API, exclusivamente no ambiente Desenvolvimento e para
+  o mesmo usuário ativo. O complemento exige Desenvolvimento/Silveira Lab; imagens
+  somente MAIN não são consideradas galeria adicional.
+- Limites conferidos e preservados: complemento automático 10 s, cliente do
+  Laboratório 40 s, transporte Amazon 25 s, Function 45 s, corpo até 8 MiB.
+  Uma única requisição, sem redirect, retry, cookies Amazon ou contorno de bloqueios.
+- Leitura do log do Preview `dpl_6pgVJV8aNgKt1mREhAcRsdXWFgzz`: evento em
+  `2026-11-02T22:45:29.194Z`, id `3f4c87a9-84f1-4fa1-b021-93e7767af5df`,
+  duração `409 ms`, Function/HTTP `200`, código `amazon_unexpected`.
+  Confirma execução real do Laboratório nesse Preview, não timeout nessa chamada.
+  Como não há ISBN no log, o evento isolado não comprova que foi a pesquisa do Batman.
+- Nesse código, `amazon_unexpected` com HTTP 200 ocorre antes do extrator:
+  formato ausente/inválido/não HTML, corpo vazio ou limite de leitura. Portanto,
+  nessa execução não foi produzida uma galeria que o formulário pudesse descartar.
+  Os logs anteriores não registram qual dessas condições ocorreu; não é possível
+  afirmar mudança externa da Amazon nem recuperação das cinco fotografias.
+- A Function existente agora registra o motivo controlado (`content_type_missing`,
+  `content_type_invalid`, `content_type_not_html`, `body_empty`, `body_limit`,
+  `http_status` ou `blocked`). Quando a extração termina, registra somente contagens
+  de imagens principais/adicionais. Sem ISBN, URLs, HTML, cabeçalhos, credenciais ou
+  mensagens externas nos logs; nenhum endpoint, extrator ou autenticação novo.
+- A tentativa de acessar a sessão autenticada pelo controle do Chrome foi
+  interrompida pelo próprio controle: não conseguiu determinar a URL com segurança.
+  Não houve consulta Amazon disparada pelo agente nem acesso a cookies/tokens.
+  A verificação real do ISBN e das cinco fotos permanece pendente de uma única
+  pesquisa pelo proprietário no novo Preview; os logs bastam para ler o motivo e
+  as contagens, sem precisar copiar o corpo da resposta.
+
+### Medidas e preço
+
+- Removidos os dois avisos vermelhos de orientação de altura/profundidade.
+  Preservados o arredondamento, os valores/eixos originais, a edição manual e o
+  alerta não bloqueante de 10 g. Sem confirmação adicional para dimensões comuns.
+  Rótulos mantêm largura, altura e espessura/profundidade, sem prometer orientação
+  bibliográfica que a fonte não confirma; nenhuma inversão por magnitude.
+- A versão anterior formatava o preço somente ao persistir o evento de blur no
+  rascunho. A apresentação passa a distinguir foco/edição: sem foco, deriva duas
+  casas decimais do rascunho atual, inclusive em montagem, retorno e atualização
+  adiada do componente pai; com foco, preserva o texto digitado. O prefixo `R$`,
+  os três formatos aceitos e a moeda na revisão/conclusão foram preservados.
+  Não foi possível reproduzir visualmente o blur no navegador nesta execução.
+
+### Verificação
+
+- TypeScript, lint e build: aprovados; mesmos avisos conhecidos do build.
+- SP-API: 78/78 aprovados.
+- Testes relacionados de Laboratório, transporte, imagens, SP-API e cadastro:
+  141/141 aprovados. Fixtures locais não comprovam a disponibilidade real das fotos.
+- Bateria completa: 618 testes, 614 aprovados e as mesmas quatro falhas anteriores
+  de mocks `lazy`/marcador CRLF, fora do escopo desta correção.
+- Sem mudanças em Supabase, Storage, autenticação, Magazord real, NOVO/USADO ou
+  produção. Revisão/retorno, deduplicação e isolamento das imagens preservados.

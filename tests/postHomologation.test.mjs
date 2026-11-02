@@ -153,12 +153,29 @@ test('price typing preserves the entered text and formats two Brazilian decimal 
   const view = mount('CommercialSection', utils.createRegistrationDraft(book));
   const input = () => view.find(node => node.props['data-registration-field'] === 'price');
   for (const [typed, completed] of [['5', '5,00'], ['50', '50,00'], ['50,00', '50,00'], ['1.234,56', '1.234,56'], ['50,', '50,'], ['-10', '-10']]) {
+    input().props.onFocus(); view.render();
     input().props.onChange({ target: { value: typed } }); view.render();
     assert.equal(input().props.value, typed, 'typing cannot move the caret by rewriting the value');
     input().props.onBlur({ target: { value: typed } }); view.render();
     assert.equal(input().props.value, completed);
   }
   assert.ok(utils.validateRegistrationDraft(view.draft()).errors.price, 'invalid negative input remains invalid');
+});
+
+test('unfocused price is formatted from the current draft even on mounting, delayed parent updates and returning to the form', () => {
+  for (const price of ['50', '50,00', '1.234,56']) {
+    const initial = { ...utils.createRegistrationDraft(book), price }, changes = [];
+    const view = mount('CommercialSection', initial, { props: { onChange: update => changes.push(update) } });
+    const input = () => view.find(node => node.props['data-registration-field'] === 'price');
+    const formatted = price === '1.234,56' ? price : '50,00';
+    assert.equal(input().props.value, formatted);
+    input().props.onFocus(); view.render(); assert.equal(input().props.value, price);
+    input().props.onBlur({ target: { value: price } }); view.render();
+    assert.equal(input().props.value, formatted, 'rendered price must not depend on a synchronous parent update');
+    assert.equal(view.draft().price, price, 'test parent intentionally keeps the original raw value');
+    assert.equal(mount('CommercialSection', initial).find(node => node.props['data-registration-field'] === 'price').props.value, formatted);
+    assert.ok(view.all(node => node.type === 'span' && node.props.children === 'R$').length, 'visual currency prefix is preserved');
+  }
 });
 
 test('imported float noise is rounded for g/cm fields, while raw source axes and suspicious weight remain available', () => {
@@ -171,8 +188,8 @@ test('imported float noise is rounded for g/cm fields, while raw source axes and
   }
   assert.deepEqual(source, before, 'original measurements are not rewritten');
   const report = utils.validateRegistrationDraft(draft, source);
-  assert.match(report.warnings.weight, /10 g/); assert.match(report.warnings.height, /height.*3,18 cm/);
-  assert.match(report.warnings.depth, /length.*30,5 cm.*não fazemos troca automática/);
+  assert.match(report.warnings.weight, /10 g/);
+  assert.equal(report.warnings.height, undefined); assert.equal(report.warnings.depth, undefined);
   const corrected = utils.validateRegistrationDraft({ ...draft, height: 30.5, depth: 3.18 }, source);
   assert.equal(corrected.warnings.height, undefined); assert.equal(corrected.warnings.depth, undefined);
 });

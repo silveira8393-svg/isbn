@@ -787,7 +787,7 @@ test('9781419762109: SP-API physical axes stay named as returned, conversions lo
   form.find(n => n.props.id === 'btn-submit-magazord-registration').props.onClick(); form.render();
   const review = form.find(n => n.props['aria-label'] === 'Revisão do cadastro');
   assert.match(imageText(review), /3,18 cm/); assert.match(imageText(review), /30,5 cm/);
-  assert.match(imageText(review), /não fazemos troca automática/); assert.match(imageText(review), /PESO POSSIVELMENTE INCORRETO: 10 g/);
+  assert.doesNotMatch(imageText(review), /Confira a orientação|não fazemos troca automática/); assert.match(imageText(review), /PESO POSSIVELMENTE INCORRETO: 10 g/);
   assert.doesNotMatch(imageText(review), /299999|179999|499999/);
 });
 
