@@ -107,7 +107,8 @@ test('transporte fixo preserva GET único, ISBN-10, bloqueios, limites e nenhuma
   assert.throws(() => isbn10For('9791090636071'), error => error.status === 422);
   for (const [status, mime, body, message] of [[200, 'text/html', '<html>produto</html>', null], [302, 'text/html', '', /não 200/],
     [403, 'text/html', '', /não 200/], [200, 'application/json', '{}', /Content-Type não HTML/],
-    [200, 'text/html', 'robot check captcha', /CAPTCHA/], [200, 'text/html', 'x'.repeat(MAX_BYTES + 1), /8 MiB/]]) {
+    [200, 'text/html', 'robot check captcha', /CAPTCHA/], [200, 'text/html', 'x'.repeat(MAX_BYTES + 1), /8 MiB/],
+    [200, undefined, 'x'.repeat(MAX_BYTES + 1), /8 MiB/]]) {
     let calls = 0;
     const result = await fetchHtml(ISBN, (options, callback) => {
       calls++;
@@ -135,12 +136,12 @@ test('transporte fixo preserva GET único, ISBN-10, bloqueios, limites e nenhuma
   }), error => error.status === 502);
 });
 
-test('HTML MIME parsing accepts standard whitespace/parameters and reads split UTF-8; missing, invalid or non-HTML MIME stops before reading', async () => {
+test('HTML MIME parsing reads split UTF-8 and validates documents without a header; explicitly invalid/non-HTML MIME stops before reading', async () => {
   const document = '<!doctype html><html><body>Conteúdo bibliográfico</body></html>', bytes = Buffer.from(document);
   for (const [mime, accepted, message] of [
     ['text/html ; charset=UTF-8', true], [' Text/HTML\t; charset="utf-8" ', true],
     ['application/xhtml+xml ; charset=utf-8', true],
-    [undefined, false, /Content-Type ausente/], ['', false, /Content-Type ausente/],
+    [undefined, true], ['', true],
     ['invalid-mime', false, /Content-Type inválido/],
     ['application/json', false, /Content-Type não HTML/], ['text/plain', false, /Content-Type não HTML/],
     ['text/html-example', false, /Content-Type não HTML/],
@@ -161,6 +162,32 @@ test('HTML MIME parsing accepts standard whitespace/parameters and reads split U
     assert.equal(calls, 1); assert.equal(result.status_http, 200);
     if (accepted) { assert.equal(result.html, document); assert.equal(result.tamanho_bytes, bytes.length); assert.ok(reads > 1); }
     else { assert.equal(result.html, null); assert.match(result.mensagem, message); assert.equal(reads, 0); }
+  }
+});
+
+test('9781419762109: a missing Content-Type permits only a recognizable bounded HTML document, never arbitrary text or JSON', async () => {
+  for (const [body, accepted, reason] of [
+    ['<!doctype html><html lang="pt-br"><body>Livro</body></html>', true],
+    ['<HTML><body>Livro</body></HTML>', true],
+    ['<!doctype html>{"book":"synthetic-body"}', false, 'content_type_missing'],
+    ['{"html":"<html>synthetic-body</html>"}', false, 'content_type_missing'],
+    ['synthetic-body', false, 'content_type_missing'],
+    ['', false, 'body_empty'], [' \n\t', false, 'body_empty'],
+    ['<html>captcha robot check</html>', false, 'blocked'],
+  ]) {
+    let calls = 0;
+    const result = await fetchHtml('9781419762109', (options, callback) => {
+      calls++; assert.equal(options.path, '/dp/1419762109');
+      const request = new EventEmitter();
+      request.end = () => setImmediate(() => {
+        const response = Readable.from([Buffer.from(body)]);
+        Object.assign(response, { statusCode: 200, headers: {} });
+        response.once('close', () => request.emit('close')); callback(response);
+      });
+      request.destroy = error => { request.emit('error', error); request.emit('close'); };
+      return request;
+    });
+    assert.equal(calls, 1); assert.equal(result.html, accepted ? body : null); assert.equal(result.motivo, reason);
   }
 });
 

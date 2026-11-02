@@ -161,7 +161,10 @@ test('HTTP blocks, CAPTCHA and unexpected content stop without retry or raw body
 test('Function uses real transport MIME handling: HTTP 200 may complete, lack a usable format/body, or be a CAPTCHA', async () => {
   for (const [mime, body, expectedStatus, expectedCode, message, reason] of [
     ['Text/HTML ; charset=UTF-8', html, 'concluida', 'completed'],
-    [undefined, html, 'interrompida', 'amazon_unexpected', /Content-Type ausente/, 'content_type_missing'],
+    [undefined, html, 'concluida', 'completed'],
+    [undefined, '{"private":"synthetic-body"}', 'interrompida', 'amazon_unexpected', /Content-Type ausente/, 'content_type_missing'],
+    [undefined, '', 'interrompida', 'amazon_unexpected', /Corpo HTML vazio/, 'body_empty'],
+    [undefined, '<html>robot check captcha synthetic-body</html>', 'interrompida', 'amazon_captcha', /CAPTCHA/, 'blocked'],
     ['synthetic-private-header', html, 'interrompida', 'amazon_unexpected', /Content-Type inválido/, 'content_type_invalid'],
     ['application/json', '{"private":"synthetic-body"}', 'interrompida', 'amazon_unexpected', /Content-Type não HTML/, 'content_type_not_html'],
     ['text/html', '', 'interrompida', 'amazon_unexpected', /Corpo HTML vazio/, 'body_empty'],

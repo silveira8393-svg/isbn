@@ -513,3 +513,46 @@ Base: `3599034c117389b7bf164b49b10c02862957378d`, PR #1.
   de mocks `lazy`/marcador CRLF, fora do escopo desta correção.
 - Sem mudanças em Supabase, Storage, autenticação, Magazord real, NOVO/USADO ou
   produção. Revisão/retorno, deduplicação e isolamento das imagens preservados.
+
+### Complemento: motivo real identificado no Preview
+
+Consulta dos logs de `dpl_4NSNk1LLeK1DJunmHAvefyFQm4Fo` (commit `1fccd1b`):
+em **02/11/2026 às 20:00:20 BRT**, a Function registrou:
+
+```json
+{"evento":"amazon_lab","id":"d3aad6a6-49fe-4783-a0c6-e8fec4efa091","duracao_ms":451.98,"status_function":200,"status_http":200,"codigo":"amazon_unexpected","motivo":"content_type_missing"}
+```
+
+Isso comprova uma chamada real do Laboratório nesse Preview e identifica a
+interrupção: a resposta recebida pelo transporte não continha `Content-Type`.
+Nosso código descartava essa resposta antes de ler o corpo. Não foi timeout,
+deduplicação ou perda de galeria no formulário nessa execução. O log não registra
+ISBN; a correlação exclusiva com `9781419762109` depende da pesquisa informada
+pelo operador. Não é possível concluir que o HTML ou as cinco fotos estavam no
+corpo, pois essa versão nem o examinou, nem que a fonte mudou em relação ao teste
+antigo (não há cabeçalhos/corpo históricos para comparar).
+
+**Correção mínima:** o mesmo transporte agora lê o corpo limitado quando falta o
+cabeçalho e só o entrega ao extrator existente se reconhecer um documento HTML
+iniciado por `<html>` ou `<!doctype html> ... <html>`. Cabeçalho declarado inválido
+ou não HTML continua interrompendo antes da leitura; corpo vazio, JSON/texto,
+CAPTCHA/restrição e respostas acima do limite continuam recusados. Não se deduz
+HTML de HTTP 200. Não houve nova tentativa, troca de agente/IP, proxy, cookie,
+redirect, mudança de timeout ou novo extrator.
+
+A [RFC 9110, seção 8.3](https://www.rfc-editor.org/rfc/rfc9110.html#section-8.3)
+permite determinar o tipo pelos dados quando o campo está ausente. Aqui a
+aceitação é restrita a documento HTML em memória para o extrator existente;
+nenhum HTML é executado, exposto ou persistido no navegador.
+
+Verificação após o ajuste: TypeScript/lint/build aprovados; **78/78 SP-API** e
+**142/142 testes relacionados** aprovados. A bateria completa teve **619 testes,
+615 aprovados e as mesmas quatro falhas preexistentes**. A regressão inclui HTML
+sem MIME aceito pelo transporte/Function e casos negativos de corpo vazio,
+JSON/texto, CAPTCHA e limite de 8 MiB, sempre com uma requisição.
+
+**Resultado real ainda não homologado após a correção:** as cinco imagens não
+foram comprovadamente recuperadas. Uma pesquisa única no Preview corrigido
+permitirá verificar os novos motivos/contagens pelos logs existentes, sem copiar
+credenciais, HTML ou URLs. Caso o corpo esteja vazio, não HTML ou bloqueado, a
+capa SP-API continua válida e não haverá contorno ou retry.
