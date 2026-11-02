@@ -205,14 +205,14 @@ preservados. Não foram criadas rotas, módulos de aplicação, credenciais ou t
   das fontes existentes conservam seu comportamento. Remover uma foto da ficha remove
   sua referência, sem apagar o arquivo privado que pode estar em snapshots anteriores.
 
-### Storage: alteração preparada, ainda não aplicada
+### Storage: alteração autorizada e aplicada
 
 A inspeção somente de leitura no projeto ISBN `jcxdkrpmrfbrhzwbzhph` retornou zero
 buckets e zero políticas em `storage.objects`. A RLS está habilitada. As estruturas
 existentes `profiles` e `store_users` fornecem usuário ativo, loja, vínculo ativo e perfil.
 
 O arquivo [supabase/setup/registration_images.sql](supabase/setup/registration_images.sql)
-prepara exclusivamente:
+contém exclusivamente:
 
 1. Bucket privado `isbn-registration-images`, limite de 5 MiB e MIME JPEG/PNG/WebP.
 2. SELECT autenticado para usuários ativos vinculados à loja do caminho, nos perfis
@@ -222,10 +222,17 @@ prepara exclusivamente:
 
 Não há alteração de tabelas de produtos, dados comerciais ou políticas preexistentes.
 O SQL é transacional e falha se já existir recurso homônimo, evitando alterar uma
-configuração desconhecida. Revalidar a estrutura antes de aplicar. Por ser uma mudança
-persistente no projeto compartilhado, sua execução depende da autorização explícita
-solicitada pelo responsável. Sem ela, prévias locais e gerenciamento das imagens
-automáticas funcionam; o envio persistente apresenta erro seguro e preserva a ficha.
+configuração desconhecida. Em 2026-11-02, após autorização explícita do responsável,
+a inspeção confirmou novamente zero buckets/políticas. O SQL foi aplicado com sucesso
+pela alteração `registration_images_private_storage`, exclusivamente no projeto ISBN.
+Não reaplicar esse arquivo: o bucket e as políticas já existem.
+
+A verificação posterior confirmou `public: false`, `file_size_limit: 5242880`, os três
+MIME previstos, RLS habilitada e exatamente duas políticas (`SELECT`/`INSERT`, ambas
+para `authenticated`), com os predicados de loja, usuário e vínculos ativos revisados.
+O bucket permaneceu com zero objetos; não foram enviados arquivos nem modificados dados
+comerciais, credenciais, configurações Vercel ou permissões preexistentes. O aplicativo
+no Preview já pode utilizar o Storage, sem novo build ou novas variáveis.
 
 O aplicativo usa o cliente já configurado e recusa upload/download privado fora do
 projeto ISBN. Não há novas variáveis nem leitura de credenciais protegidas. O upload
@@ -268,8 +275,16 @@ Referência oficial: [associação de mídia ao produto](https://docs-v2.api.mag
   dos novos cenários de imagens, mas a bateria geral ainda não está totalmente verde.
 - Os testes usam arquivos e respostas sintéticos em memória, sem uploads reais,
   consultas Amazon adicionais, publicação Magazord ou gravações no banco.
+- A criação autorizada do Storage foi validada separadamente por SELECT de configuração
+  e políticas. O verificador de segurança não apontou itens nos novos recursos; retornou
+  avisos sobre recursos anteriores, mantidos fora desta alteração: funções SECURITY
+  DEFINER executáveis por [anon](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable)
+  e [authenticated](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable),
+  [tabelas com RLS sem políticas](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)
+  e [proteção de senhas vazadas desativada](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+  Nenhuma dessas configurações foi alterada.
 
-Para concluir a homologação: autorizar/aplicar somente o Storage preparado e, no
-Preview autenticado, confirmar uma foto local, escolher como capa, voltar/reabrir a
-ficha e conferir a referência no resultado simulado. O envio persistente real e sua
-RLS não foram apresentados como validados antes dessa aprovação e desse ensaio.
+Para concluir a homologação no Preview autenticado: confirmar uma foto local, escolher
+como capa, voltar/reabrir a ficha e conferir a referência no resultado simulado. O
+Storage já foi aplicado e conferido; o envio de um arquivo real pelo navegador e a
+aplicação da RLS durante esse envio ainda dependem desse ensaio autenticado.
