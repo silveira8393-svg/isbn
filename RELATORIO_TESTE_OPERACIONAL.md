@@ -189,7 +189,10 @@ preservados. Não foram criadas rotas, módulos de aplicação, credenciais ou t
   manual de capa prevalece sobre carregamentos posteriores. Redimensionamentos Amazon
   continuam deduplicados pelo identificador do arquivo, preservando imagens distintas.
 - As escolhas e a ordem sobrevivem ao retorno à pesquisa e à reabertura do cadastro do
-  mesmo livro, inclusive troca NOVO/USADO. Uma nova pesquisa inicia outra ficha. A
+  mesmo livro e condição. Na Etapa 2, abrir outro cadastro após concluir o anterior ou
+  mudar a condição pela consulta reinicia a seleção a partir das fontes, evitando
+  reaproveitar fotos de outro exemplar. O seletor de condição dentro da mesma ficha
+  mantém as escolhas dessa edição em andamento. Uma nova pesquisa inicia outra ficha. A
   recuperação geral do rascunho após recarregar a página pertence à etapa seguinte.
 - Fotografias locais são selecionadas em lote, verificadas e pré-visualizadas antes da
   confirmação. JPEG/PNG/WebP até 5 MiB; MIME, assinatura e decodificação precisam ser
@@ -288,3 +291,113 @@ Para concluir a homologação no Preview autenticado: confirmar uma foto local, 
 como capa, voltar/reabrir a ficha e conferir a referência no resultado simulado. O
 Storage já foi aplicado e conferido; o envio de um arquivo real pelo navegador e a
 aplicação da RLS durante esse envio ainda dependem desse ensaio autenticado.
+
+## Etapa 2 — validação automática e revisão obrigatória (2026-11-02)
+
+Implementada na mesma branch/PR, sobre `4734ebf`. Não há nova página, rota, módulo,
+biblioteca, tabela, bucket, migration ou conector. Não foram alterados autenticação,
+Storage, políticas, fontes operacionais, preços/estoque existentes ou produção.
+
+### Comportamento entregue
+
+1. A ficha valida automaticamente os dados carregados e as alterações. Campos com
+   observações ou erros ficam vermelhos, com texto que distingue `Observação` de
+   `Erro obrigatório`. A borda verde discreta indica consistência do campo, não
+   comprovação da informação pela fonte. Durante a digitação, o aviso daquele campo
+   fica suspenso até sair dele; não há confirmação individual ou pop-ups sucessivos.
+2. Erros bloqueantes: condição inválida, códigos obrigatórios vazios, título ausente
+   ou composto por mensagem de ausência, categoria vazia, preço inválido/não positivo,
+   quantidade não inteira/menor que um, identificadores fornecidos inválidos ou
+   divergentes e referências de imagens inseguras/inválidas. Ao revisar, o primeiro
+   campo com erro recebe foco e rolagem. Campos opcionais ausentes não bloqueiam.
+3. ISBN-10/13 reutilizam o verificador já existente, extraído sem mudança de algoritmo
+   para `utils/isbn.ts`, mantendo sua exportação anterior. ISBN-10 é comparado ao ISBN-13
+   equivalente apenas para conferir correspondência; não é inventado um identificador
+   para preencher a ficha. ISBN/EAN ausentes continuam ausentes. Código Filho manual de
+   USADO e as regras de condição/modo permanecem; coincidência com ISBN gera observação.
+4. Preços `50`, `50,00` e `1.234,56` são aceitos sem parse parcial. Revisão e conclusão
+   apresentam `R$ 50,00` / `R$ 1.234,56`. O envio ao simulador usa decimal com duas casas
+   (`1234,56`); o rascunho digitado não é modificado ao revisar ou retornar.
+5. Autor, editora, ano, edição, idioma, formato, páginas e medidas suspeitos geram
+   observações informativas. Idioma/formato ausentes não recebem mais os padrões
+   presumidos Português/Brochura. Português sugerido pelo importador BrasilAPI, sem
+   proveniência explícita, é sinalizado para conferência sem modificar a pesquisa.
+6. Peso de 10 g (caso `9781419762109`) permanece visível, com a observação vermelha
+   `ATENÇÃO — PESO POSSIVELMENTE INCORRETO`, sem bloquear ou inventar outro peso. A
+   conversão declarada kg → g é sempre multiplicação por mil, sem reinterpretar kg
+   como gramas pela magnitude. Dimensões permanecem em cm; unidade não confirmada pela
+   fonte é sinalizada. Limiares de suspeita: peso <30 g/>30 kg e dimensões <=0/>100 cm,
+   além de valores não finitos; são alertas de conferência, nunca estimativas.
+7. `Revisar cadastro` abre a etapa integrada de leitura: identificação, bibliografia,
+   condição/conservação, códigos, preço, quantidade, localização, categoria/marca,
+   medidas, dados fiscais, sinopse/descrição final e imagens selecionadas. Observações
+   continuam vermelhas. `Retornar ao cadastro` preserva integralmente os campos,
+   seleção/remoções de imagens e estado dos controles, sem gravar a operação.
+8. `Confirmar cadastro` revalida os dados atuais e executa somente o simulador existente
+   e o fluxo de registro já implementado. Cliques repetidos são protegidos por refs
+   antes da chamada assíncrona; erros essenciais surgidos após abrir a revisão retornam
+   ao campo, sem gravação. A conclusão mostra os dados efetivamente enviados.
+9. Prévias locais não enviadas impedem o avanço silencioso: há aviso vermelho e acesso
+   ao botão existente de confirmação do upload. É possível enviar as fotos ou remover
+   as prévias antes de revisar. Falhas parciais continuam preservando a ficha. A revisão
+   reaproveita `RegistrationImage` para imagens públicas e privadas; não faz sondagens de
+   disponibilidade nem novas consultas bibliográficas. A ausência temporária de imagem
+   externa não bloqueia. Cadastrar sem imagens continua permitido.
+10. Dados personalizados ficam no rascunho de cada cadastro. A pesquisa mantém apenas
+    os dados/imagens das fontes. Novo cadastro após conclusão, outra condição aberta
+    pela consulta e nova pesquisa não herdam fotografias do exemplar anterior. Não foi
+    introduzida recuperação de rascunho entre consultas ou após reload.
+
+### Arquivos principais
+
+- `ProductRegistrationForm.tsx`: validação, foco, revisão, retorno, confirmação única,
+  apresentação monetária e dados efetivamente submetidos.
+- `utils/draft.ts`, `utils/isbn.ts`, `utils/bibliographicEvaluation.ts`: validação pura,
+  valores monetários, conversão confiável de peso e reutilização do checksum ISBN.
+- Seções existentes `ProductIdentitySection`, `CategoryAndBrandSection`,
+  `CommercialSection`, `BibliographicSection`, `PhysicalAttributesSection` e
+  `ImagesSection`: mensagens e identificação dos campos; comunicação das fotos pendentes.
+- `App.tsx`: separação entre edição em andamento e próximo cadastro de exemplar.
+- Testes existentes `postHomologation`, `operations`, `history` e `spapiIntegrated`:
+  novos cenários e adaptação dos testes de envio à confirmação obrigatória.
+
+### Testes e limites da evidência
+
+- TypeScript e lint (`tsc --noEmit`): aprovados.
+- Build: aprovado; permanecem os avisos conhecidos de chunk >500 kB e importações
+  estáticas/dinâmicas do mesmo cliente Supabase.
+- `npm.cmd run test:spapi`: 76/76 aprovados.
+- `node --test tests/postHomologation.test.mjs tests/operations.test.mjs tests/history.test.mjs tests/spapiIntegrated.test.mjs tests/bibliographicContract.test.mjs tests/registrationLookup.test.mjs`:
+  175/175 aprovados. Cobrem checksum/correspondência, preços, 10 g não bloqueante,
+  foco, digitação sem avisos prematuros, ida/volta sem gravação/perda, imagens,
+  upload pendente, revalidação final, cliques repetidos, NOVO/USADO, simulador,
+  snapshot e isolamento das fotos em novas consultas/exemplares.
+- Bateria completa: 611 testes, 607 aprovados, mesmas quatro falhas anteriores:
+  três em `infrastructureUi.test.mjs` (mock React sem `lazy`) e a inicialização de
+  `magazordMode.test.mjs` (marcador textual sensível a CRLF). Fora desta etapa;
+  não foram corrigidas nem ocultadas.
+- Testes isolados, arquivos e respostas sintéticos. Não foram usadas credenciais
+  reais, executadas consultas Amazon reais nem gravados produtos/estoque/auditoria no
+  servidor. O controle de abas do navegador informou `browser access host is unavailable`;
+  a conferência visual autenticada fica para a homologação do proprietário no Preview.
+
+### Roteiro mínimo de homologação no Preview / Desenvolvimento
+
+1. **NOVO:** pesquisar um ISBN, abrir a ficha, deixar Código Pai vazio e clicar em
+   `Revisar cadastro`: conferir mensagem vermelha e foco no campo, sem operação criada.
+   Preencher código e preço `50,00`; escolher a capa/remover uma foto. Revisar, conferir
+   dados/imagens e `R$ 50,00`; retornar, verificar a preservação e revisar novamente.
+   Somente então confirmar uma vez e conferir conclusão/registro no simulador.
+2. **USADO:** abrir outra ficha, informar os códigos manuais e conservação; usar preço
+   `1.234,56` e peso `10 g`. Selecionar uma foto local e solicitar revisão antes de
+   enviá-la: conferir o aviso e confirmar o upload na galeria (ou remover a prévia).
+   Escolher a capa, revisar e verificar o aviso de peso sem bloqueio, conservação e
+   `R$ 1.234,56`. Retornar e confirmar que todos os campos/imagens foram mantidos.
+   Após a conferência, revisar e confirmar; a operação deve aparecer uma única vez.
+3. Iniciar outro exemplar USADO ou nova pesquisa do mesmo ISBN: conferir que fotografias
+   personalizadas anteriores não aparecem como dados bibliográficos nem como seleção
+   automática do novo exemplar. O primeiro upload real do Storage deve ser validado
+   nessa rodada autenticada; sua estrutura/permissões já foram aplicadas na Etapa 1.
+
+Não houve merge nem deploy de produção. O Preview é destinado à homologação; a
+integração comercial permanece simulada e a liberação em produção depende de autorização.

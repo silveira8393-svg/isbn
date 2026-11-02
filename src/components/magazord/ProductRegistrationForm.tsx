@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   RegistrationDraft,
   MagazordRegistrationResult,
@@ -11,8 +11,10 @@ import {
   User,
 } from '../../types';
 import { magazordMockService, type MagazordSimulationMode } from '../../services/magazordMockService';
-import { buildFinalDescription, registrationModeForCondition } from '../../utils/draft';
-import { magazordPresentation } from '../../utils/magazordPresentation';
+import { buildFinalDescription, formatRegistrationPrice, parseRegistrationPrice, registrationModeForCondition, validateRegistrationDraft } from '../../utils/draft';
+import { cleanIsbn } from '../../utils/isbn';
+import { normalizeLanguage } from '../../utils/bibliographicNormalization';
+import RegistrationImage from '../dashboard/RegistrationImage';
 import { imageReferences } from '../../utils/imageUrls';
 import ProductIdentitySection from './ProductIdentitySection';
 import CategoryAndBrandSection from './CategoryAndBrandSection';
@@ -58,73 +60,62 @@ export default function ProductRegistrationForm({
   imageUser,
   onImageUploadBusyChange,
 }: ProductRegistrationFormProps) {
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewRequested, setReviewRequested] = useState(false);
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [focusField, setFocusField] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successResult, setSuccessResult] = useState<MagazordRegistrationResult | null>(null);
   const submissionInFlight = useRef(false);
   const submissionCompleted = useRef(false);
+  const reviewOpen = useRef(false);
+  const currentDraft = useRef(draft);
+  currentDraft.current = draft;
+  const submittedDraft = useRef<RegistrationDraft | null>(null);
   const imageUploadInFlight = useRef(false);
   const [imageUploadBusy, setImageUploadBusy] = useState(false);
+  const pendingPhotos = useRef(0);
+  const [pendingPhotoCount, setPendingPhotoCount] = useState(0);
+  const [pendingAttention, setPendingAttention] = useState(false);
   const handleImageBusy = (busy: boolean) => {
     imageUploadInFlight.current = busy; setImageUploadBusy(busy); onImageUploadBusyChange?.(busy);
   };
 
-  // Validações antes do envio
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {};
+  const handlePendingPhotos = (count: number) => {
+    pendingPhotos.current = count; setPendingPhotoCount(count);
+    if (!count) setPendingAttention(false);
+  };
+  const validation = validateRegistrationDraft(draft, originalBook);
+  const visibleRequired = Object.entries(validation.errors).filter(([field]) => field !== editingField);
+  const errors = Object.fromEntries(Object.entries({ ...validation.warnings, ...validation.errors }).filter(([field]) => field !== editingField));
+  const validFields = ['parentCode', 'childCode', 'title', 'category', 'price', 'quantity', 'isbn13', 'isbn10', 'ean', 'publisher', 'year', 'edition', 'language', 'format', 'pageCount', 'weight', 'width', 'height', 'depth']
+    .filter(field => !validation.errors[field] && !validation.warnings[field] && field !== editingField && draft[field as keyof RegistrationDraft] != null && String(draft[field as keyof RegistrationDraft]).trim() !== '');
+  useEffect(() => {
+    if (!focusField || typeof document === 'undefined') return;
+    const element = document.querySelector<HTMLElement>(`[data-registration-form] [data-registration-field="${focusField}"]`);
+    element?.scrollIntoView?.({ behavior: 'smooth', block: 'center' }); element?.focus?.({ preventScroll: true });
+    setFocusField(null);
+  }, [focusField]);
 
-    if (!draft.condition) {
-      newErrors.condition = 'Selecione a condição (Novo ou Usado).';
-    }
-
-    if (!draft.parentCode || !draft.parentCode.trim()) {
-      newErrors.parentCode = 'Código Pai é obrigatório (etiqueta física da loja).';
-    }
-
-    if (!draft.childCode || !draft.childCode.trim()) {
-      newErrors.childCode =
-        draft.condition === 'novo'
-          ? 'Código Filho é obrigatório (ISBN-13).'
-          : 'Código Filho é obrigatório para livros usados.';
-    }
-
-    if (!draft.title || !draft.title.trim()) {
-      newErrors.title = 'Título da obra é obrigatório.';
-    }
-
-    if (!draft.category || !draft.category.trim()) {
-      newErrors.category = 'Selecione uma categoria Magazord.';
-    }
-
-    if (!draft.price || !draft.price.trim()) {
-      newErrors.price = 'Informe o preço de venda da loja (R$).';
-    } else {
-      const num = Number(draft.price.replace(',', '.'));
-      if (Number.isNaN(num) || num <= 0) {
-        newErrors.price = 'Informe um preço de venda válido maior que zero.';
-      }
-    }
-
-    if (!draft.quantity || draft.quantity < 1) {
-      newErrors.quantity = 'A quantidade em estoque deve ser de pelo menos 1 exemplar.';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+  const requestReview = () => {
+    if (reviewOpen.current || submissionInFlight.current || submissionCompleted.current || imageUploadInFlight.current) return;
+    setEditingField(null); setReviewRequested(true); setSubmitError(null);
+    const result = validateRegistrationDraft(currentDraft.current, originalBook);
+    const firstError = Object.keys(result.errors)[0];
+    if (firstError) { setFocusField(firstError); return; }
+    if (pendingPhotos.current) { setPendingAttention(true); setFocusField('pendingPhotos'); return; }
+    reviewOpen.current = true; setReviewing(true); setFocusField('review');
   };
 
   const handleSubmit = async () => {
-    if (submissionInFlight.current || submissionCompleted.current || successResult || imageUploadInFlight.current) return;
+    if (!reviewOpen.current || submissionInFlight.current || submissionCompleted.current || successResult || imageUploadInFlight.current) return;
     setSubmitError(null);
-
-    if (!validateForm()) {
-      // Rola suavemente até o primeiro erro se houver
-      const firstErrorEl = document.querySelector('.border-red-300');
-      if (firstErrorEl) {
-        firstErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-      return;
+    const draft = currentDraft.current;
+    const firstError = Object.keys(validateRegistrationDraft(draft, originalBook).errors)[0];
+    if (firstError || pendingPhotos.current) {
+      reviewOpen.current = false; setReviewing(false); setEditingField(null); setReviewRequested(true);
+      setPendingAttention(Boolean(pendingPhotos.current)); setFocusField(firstError || 'pendingPhotos'); return;
     }
 
     submissionInFlight.current = true;
@@ -141,10 +132,15 @@ export default function ProductRegistrationForm({
         mainImageUrl: images[0],
         additionalImageUrls: images.slice(1),
         description: finalDescription,
+        price: parseRegistrationPrice(draft.price)!.toFixed(2).replace('.', ','),
+        ean: cleanIsbn(draft.ean), isbn13: cleanIsbn(draft.isbn13), isbn10: cleanIsbn(draft.isbn10),
+        language: normalizeLanguage(draft.language),
+        weight: draft.weight == null ? undefined : draft.weight * (draft.weightUnit === 'kg' ? 1000 : 1), weightUnit: 'g',
       };
       const result = await magazordMockService.createProduct(draftToSubmit, actionMode);
       if (!result.success) throw new Error('Cadastro simulado não concluído.');
       submissionCompleted.current = true;
+      submittedDraft.current = draftToSubmit;
       setSuccessResult(result);
       onSuccessRegistration(result, draftToSubmit, actionMode);
     } catch (err: any) {
@@ -161,6 +157,7 @@ export default function ProductRegistrationForm({
 
   // Se o cadastro foi concluído com sucesso, exibir a tela de confirmação
   if (successResult) {
+    const draft = submittedDraft.current || currentDraft.current;
     const sentDescription = draft.description || buildFinalDescription(draft);
 
     return (
@@ -207,7 +204,7 @@ export default function ProductRegistrationForm({
           </div>
           <div>
             <span className="text-slate-500 block">Preço de Venda</span>
-            <span className="font-bold text-emerald-700 text-sm">R$ {draft.price}</span>
+            <span className="font-bold text-emerald-700 text-sm">{formatRegistrationPrice(draft.price)}</span>
           </div>
           <div>
             <span className="text-slate-500 block">Estoque Inicial</span>
@@ -243,10 +240,49 @@ export default function ProductRegistrationForm({
     );
   }
 
-  const hasErrors = Object.keys(errors).length > 0;
+  const hasErrors = Object.keys(validation.errors).length > 0;
+  const reviewedImages = imageReferences([draft.mainImageUrl, ...(draft.additionalImageUrls || [])]);
+  const reviewRows: [string, unknown][] = [
+    ['Título', draft.title], ['Subtítulo', draft.subtitle], ['EAN', draft.ean], ['ISBN-13', draft.isbn13], ['ISBN-10', draft.isbn10],
+    ['Autores', draft.authors?.join('; ')], ['Editora', draft.publisher], ['Ano', draft.year], ['Edição', draft.edition],
+    ['Idioma', normalizeLanguage(draft.language)], ['Páginas', draft.pageCount], ['Formato', draft.format],
+    ['Condição', draft.condition === 'usado' ? 'USADO' : 'NOVO'], ['Modo', draft.condition === 'usado' ? 'Novo exemplar usado' : draft.registrationMode === 'reuse_existing_new' ? 'Reaproveitamento de produto novo' : 'Novo produto'],
+    ...(draft.condition === 'usado' ? [['Conservação', draft.usedBookConditionNotes] as [string, unknown]] : []),
+    ['Código Pai', draft.parentCode], ['Código Filho', draft.childCode], ['Preço', formatRegistrationPrice(draft.price)],
+    ['Quantidade', draft.quantity], ['Localização', draft.location], ['Categoria', draft.category], ['Marca', draft.brand],
+    ['Peso', draft.weight == null ? undefined : `${draft.weight * (draft.weightUnit === 'kg' ? 1000 : 1)} g`],
+    ['Largura', draft.width == null ? undefined : `${draft.width} cm`], ['Altura', draft.height == null ? undefined : `${draft.height} cm`], ['Espessura', draft.depth == null ? undefined : `${draft.depth} cm`],
+    ['NCM', draft.ncm], ['Origem fiscal', draft.fiscalOrigin], ['Unidade', draft.unit],
+  ];
 
   return (
-    <div className="space-y-6 animate-fade-in w-full pb-16">
+    <div data-registration-form className="space-y-6 animate-fade-in w-full pb-16">
+      <style>{[
+        ...validFields.map(field => `[data-registration-form] [data-registration-field="${field}"] { border-color: #6ee7b7; }`),
+        ...Object.keys(errors).map(field => `[data-registration-form] [data-registration-field="${field}"] { border-color: #f87171; background-color: #fef2f2; }`),
+      ].join('\n')}</style>
+      {reviewing && <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-5 sm:p-7" aria-label="Revisão do cadastro">
+        <h2 data-registration-field="review" tabIndex={-1} className="text-xl font-bold text-slate-900">Revisão do cadastro</h2>
+        <p className="text-sm text-slate-600">Confira os dados e as imagens selecionadas. A operação será executada somente ao confirmar, no simulador existente.</p>
+        <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{reviewRows.map(([label, value]) => <div key={label} className="min-w-0">
+          <dt className="text-xs text-slate-500">{label}</dt><dd className="break-words text-sm font-medium text-slate-900">{value == null || value === '' ? 'Não informado' : String(value)}</dd>
+        </div>)}</dl>
+        {Object.keys(validation.warnings).length > 0 && <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800" role="status">
+          <p className="font-bold">Observações informativas — não impedem a confirmação</p>
+          <ul className="mt-2 list-inside list-disc space-y-1">{Object.entries(validation.warnings).map(([field, message]) => <li key={field}>{message}</li>)}</ul>
+        </div>}
+        {draft.synopsis && <div><h3 className="text-sm font-bold">Sinopse</h3><p className="whitespace-pre-wrap text-sm text-slate-700">{draft.synopsis}</p></div>}
+        {buildFinalDescription(draft) && <div><h3 className="text-sm font-bold">Descrição final</h3><p className="whitespace-pre-wrap text-sm text-slate-700">{buildFinalDescription(draft)}</p></div>}
+        <div><h3 className="mb-3 text-sm font-bold">Imagens selecionadas</h3>{reviewedImages.length ? <div className="grid gap-4 sm:grid-cols-3">{reviewedImages.map((url, index) => <div key={url}><RegistrationImage url={url} label={index ? `Imagem adicional ${index}` : 'Capa principal'} /></div>)}</div> : <p className="text-sm text-slate-500">Sem imagens. O cadastro pode continuar.</p>}</div>
+        {submitError && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">{submitError}</p>}
+        <div className="flex flex-wrap justify-end gap-3">
+          <button type="button" id="btn-return-to-registration" disabled={isSubmitting} onClick={() => { if (submissionInFlight.current) return; reviewOpen.current = false; setReviewing(false); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold disabled:opacity-60">Retornar ao cadastro</button>
+          <button type="button" id="btn-confirm-magazord-registration" disabled={isSubmitting || imageUploadBusy} onClick={handleSubmit} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-bold text-white disabled:opacity-60">{isSubmitting ? 'Confirmando cadastro...' : 'Confirmar cadastro'}</button>
+        </div>
+      </section>}
+      <div hidden={reviewing} className="space-y-6" onChangeCapture={event => {
+        const field = (event.target as HTMLElement).getAttribute?.('data-registration-field'); if (field) setEditingField(field);
+      }} onBlurCapture={() => setEditingField(null)}>
       {/* Barra de Navegação e Título da Tela */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -284,7 +320,7 @@ export default function ProductRegistrationForm({
 
           <button
             type="button"
-            onClick={handleSubmit}
+            onClick={requestReview}
             disabled={isSubmitting || imageUploadBusy}
             className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-60"
           >
@@ -296,7 +332,7 @@ export default function ProductRegistrationForm({
             ) : (
               <>
                 <Send className="w-3.5 h-3.5" />
-                <span>{magazordPresentation.submit}</span>
+                <span>Revisar cadastro</span>
               </>
             )}
           </button>
@@ -304,19 +340,24 @@ export default function ProductRegistrationForm({
       </div>
 
       {/* Banner de Erros no Envio se houver */}
-      {hasErrors && (
+      {visibleRequired.length > 0 && reviewRequested && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-800 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
           <div>
             <p className="font-bold">Por favor, revise os seguintes campos obrigatórios:</p>
             <ul className="list-disc list-inside mt-1 space-y-0.5 font-medium">
-              {Object.values(errors).map((err, i) => (
-                <li key={i}>{err}</li>
+              {visibleRequired.map(([field, err]) => (
+                <li key={field}>{err}</li>
               ))}
             </ul>
           </div>
         </div>
       )}
+      {!hasErrors && <p className="flex items-center gap-2 text-xs text-emerald-700"><CheckCircle2 className="h-4 w-4" />Dados essenciais válidos para revisão. As observações continuam disponíveis nos campos.</p>}
+      {pendingAttention && pendingPhotoCount > 0 && <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800">
+        Há {pendingPhotoCount} foto(s) local(is) ainda não enviada(s). Confirme o upload na galeria ou remova as prévias antes de revisar.
+        <button type="button" onClick={() => setFocusField('pendingPhotos')} className="ml-2 font-semibold underline">Ver fotos e confirmar envio</button>
+      </div>}
 
       {/* Erro de API Simulado */}
       {submitError && (
@@ -374,6 +415,7 @@ export default function ProductRegistrationForm({
       <PhysicalAttributesSection
         draft={draft}
         onChange={onUpdateDraft}
+        errors={errors}
       />
 
       {/* Seção 6: Galeria de Imagens */}
@@ -382,6 +424,8 @@ export default function ProductRegistrationForm({
         onChange={onUpdateDraft}
         user={imageUser}
         onUploadBusyChange={handleImageBusy}
+        onPendingPhotosChange={handlePendingPhotos}
+        errors={errors}
       />
 
       {/* Seção 7: Descrição Única (Sinopse e, se Usado, Estado do Exemplar) */}
@@ -430,7 +474,7 @@ export default function ProductRegistrationForm({
 
           <button
             type="button"
-            onClick={handleSubmit}
+            onClick={requestReview}
             disabled={isSubmitting || imageUploadBusy}
             id="btn-submit-magazord-registration"
             className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-7 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-bold shadow-lg transition-all cursor-pointer disabled:opacity-60"
@@ -443,11 +487,12 @@ export default function ProductRegistrationForm({
             ) : (
               <>
                 <Send className="w-4 h-4" />
-                <span>{magazordPresentation.submit}</span>
+                <span>Revisar cadastro</span>
               </>
             )}
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

@@ -96,6 +96,7 @@ export default function ProductIdentitySection({
           <button
             type="button"
             onClick={() => handleConditionChange('novo')}
+            data-registration-field="condition"
             className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm transition-all border cursor-pointer ${
               draft.condition === 'novo'
                 ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
@@ -141,6 +142,7 @@ export default function ProductIdentitySection({
             <input
               type="text"
               value={draft.parentCode}
+              data-registration-field="parentCode"
               onChange={(e) => {
                 markSensitiveField('parentCode');
                 onChange({ parentCode: e.target.value.toUpperCase() });
@@ -180,6 +182,7 @@ export default function ProductIdentitySection({
             <input
               type="text"
               value={draft.childCode}
+              data-registration-field="childCode"
               onChange={(e) => {
                 markSensitiveField('childCode');
                 onChange({ childCode: e.target.value });
@@ -216,6 +219,7 @@ export default function ProductIdentitySection({
           <input
             type="text"
             value={draft.ean}
+            data-registration-field="ean"
             onChange={(e) => {
               markSensitiveField('ean');
               onChange({ ean: e.target.value });
@@ -224,6 +228,7 @@ export default function ProductIdentitySection({
             className="w-full px-3.5 py-2 rounded-lg border border-slate-300 bg-white text-sm font-mono text-slate-900 focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
           />
           <span className="text-[10px] text-slate-400 block mt-0.5">Identificador comercial do produto</span>
+          {errors.ean && <p className="mt-1 text-xs font-medium text-red-600">{errors.ean}</p>}
         </div>
 
         <div>
@@ -233,6 +238,7 @@ export default function ProductIdentitySection({
           <input
             type="text"
             value={draft.isbn13}
+            data-registration-field="isbn13"
             onChange={(e) => {
               markSensitiveField('isbn13');
               onChange({ isbn13: e.target.value });
@@ -241,6 +247,7 @@ export default function ProductIdentitySection({
             className="w-full px-3.5 py-2 rounded-lg border border-slate-300 bg-white text-sm font-mono text-slate-900 focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
           />
           <span className="text-[10px] text-slate-400 block mt-0.5">Registro padrão internacional</span>
+          {errors.isbn13 && <p className="mt-1 text-xs font-medium text-red-600">{errors.isbn13}</p>}
         </div>
 
         <div>
@@ -250,6 +257,7 @@ export default function ProductIdentitySection({
           <input
             type="text"
             value={draft.isbn10}
+            data-registration-field="isbn10"
             onChange={(e) => {
               markSensitiveField('isbn10');
               onChange({ isbn10: e.target.value });
@@ -258,6 +266,7 @@ export default function ProductIdentitySection({
             className="w-full px-3.5 py-2 rounded-lg border border-slate-300 bg-white text-sm font-mono text-slate-900 focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
           />
           <span className="text-[10px] text-slate-400 block mt-0.5">Formato legado (se houver)</span>
+          {errors.isbn10 && <p className="mt-1 text-xs font-medium text-red-600">{errors.isbn10}</p>}
         </div>
       </div>
     </div>

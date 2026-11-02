@@ -77,9 +77,9 @@ const componentMocks = [
 ];
 async function component(entry) {
   // Preserve each component name so assertions can find the public event props.
-  const mocks = [...componentMocks];
+  const mocks = componentMocks.filter(([pattern]) => !entry.includes('ProductRegistrationForm') || !pattern.test('/utils/draft'));
   const paths = ['Header', 'SearchForm', 'BookDetailsCard', 'SearchHistoryGroup', 'CameraScannerModal', 'MagazordStatusCard', 'ProductRegistrationForm', 'OwnerDashboard', 'SettingsView',
-    'ProductIdentitySection', 'CategoryAndBrandSection', 'CommercialSection', 'BibliographicSection', 'PhysicalAttributesSection', 'ImagesSection', 'SynopsisSection', 'AdvancedFiscalSection'];
+    'ProductIdentitySection', 'CategoryAndBrandSection', 'CommercialSection', 'BibliographicSection', 'PhysicalAttributesSection', 'ImagesSection', 'SynopsisSection', 'AdvancedFiscalSection', 'RegistrationImage'];
   for (const name of paths) mocks.push([new RegExp(`(?:^|/)${name}$`), `module.exports=${JSON.stringify(name)}`]);
   return compile(entry, mocks);
 }
@@ -216,10 +216,80 @@ test('Registration submission guard prevents duplicate service calls and complet
   const deps = dependencies(); deps.magazord.createProduct = () => { calls++; return new Promise(r => { resolve = r; }); };
   const view = mount(form, deps, { draft: { condition: 'novo', parentCode: 'P', childCode: 'C', title: 'Livro', category: 'Livro', price: '10', quantity: 1 },
     originalBook: { title: 'Livro' }, onSuccessRegistration: () => { completions++; }, onUpdateDraft() {}, onBackToSearch() {}, onProcessNextBook() {} });
-  const handler = view.find(n => n.props?.id === 'btn-submit-magazord-registration').props.onClick;
+  view.find(n => n.props?.id === 'btn-submit-magazord-registration').props.onClick(); await flush();
+  assert.equal(calls, 0, 'opening the mandatory review cannot write');
+  const handler = view.find(n => n.props?.id === 'btn-confirm-magazord-registration').props.onClick;
   const first = handler(); await handler(); assert.equal(calls, 1);
   resolve({ success: true, parentCode: 'P', childCode: 'C', registeredAt: Date.now() }); await first; await handler();
   assert.equal(completions, 1); assert.equal(calls, 1);
+});
+
+test('mandatory review and return preserve all new/used fields and chosen images without writing; warnings remain red and confirmation formats reais', async () => {
+  for (const condition of ['novo', 'usado']) {
+    const calls = [], completions = [], deps = dependencies();
+    deps.magazord.createProduct = async payload => { calls.push(payload); return { success: true, parentCode: 'P', childCode: payload.childCode, registeredAt: 1 }; };
+    const draft = { condition, parentCode: 'P', childCode: condition === 'novo' ? input.isbn : 'USED-1', title: 'The Art of the Batman',
+      ean: input.isbn, isbn13: input.isbn, isbn10: '8535914846', category: 'Livros', authors: ['Autor'], publisher: 'Editora',
+      language: 'Inglês', format: 'Capa dura', year: '2022', edition: '1ª', pageCount: 224, weight: 10, weightUnit: 'g', width: 20, height: 30, depth: 2,
+      price: '1.234,56', quantity: 1, location: 'Sebo Livraria Sul', usedBookConditionNotes: 'Assinatura na primeira página', synopsis: 'Sinopse do livro',
+      mainImageUrl: 'https://example.invalid/manual.jpg', additionalImageUrls: ['https://example.invalid/inside.jpg'], imageSelectionManual: true };
+    const before = structuredClone(draft), props = { draft, originalBook: {}, onUpdateDraft() {}, onSuccessRegistration: (_, sent) => completions.push(sent) };
+    const view = mount(form, deps, props);
+    assert.match(view.find(n => n.type === 'PhysicalAttributesSection').props.errors.weight, /PESO POSSIVELMENTE INCORRETO/);
+    view.find(n => n.props?.id === 'btn-submit-magazord-registration').props.onClick(); await flush();
+    const review = view.find(n => n.props?.['aria-label'] === 'Revisão do cadastro');
+    assert.ok(review); assert.equal(calls.length, 0); assert.equal(deps.records.length, 0);
+    assert.match(JSON.stringify(review), /text-red-800/); assert.match(JSON.stringify(review), /10 g/);
+    assert.match(JSON.stringify(review).replace(/\s/g, ' '), /R\$ 1\.234,56/);
+    assert.equal(view.find(n => n.type === 'RegistrationImage' && n.props.label === 'Capa principal').props.url, draft.mainImageUrl);
+    view.find(n => n.props?.id === 'btn-return-to-registration').props.onClick(); await flush();
+    assert.equal(view.find(n => n.props?.['aria-label'] === 'Revisão do cadastro'), null);
+    assert.deepEqual(draft, before); assert.equal(calls.length, 0);
+    view.find(n => n.props?.id === 'btn-submit-magazord-registration').props.onClick(); await flush();
+    await view.find(n => n.props?.id === 'btn-confirm-magazord-registration').props.onClick(); await flush();
+    assert.equal(calls.length, 1); assert.equal(completions.length, 1); assert.equal(calls[0].price, '1234,56'); assert.equal(calls[0].weight, 10);
+    assert.equal(calls[0].mainImageUrl, before.mainImageUrl); assert.deepEqual(calls[0].additionalImageUrls, before.additionalImageUrls);
+    assert.equal(calls[0].registrationMode, condition === 'usado' ? 'new_used_from_known_edition' : 'new_product');
+    assert.match(JSON.stringify(view.tree()).replace(/\s/g, ' '), /R\$ 1\.234,56/); assert.deepEqual(draft, before);
+  }
+});
+
+test('essential errors focus the first field, remain correctable, and are checked again at final confirmation', async () => {
+  let calls = 0; const focus = [], deps = dependencies();
+  deps.magazord.createProduct = async () => { calls++; return { success: true }; };
+  const props = { draft: { condition: 'novo', title: 'Livro', category: 'Livro', parentCode: '', childCode: 'C', price: '50', quantity: 1 }, originalBook: {}, onUpdateDraft() {} };
+  const view = mount(form, deps, props);
+  globalThis.document.querySelector = selector => ({ scrollIntoView(options) { focus.push(['scroll', selector, options]); }, focus() { focus.push(['focus', selector]); } });
+  view.find(n => n.props?.id === 'btn-submit-magazord-registration').props.onClick(); await flush();
+  assert.ok(focus.some(call => call[0] === 'focus' && /parentCode/.test(call[1])));
+  assert.equal(view.find(n => n.props?.id === 'btn-confirm-magazord-registration'), null); assert.equal(calls, 0);
+  props.draft = { ...props.draft, parentCode: 'P' }; view.render();
+  view.find(n => n.props?.id === 'btn-submit-magazord-registration').props.onClick(); await flush();
+  const confirm = view.find(n => n.props?.id === 'btn-confirm-magazord-registration').props.onClick;
+  props.draft = { ...props.draft, title: 'Título não cadastrado' }; view.render();
+  await confirm(); await flush(); assert.equal(calls, 0);
+  assert.equal(view.find(n => n.props?.id === 'btn-confirm-magazord-registration'), null);
+  assert.ok(focus.some(call => call[0] === 'focus' && /title/.test(call[1])));
+  const capture = view.find(n => typeof n.props?.onChangeCapture === 'function');
+  capture.props.onChangeCapture({ target: { getAttribute: () => 'title' } }); await flush();
+  assert.equal(view.find(n => n.type === 'BibliographicSection').props.errors.title, undefined, 'no incomplete-field messages during typing');
+  view.find(n => typeof n.props?.onBlurCapture === 'function').props.onBlurCapture(); await flush();
+  assert.match(view.find(n => n.type === 'BibliographicSection').props.errors.title, /^Erro obrigatório/);
+});
+
+test('selected local photos cannot be silently omitted: review offers their existing upload confirmation and opens only after completion/removal', async () => {
+  let calls = 0; const deps = dependencies(); deps.magazord.createProduct = async () => { calls++; return { success: true }; };
+  const props = { draft: { condition: 'usado', parentCode: 'P', childCode: 'USED-1', title: 'Livro', category: 'Livro', price: '50,00', quantity: 1 }, originalBook: {} };
+  const view = mount(form, deps, props);
+  view.find(n => n.type === 'ImagesSection').props.onPendingPhotosChange(2); await flush();
+  view.find(n => n.props?.id === 'btn-submit-magazord-registration').props.onClick(); await flush();
+  assert.equal(view.find(n => n.props?.id === 'btn-confirm-magazord-registration'), null);
+  assert.ok(view.find(n => n.type === 'button' && n.props.children === 'Ver fotos e confirmar envio')); assert.equal(calls, 0);
+  props.draft = { ...props.draft, mainImageUrl: 'https://example.invalid/uploaded.jpg', additionalImageUrls: [] }; view.render();
+  view.find(n => n.type === 'ImagesSection').props.onPendingPhotosChange(0); await flush();
+  view.find(n => n.props?.id === 'btn-submit-magazord-registration').props.onClick(); await flush();
+  assert.ok(view.find(n => n.props?.id === 'btn-confirm-magazord-registration')); assert.equal(calls, 0);
+  assert.equal(view.find(n => n.type === 'RegistrationImage').props.url, props.draft.mainImageUrl);
 });
 
 test('Lost INSERT response can be retried with the same UUID and confirmed under RLS without UPDATE', async () => {
@@ -340,6 +410,7 @@ test('A negative registration result cannot show success or call the completed-r
     originalBook: { title: 'Livro' }, onSuccessRegistration: () => completions++, onRegistrationError: () => errors++,
     onUpdateDraft() {}, onBackToSearch() {}, onProcessNextBook() {} });
   await view.find(n => n.props?.id === 'btn-submit-magazord-registration').props.onClick(); await flush();
+  await view.find(n => n.props?.id === 'btn-confirm-magazord-registration').props.onClick(); await flush();
   assert.equal(completions, 0); assert.equal(errors, 1);
   assert.equal(view.find(n => n.props?.id === 'btn-process-next-book'), null);
 });

@@ -161,7 +161,8 @@ function setup(t, mode = 'auto', initialHistory = []) {
     prop('ProductRegistrationForm').onUpdateDraft(updates);
     view.render();
     const form = mount(module.exports.RegistrationForm, prop('ProductRegistrationForm'));
-    const completion = form.find(node => node.props?.id === 'btn-submit-magazord-registration').props.onClick();
+    form.find(node => node.props?.id === 'btn-submit-magazord-registration').props.onClick(); form.render();
+    const completion = form.find(node => node.props?.id === 'btn-confirm-magazord-registration').props.onClick();
     return { form, completion };
   }
   function assertOldEntries() {
@@ -257,6 +258,7 @@ for (const scenario of [
     app.view.render();
     const form = app.mountRegistration(app.prop('ProductRegistrationForm'));
     await form.find(n => n.props?.id === 'btn-submit-magazord-registration').props.onClick();
+    form.render(); await form.find(n => n.props?.id === 'btn-confirm-magazord-registration').props.onClick();
     await flush(); app.view.render();
     assert.equal(app.service.getRecordsForEan(problemIsbn, 'auto')[0].title, draft.title || 'Título informado pelo operador');
     assert.equal(app.rows.filter(row => row.operation_type === 'new_product_created').length, 1);
@@ -586,7 +588,8 @@ test('Form submission normalizes a stale used draft before simulator and snapsho
   const props = app.prop('ProductRegistrationForm');
   const before = structuredClone(props.draft);
   const form = app.mountRegistration(props);
-  const completion = form.find(node => node.props?.id === 'btn-submit-magazord-registration').props.onClick();
+  form.find(node => node.props?.id === 'btn-submit-magazord-registration').props.onClick(); form.render();
+  const completion = form.find(node => node.props?.id === 'btn-confirm-magazord-registration').props.onClick();
   await completion; await flush(); app.view.render();
   assert.deepEqual(props.draft, before);
   assert.equal(app.rows.at(-1).metadata.registrationSnapshot.fields.registrationMode, 'new_used_from_known_edition');
@@ -602,7 +605,8 @@ test('Simulation notice remains visible throughout all app tabs and registration
   }
   await app.tab('consultar'); await app.search();
   const { form, completion } = await app.registration('usado');
-  assert.match(JSON.stringify(form.tree()), /CONCLUIR CADASTRO NO SIMULADOR/);
+  assert.match(JSON.stringify(form.tree()), /Confirmar cadastro/);
+  assert.match(JSON.stringify(form.tree()), /somente ao confirmar, no simulador existente/);
   assert.doesNotMatch(JSON.stringify(form.tree()), /CADASTRAR NO MAGAZORD/);
   await completion; await flush(); form.render();
   assert.match(JSON.stringify(form.tree()), /Cadastro simulado concluído/);

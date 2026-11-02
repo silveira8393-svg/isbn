@@ -51,6 +51,7 @@ export default function CategoryAndBrandSection({
 
         <select
           value={draft.category}
+          data-registration-field="category"
           onChange={(e) => onChange({ category: e.target.value })}
           className={`w-full px-3.5 py-2.5 rounded-lg border text-sm font-medium transition-colors bg-white focus:outline-none focus:ring-2 cursor-pointer ${
             errors.category
@@ -68,7 +69,7 @@ export default function CategoryAndBrandSection({
           <p className="text-xs text-red-600 font-medium mt-1">{errors.category}</p>
         ) : (
           <p className="text-[11px] text-slate-500 mt-1">
-            Futuramente mapeado com a árvore de categorias oficial Magazord.
+            Categoria inicial sugerida pelo sistema; confira a seleção. Futuramente mapeada com a árvore oficial Magazord.
           </p>
         )}
       </div>
@@ -106,6 +107,7 @@ export default function CategoryAndBrandSection({
           <input
             type="text"
             value={draft.publisher}
+            data-registration-field="publisher"
             onChange={(e) => onChange({ publisher: e.target.value })}
             placeholder="Ex: Publicações Pão Diário Ltda."
             className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
@@ -113,6 +115,7 @@ export default function CategoryAndBrandSection({
           <p className="text-[11px] text-slate-500 mt-1">
             Razão social ou selo editorial obtido nas fontes bibliográficas (editável).
           </p>
+          {errors.publisher && <p className="mt-1 text-xs font-medium text-red-600">{errors.publisher}</p>}
         </div>
       </div>
     </div>

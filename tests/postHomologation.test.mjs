@@ -125,6 +125,61 @@ test('Curitiba rejects directory/HTML cover candidates and uses the existing add
   assert.equal(existing.coverUrl, cover, 'A valid existing cover is not replaced by enrichment');
 });
 
+test('registration validates both ISBN check digits and correspondence without inventing missing identifiers', () => {
+  const valid = { ...utils.createRegistrationDraft(book), parentCode: 'P', price: '50,00' };
+  for (const ids of [{ isbn13: '9788535914849', isbn10: '8535914846', ean: '978-85-359-1484-9' },
+    { isbn13: '', isbn10: '0-8044-2957-X', ean: '' }, { isbn13: '', isbn10: '', ean: '' }]) {
+    assert.deepEqual(utils.validateRegistrationDraft({ ...valid, ...ids }).errors, {});
+  }
+  for (const ids of [{ isbn13: '9788535914848' }, { isbn10: '8535914847' }, { isbn10: '0000000000' },
+    { isbn13: '9788535914849', isbn10: '0515154555', ean: '9788535914849' }, { ean: '9780515154559' }]) {
+    const result = utils.validateRegistrationDraft({ ...valid, ...ids });
+    assert.ok(['isbn13', 'isbn10', 'ean'].some(field => result.errors[field]), JSON.stringify(ids));
+  }
+});
+
+test('Brazilian prices are parsed entirely and formatted with exactly two decimal places', () => {
+  for (const [input, amount, label] of [['50', 50, 'R$ 50,00'], ['50,00', 50, 'R$ 50,00'], ['1.234,56', 1234.56, 'R$ 1.234,56'],
+    ['1.234', 1234, 'R$ 1.234,00'], ['50.5', 50.5, 'R$ 50,50'], ['0,01', .01, 'R$ 0,01']]) {
+    assert.equal(utils.parseRegistrationPrice(input), amount);
+    assert.equal(utils.formatRegistrationPrice(input).replace(/\s/g, ' '), label);
+  }
+  for (const input of ['', '-10', '1e3', 'Infinity', '1.23,45', '50,001', '1,2,3', '10 reais']) assert.equal(utils.parseRegistrationPrice(input), undefined, input);
+});
+
+test('9781419762109: 10 g is a red-review observation, not a blocker or an invented replacement; declared kg always convert reliably', () => {
+  const source = { id: 'fixture', title: 'The Art of the Batman', isbn13: '9781419762109', weight: .01, weightUnit: 'kg' };
+  const draft = { ...utils.createRegistrationDraft(source), parentCode: 'BATMAN-P', price: '1.234,56' };
+  const result = utils.validateRegistrationDraft(draft, source);
+  assert.equal(draft.weight, 10); assert.deepEqual(result.errors, {}); assert.match(result.warnings.weight, /PESO POSSIVELMENTE INCORRETO: 10 g/);
+  assert.equal(utils.createRegistrationDraft({ ...source, weight: 20 }).weight, 20000, 'never reinterpret a declared kg value as grams based on magnitude');
+  assert.equal(utils.createRegistrationDraft({ ...source, weight: 0 }).weight, 0, 'suspicious values stay visible for review');
+});
+
+test('optional metadata and unconfirmed units produce observations, while essential omissions and invalid quantities block', () => {
+  const draft = { ...utils.createRegistrationDraft({ id: 'manual', title: 'Título não cadastrado' }), parentCode: '', childCode: '', price: '-10', quantity: 1.5,
+    year: '07T00:00:01Z/05/2013', edition: 'Não informado', pageCount: -1, weight: 10, width: -3 };
+  const result = utils.validateRegistrationDraft(draft);
+  for (const field of ['title', 'parentCode', 'childCode', 'price', 'quantity']) assert.match(result.errors[field], /^Erro obrigatório/);
+  for (const field of ['authors', 'publisher', 'year', 'edition', 'language', 'format', 'pageCount', 'weight', 'width']) assert.match(result.warnings[field], /^Observação/);
+  assert.equal(draft.language, ''); assert.equal(draft.format, '');
+  const imported = { id: 'brasilapi-fixture', title: 'Livro', language: 'pt', weight: 200, width: 20 };
+  const unconfirmed = utils.validateRegistrationDraft(utils.createRegistrationDraft(imported), imported);
+  assert.match(unconfirmed.warnings.language, /sem confirmação explícita/);
+  assert.match(unconfirmed.warnings.weight, /não declarou a unidade/); assert.match(unconfirmed.warnings.width, /não declarou centímetros/);
+  assert.deepEqual(utils.validateRegistrationDraft({ ...draft, title: 'Livro', parentCode: 'P', childCode: 'EXEMPLAR', price: '50', quantity: 1, condition: 'usado' }).errors, {});
+});
+
+test('image references are validated without availability probes, and placeholder titles cannot be confirmed', t => {
+  t.mock.method(globalThis, 'fetch', () => assert.fail('validation must not probe image URLs or call providers'));
+  const valid = { ...utils.createRegistrationDraft(book), parentCode: 'P', price: '50', mainImageUrl: 'https://example.invalid/temporarily-offline.jpg' };
+  assert.deepEqual(utils.validateRegistrationDraft(valid).errors, {});
+  for (const title of ['Título não cadastrado.', ' TÍTULO NÃO ENCONTRADO ', 'Não informado', '...', '']) assert.ok(utils.validateRegistrationDraft({ ...valid, title }).errors.title);
+  for (const mainImageUrl of ['javascript:bad', 'blob:temporary', 'https://example.invalid/images/', 'https://example.invalid/a.jpg?token=secret'])
+    assert.ok(utils.validateRegistrationDraft({ ...valid, mainImageUrl }).errors.mainImageUrl);
+  assert.deepEqual(utils.validateRegistrationDraft({ ...valid, mainImageUrl: undefined, additionalImageUrls: [] }).errors, {});
+});
+
 test('Reference validation excludes HTML directories, binaries and credentials while retaining image endpoint URLs', () => {
   for (const value of [directory, `${directory}?x=1`, `${directory}index.HTML`, `${directory}page.htm`, 'data:image/png;base64,AAA', 'blob:abc', 'https://user:pass@example.com/a.jpg']) {
     assert.equal(utils.isImageReference(value), false, value);
@@ -240,9 +295,9 @@ test('upload validates project/session, scopes files to store/user, deduplicates
 });
 
 test('multiple local photos are previewed before upload; duplicate files are ignored and selected references survive snapshots in order', async t => {
-  bitmapMock(t); const storage = photoStorage(), busy = [];
+  bitmapMock(t); const storage = photoStorage(), busy = [], pending = [];
   const view = mount('ImagesSection', utils.createRegistrationDraft(book), { ...storage,
-    props: { user: photoUser, onUploadBusyChange: value => busy.push(value) } });
+    props: { user: photoUser, onUploadBusyChange: value => busy.push(value), onPendingPhotosChange: count => pending.push(count) } });
   t.after(view.unmount);
   await view.find(node => node.props.type === 'file').props.onChange({ target: { files: [photoFile('a.png'), photoFile('same.png'), photoFile('b.png', 'different')], value: 'input' } }); view.render();
   assert.equal(view.all(node => node.type === 'img' && /^Prévia/.test(node.props.alt)).length, 2);
@@ -256,6 +311,7 @@ test('multiple local photos are previewed before upload; duplicate files are ign
   assert.equal(saved.fields.mainImageUrl, cover); assert.deepEqual(saved.fields.additionalImageUrls, refs);
   assert.doesNotMatch(JSON.stringify(saved), /blob:|data:|imageSelectionManual|access_token/);
   assert.deepEqual(busy, [true, false, true, false]);
+  assert.deepEqual(pending, [1, 2, 1, 0], 'the form knows about each pending preview and its confirmed upload');
   await new Promise(resolve => setImmediate(resolve)); view.render();
   assert.equal(view.all(node => node.type === 'img' && /^Prévia/.test(node.props.alt)).length, 0);
   assert.ok(view.all(node => node.type === 'img').every(node => !node.props.src.includes('/object/authenticated/')), 'private images use authenticated blobs, never naked protected URLs');

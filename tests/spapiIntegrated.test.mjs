@@ -669,6 +669,8 @@ test('existing image gallery renders automatic cover, permits manual replacement
     const imageSection = form.find(n => typeof n.type === 'function' && n.type.name === 'ImagesSection');
     assert.equal(imageSection.props.draft.mainImageUrl, draft.mainImageUrl);
     await form.find(n => n.props.id === 'btn-submit-magazord-registration').props.onClick();
+    form.render(); assert.equal(calls.length, 0, 'review does not call Magazord');
+    await form.find(n => n.props.id === 'btn-confirm-magazord-registration').props.onClick();
     assert.equal(calls.length, 1); assert.equal(calls[0].payload.mainImageUrl, draft.mainImageUrl);
     assert.deepEqual(calls[0].payload.additionalImageUrls, draft.additionalImageUrls); assert.equal(calls[0].actionMode, 'auto');
   }
@@ -703,7 +705,7 @@ test('normal navigation preserves selected and removed images; pending uploads b
   const before = calls; await search(isbn); assert.equal(calls, before);
   form.props.onImageUploadBusyChange(false);
   view.find('Header').props.onTabChange('consultar'); view.render();
-  view.find('MagazordStatusCard').props.onOpenRegistration('usado'); view.render();
+  view.find('MagazordStatusCard').props.onOpenRegistration('novo'); view.render();
   const reopened = view.find('ProductRegistrationForm').props.draft;
   assert.equal(reopened.mainImageUrl, main); assert.deepEqual(reopened.additionalImageUrls, [extra]);
   assert.equal(reopened.imageSelectionManual, true);
@@ -726,10 +728,38 @@ test('registration waits for photo processing and forwards one main plus ordered
   form.find(n => typeof n.type === 'function' && n.type.name === 'ImagesSection').props.onUploadBusyChange(true);
   form.render(); assert.equal(form.find(n => n.props.id === 'btn-submit-magazord-registration').props.disabled, true);
   await form.find(n => n.props.id === 'btn-submit-magazord-registration').props.onClick();
+  form.render(); assert.equal(calls.length, 0);
+  assert.equal(form.find(n => n.props.id === 'btn-confirm-magazord-registration'), undefined);
   form.find(n => n.props.title === 'Voltar para a pesquisa de ISBN').props.onClick();
   assert.equal(calls.length, 0); assert.equal(back, 0);
   form.find(n => typeof n.type === 'function' && n.type.name === 'ImagesSection').props.onUploadBusyChange(false); form.render();
   await form.find(n => n.props.id === 'btn-submit-magazord-registration').props.onClick();
+  form.render(); await form.find(n => n.props.id === 'btn-confirm-magazord-registration').props.onClick();
   assert.equal(calls.length, 1); assert.equal(calls[0].mainImageUrl, privateRef);
   assert.deepEqual(calls[0].additionalImageUrls, [cover, inside]); assert.deepEqual(busy, [true, false]);
+});
+
+test('operator photographs stay out of bibliographic results, later searches and the next used copy', async t => {
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ isbn, items: [] }));
+  const sourceCover = 'https://example.invalid/source.jpg', ownPhoto = 'https://example.invalid/used-copy.jpg';
+  const source = { id: 'fixture', title: 'Source title', isbn13: isbn, coverUrl: sourceCover };
+  const view = mountApp({ brasil: { book: source, diagnostic: { status: 200 } } });
+  await view.search(); view.render(); const original = structuredClone(view.find('BookDetailsCard').props.book);
+  view.find('MagazordStatusCard').props.onOpenRegistration('usado'); view.render();
+  view.find('ProductRegistrationForm').props.onUpdateDraft({ mainImageUrl: ownPhoto, additionalImageUrls: [], imageSelectionManual: true }); view.render();
+  view.find('Header').props.onTabChange('consultar'); view.render();
+  view.find('MagazordStatusCard').props.onOpenRegistration('novo'); view.render();
+  assert.equal(view.find('ProductRegistrationForm').props.draft.mainImageUrl, sourceCover, 'a separate NEW registration must not inherit USED photographs');
+  view.find('Header').props.onTabChange('consultar'); view.render();
+  view.find('MagazordStatusCard').props.onOpenRegistration('usado'); view.render();
+  view.find('ProductRegistrationForm').props.onUpdateDraft({ mainImageUrl: ownPhoto, additionalImageUrls: [], imageSelectionManual: true }); view.render();
+  const props = view.find('ProductRegistrationForm').props;
+  props.onSuccessRegistration({ success: true, parentCode: 'P', childCode: 'USED-1', registeredAt: 1 }, props.draft);
+  view.find('Header').props.onTabChange('consultar'); view.render();
+  assert.deepEqual(view.find('BookDetailsCard').props.book, original);
+  view.find('MagazordStatusCard').props.onOpenRegistration('usado'); view.render();
+  assert.equal(view.find('ProductRegistrationForm').props.draft.mainImageUrl, sourceCover);
+  assert.equal(view.find('ProductRegistrationForm').props.draft.childCode, '');
+  view.find('Header').props.onTabChange('consultar'); view.render();
+  await view.search(); view.render(); assert.deepEqual(view.find('BookDetailsCard').props.book, original);
 });

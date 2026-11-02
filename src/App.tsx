@@ -64,6 +64,7 @@ export default function App() {
   const searchInFlight = useRef(false);
   const stockLinkInFlight = useRef(false);
   const imageUploadInFlight = useRef(false);
+  const registrationCompleted = useRef(false);
   const currentUserRef = useRef(currentUser);
   currentUserRef.current = currentUser;
   const operationEnvironmentRef = useRef(operationEnvironment);
@@ -170,6 +171,7 @@ export default function App() {
     setBibliographicState(null);
     setFoundBook(null);
     setRegistrationDraft(null);
+    registrationCompleted.current = false;
     setMagazordCheckResult(null);
     setMagazordCheckError(null);
     setSearchedTerm(cleaned);
@@ -348,7 +350,7 @@ export default function App() {
       'novo';
     const draft = createRegistrationDraft(foundBook, targetCondition);
     // Preserve image decisions during ordinary navigation; general draft recovery is a later stage.
-    if (registrationDraft) {
+    if (registrationDraft && registrationDraft.condition === targetCondition && !registrationCompleted.current) {
       draft.mainImageUrl = registrationDraft.mainImageUrl;
       draft.additionalImageUrls = [...registrationDraft.additionalImageUrls];
       draft.imageSelectionManual = registrationDraft.imageSelectionManual;
@@ -356,6 +358,7 @@ export default function App() {
     draft.language = foundBook.language || '';
     draft.format = foundBook.format || '';
     setRegistrationDraft(draft);
+    registrationCompleted.current = false;
     setActiveTab('cadastro');
   };
 
@@ -453,6 +456,7 @@ export default function App() {
     actionMode: MagazordSimulationMode = captureActionMode()
   ) => {
     // Registra evento de auditoria operacional do cadastro concluído
+    registrationCompleted.current = result.success;
     const currentIsbn = searchedTerm || savedDraft.isbn13 || savedDraft.ean;
     const opType: OperationType =
       savedDraft.condition === 'usado'
@@ -514,6 +518,7 @@ export default function App() {
     if (imageUploadInFlight.current) return;
     setFoundBook(null);
     setRegistrationDraft(null);
+    registrationCompleted.current = false;
     setMagazordCheckResult(null);
     setMagazordCheckError(null);
     setIsbnValue('');

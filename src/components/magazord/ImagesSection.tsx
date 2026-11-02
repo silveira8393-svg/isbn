@@ -21,6 +21,8 @@ interface ImagesSectionProps {
   onChange: (updates: Partial<RegistrationDraft>) => void;
   user?: User;
   onUploadBusyChange?: (busy: boolean) => void;
+  onPendingPhotosChange?: (count: number) => void;
+  errors?: Record<string, string>;
 }
 
 export default function ImagesSection({
@@ -28,6 +30,8 @@ export default function ImagesSection({
   onChange,
   user,
   onUploadBusyChange,
+  onPendingPhotosChange,
+  errors = {},
 }: ImagesSectionProps) {
   const [newImageUrl, setNewImageUrl] = useState('');
   const [showAddInput, setShowAddInput] = useState(false);
@@ -39,8 +43,8 @@ export default function ImagesSection({
   const [uploadMessage, setUploadMessage] = useState('');
   const [storedSources, setStoredSources] = useState<Record<string, string | null>>({});
   const [sourceRevision, setSourceRevision] = useState(0);
-  const latest = useRef({ draft, user, onChange, onUploadBusyChange });
-  latest.current = { draft, user, onChange, onUploadBusyChange };
+  const latest = useRef({ draft, user, onChange, onUploadBusyChange, onPendingPhotosChange });
+  latest.current = { draft, user, onChange, onUploadBusyChange, onPendingPhotosChange };
   const queued = useRef(pendingPhotos), busy = useRef(false), mounted = useRef(true);
   const downloads = useRef(new Map<string, { controller: AbortController; release?: () => void }>());
   const access = `${user?.id || ''}:${user?.storeId || ''}:${user?.active || false}`;
@@ -53,6 +57,7 @@ export default function ImagesSection({
       downloads.current.forEach(entry => { entry.controller.abort(); entry.release?.(); }); downloads.current.clear();
       setStoredSources({});
       queued.current.forEach(photo => URL.revokeObjectURL(photo.preview)); queued.current = []; setPendingPhotos([]);
+      latest.current.onPendingPhotosChange?.(0);
     }
     const selected: string[] = JSON.parse(privateKey);
     for (const [url, entry] of downloads.current) if (!selected.includes(url)) {
@@ -80,6 +85,7 @@ export default function ImagesSection({
       queued.current.forEach(photo => URL.revokeObjectURL(photo.preview));
       downloads.current.forEach(entry => { entry.controller.abort(); entry.release?.(); }); downloads.current.clear();
       latest.current.onUploadBusyChange?.(false);
+      latest.current.onPendingPhotosChange?.(0);
       if (typeof window !== 'undefined') window.removeEventListener('beforeunload', warn);
     };
   }, []);
@@ -88,7 +94,7 @@ export default function ImagesSection({
   const apply = (updates: Partial<RegistrationDraft>) => {
     latest.current.draft = { ...latest.current.draft, ...updates }; latest.current.onChange(updates);
   };
-  const changeQueue = (photos: typeof pendingPhotos) => { queued.current = photos; setPendingPhotos(photos); };
+  const changeQueue = (photos: typeof pendingPhotos) => { queued.current = photos; setPendingPhotos(photos); latest.current.onPendingPhotosChange?.(photos.length); };
   const changeBusy = (value: boolean) => { busy.current = value; setUploadBusy(value); latest.current.onUploadBusyChange?.(value); };
   const choosePhotos = async (files: File[]) => {
     if (busy.current || !files.length) return;
@@ -261,7 +267,7 @@ export default function ImagesSection({
             {photo.error && <p role="alert" className="text-xs text-rose-700">{photo.error}</p>}
             <button type="button" disabled={uploadBusy} onClick={() => removePreview(photo.hash)} className="text-xs text-red-700 underline">Remover prévia</button>
           </div>)}</div>
-          <button type="button" disabled={uploadBusy} onClick={() => confirmPhotos()} className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60">{uploadBusy ? 'Processando fotos...' : 'Confirmar fotos selecionadas'}</button>
+          <button type="button" data-registration-field="pendingPhotos" disabled={uploadBusy} onClick={() => confirmPhotos()} className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60">{uploadBusy ? 'Processando fotos...' : 'Confirmar fotos selecionadas'}</button>
         </div>}
       </div>
 
@@ -289,7 +295,8 @@ export default function ImagesSection({
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-6 items-start">
           {/* Imagem Principal em Destaque */}
-          <div className="sm:col-span-5 flex flex-col items-center">
+          <div data-registration-field="mainImageUrl" tabIndex={-1} className="sm:col-span-5 flex flex-col items-center">
+            {errors.mainImageUrl && <p className="mb-2 text-xs font-medium text-red-600">{errors.mainImageUrl}</p>}
             <span className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5 self-start">
               <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
               <span>Capa Principal</span>
@@ -318,7 +325,8 @@ export default function ImagesSection({
           </div>
 
           {/* Miniaturas Adicionais */}
-          <div className="sm:col-span-7">
+          <div data-registration-field="additionalImageUrls" tabIndex={-1} className="sm:col-span-7">
+            {errors.additionalImageUrls && <p className="mb-2 text-xs font-medium text-red-600">{errors.additionalImageUrls}</p>}
             <span className="text-xs font-bold text-slate-700 mb-2 block">
               Fotos Adicionais ({draft.additionalImageUrls.length})
             </span>

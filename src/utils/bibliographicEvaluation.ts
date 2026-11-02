@@ -1,7 +1,8 @@
 // Contrato experimental, usado pelo laboratório e testes. Não altera a consulta operacional.
 import type { BookInfo } from '../types.js';
 import { normalizeCoverFormat, normalizeLanguage, COVER_FORMATS } from './bibliographicNormalization.js';
-import { cleanIsbn } from './isbn.js';
+import { canonicalBookIsbn, cleanIsbn } from './isbn.js';
+export { canonicalBookIsbn } from './isbn.js';
 import { sanitizeSynopsis } from './sanitizer.js';
 import { imageReferences } from './imageUrls.js';
 
@@ -18,16 +19,6 @@ export interface BookEvaluation {
 const key = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 const absent = (value: unknown): boolean => value == null || (Array.isArray(value) ? !value.length :
   typeof value === 'string' && ['', '-', 'n/a', 'nao informado', 'nao disponivel', 'indisponivel', 'null', 'none', 'titulo nao cadastrado'].includes(key(value)));
-
-/** Dígito verificador e prefixo de livro; nunca remove caracteres arbitrários. */
-export function canonicalBookIsbn(value?: string): string | undefined {
-  const isbn = cleanIsbn(value || '');
-  if (/^97[89][0-9]{10}$/.test(isbn) && [...isbn].reduce((sum, digit, i) => sum + Number(digit) * (i % 2 ? 3 : 1), 0) % 10 === 0) return isbn;
-  if (!/^[0-9]{9}[0-9X]$/.test(isbn) || isbn === '0000000000' ||
-    [...isbn].reduce((sum, digit, i) => sum + (digit === 'X' ? 10 : Number(digit)) * (10 - i), 0) % 11 !== 0) return;
-  const base = '978' + isbn.slice(0, 9);
-  return base + (10 - [...base].reduce((sum, digit, i) => sum + Number(digit) * (i % 2 ? 3 : 1), 0) % 10) % 10;
-}
 
 export function synopsisReasons(value?: string): string[] {
   const text = key(sanitizeSynopsis(value));

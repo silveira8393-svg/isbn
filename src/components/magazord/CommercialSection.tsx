@@ -20,8 +20,7 @@ export default function CommercialSection({
   // Formata valor digitado para estilo moeda amigável se desejado
   const handlePriceChange = (val: string) => {
     // Permite digitação livre de números e vírgula/ponto
-    const clean = val.replace(/[^0-9.,]/g, '');
-    onChange({ price: clean });
+    onChange({ price: val });
   };
 
   return (
@@ -57,6 +56,8 @@ export default function CommercialSection({
             <input
               type="text"
               value={draft.price}
+              data-registration-field="price"
+              inputMode="decimal"
               onChange={(e) => handlePriceChange(e.target.value)}
               placeholder="0,00"
               className={`w-full pl-9 pr-3.5 py-2.5 rounded-lg border text-sm font-bold text-slate-900 transition-colors focus:outline-none focus:ring-2 ${
@@ -95,10 +96,10 @@ export default function CommercialSection({
             <input
               type="number"
               min={1}
-              value={draft.quantity}
+              data-registration-field="quantity"
+              value={Number.isFinite(draft.quantity) ? draft.quantity : ''}
               onChange={(e) => {
-                const parsed = parseInt(e.target.value, 10);
-                onChange({ quantity: Number.isNaN(parsed) ? 1 : Math.max(1, parsed) });
+                onChange({ quantity: e.target.value === '' ? Number.NaN : Number(e.target.value) });
               }}
               className="flex-1 text-center py-2.5 rounded-lg border border-slate-300 bg-white font-bold text-sm text-slate-900 focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
             />
@@ -113,6 +114,7 @@ export default function CommercialSection({
           <p className="text-[11px] text-slate-500 mt-1">
             Geralmente 1 para exemplares usados de sebo.
           </p>
+          {errors.quantity && <p className="mt-1 text-xs font-medium text-red-600">{errors.quantity}</p>}
         </div>
 
         {/* Localização da Filial */}
