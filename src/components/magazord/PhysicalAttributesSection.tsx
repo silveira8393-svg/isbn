@@ -40,10 +40,10 @@ export default function PhysicalAttributesSection({
           </div>
           <div>
             <h3 className="text-sm sm:text-base font-bold text-slate-900">
-              Peso & Dimensões do Pacote
+              Peso & Dimensões do Exemplar
             </h3>
             <p className="text-xs text-slate-500">
-              Medidas físicas para cálculo de frete no Magazord (usando valores exatos da fonte)
+              Medidas informadas pelas fontes. Confira a orientação antes de utilizar no cálculo de frete.
             </p>
           </div>
         </div>

@@ -490,6 +490,7 @@ test('9781419762109: only MAIN plus blocked/empty laboratory preserves the cover
     title: 'The Art of the Batman', images: [{ variant: 'MAIN', link: alternate, width: 600, height: 800 },
       { variant: 'MAIN', link: cover, width: 1400, height: 1900 }] }] }));
   for (const response of [{ status: 'interrompida', diagnostico: { codigo: 'amazon_captcha' } },
+    { status: 'interrompida', status_http: 200, diagnostico: { codigo: 'amazon_unexpected' } },
     { status: 'interrompida', status_http: 403 }, { ...labImages([]), isbn_pesquisado: query, isbn_encontrado: { isbn13: { valor: query, valido: true } } }]) {
     const view = mountApp({ lab: async () => { labCalls++; return response; } });
     const before = labCalls; await view.search(query); view.render();
@@ -762,4 +763,55 @@ test('operator photographs stay out of bibliographic results, later searches and
   assert.equal(view.find('ProductRegistrationForm').props.draft.childCode, '');
   view.find('Header').props.onTabChange('consultar'); view.render();
   await view.search(); view.render(); assert.deepEqual(view.find('BookDetailsCard').props.book, original);
+});
+
+test('9781419762109: SP-API physical axes stay named as returned, conversions lose float noise and raw measurements remain unchanged', async t => {
+  const query = '9781419762109';
+  const raw = { weight: { value: .01, unit: 'kilograms' }, width: { value: 9.56692912409449, unit: 'inches' },
+    height: { value: 1.2519684911811, unit: 'inches' }, length: { value: 12.0078740035, unit: 'inches' } };
+  const backend = server({ item: { ...item, identifiers: [{ marketplaceId: api.MARKETPLACE, identifiers: [{ identifierType: 'ISBN', identifier: query }] }],
+    dimensions: [{ marketplaceId: api.MARKETPLACE, item: raw }] } });
+  const payload = await (await backend.handler(backend.request('/api/amazon/spapi/catalog?isbn=' + query))).json();
+  globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
+  t.after(() => { delete globalThis.__spapiSession; });
+  let calls = 0; t.mock.method(globalThis, 'fetch', async () => { calls++; return Response.json(payload); });
+  const { book } = await client.searchAmazonOfficial(query, user);
+  assert.equal(book.width, 24.3); assert.equal(book.height, 3.18); assert.equal(book.depth, 30.5); assert.equal(book.weight, 10);
+  assert.deepEqual(book.amazonPhysical.item, raw, 'no renaming or sorting source axes based on their numeric size');
+  const draft = api.createRegistrationDraft(book); assert.equal(draft.height, 3.18); assert.equal(draft.depth, 30.5);
+  const priority = { id: 'primary', title: 'Priority', width: 25, height: 31, depth: 3, dimensionsUnit: 'cm' };
+  const merged = client.complementWithAmazon(priority, book);
+  assert.equal(merged.height, 31); assert.equal(merged.depth, 3); assert.deepEqual(priority, { id: 'primary', title: 'Priority', width: 25, height: 31, depth: 3, dimensionsUnit: 'cm' });
+  assert.equal(calls, 1);
+  const form = mountRegistration('Form', { draft: { ...draft, parentCode: 'P', price: '50' }, originalBook: book, onUpdateDraft() {} }, {});
+  form.find(n => n.props.id === 'btn-submit-magazord-registration').props.onClick(); form.render();
+  const review = form.find(n => n.props['aria-label'] === 'Revisão do cadastro');
+  assert.match(imageText(review), /3,18 cm/); assert.match(imageText(review), /30,5 cm/);
+  assert.match(imageText(review), /não fazemos troca automática/); assert.match(imageText(review), /PESO POSSIVELMENTE INCORRETO: 10 g/);
+  assert.doesNotMatch(imageText(review), /299999|179999|499999/);
+});
+
+test('9781419762109: one SP-API cover plus five available Lab photographs reach search, gallery, review and return without loss or extra queries', async t => {
+  const query = '9781419762109', cover = cdn('BATMANCOVER'), additions = Array.from({ length: 5 }, (_, i) => cdn(`BATMANINSIDE${i}`));
+  let official = 0, laboratory = 0;
+  t.mock.method(globalThis, 'fetch', async () => { official++; return Response.json({ isbn: query, items: [{ isbn: query, asin: '1419762109', marketplaceId: api.MARKETPLACE,
+    title: 'The Art of the Batman', images: [{ variant: 'MAIN', link: cover, width: 1400, height: 1900 }] }] }); });
+  const view = mountApp({ brasil: { book: null, diagnostic: { status: 404 } }, lab: async () => {
+    laboratory++; return { ...labImages([cover, ...additions, additions[0].replace('.jpg', '._SX75_.jpg')]),
+      isbn_pesquisado: query, isbn_encontrado: { isbn13: { valor: query, valido: true } } };
+  } });
+  await view.search(query); view.render();
+  const book = view.find('BookDetailsCard').props.book;
+  assert.equal(book.coverUrl, cover); assert.deepEqual(book.additionalImages, additions);
+  view.find('Header').props.onTabChange('cadastro'); view.render();
+  const draft = { ...view.find('ProductRegistrationForm').props.draft, parentCode: 'BATMAN-P', price: '50' };
+  assert.deepEqual(draft.additionalImageUrls, additions);
+  const gallery = mountRegistration('Images', { draft, onChange() {} });
+  assert.equal(gallery.all(n => n.type === 'img').length, 6);
+  const form = mountRegistration('Form', { draft, originalBook: book, onUpdateDraft() {} }, {});
+  form.find(n => n.props.id === 'btn-submit-magazord-registration').props.onClick(); form.render();
+  assert.deepEqual(form.all(n => typeof n.type === 'function' && n.type.name === 'RegistrationImage').map(n => n.props.url), [cover, ...additions]);
+  form.find(n => n.props.id === 'btn-return-to-registration').props.onClick(); form.render();
+  assert.deepEqual(form.find(n => typeof n.type === 'function' && n.type.name === 'ImagesSection').props.draft.additionalImageUrls, additions);
+  assert.equal(official, 1); assert.equal(laboratory, 1, 'no probes, retry or new lookup on entering/reviewing the form');
 });

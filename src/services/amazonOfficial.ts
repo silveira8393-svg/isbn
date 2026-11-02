@@ -4,6 +4,7 @@ import { normalizePublicationDate, publicationYear } from '../../shared/publicat
 import { imageIdentity, imageReferences, isImageReference } from '../utils/imageUrls';
 import { canonicalBookIsbn } from '../utils/bibliographicEvaluation';
 import { searchAmazonLab } from './amazonLabClient';
+import { roundPhysicalMeasurement } from '../utils/bibliographicNormalization';
 
 const LAB_STORE = '492af2ad-905c-42f8-90f4-aa6c1dc142f3';
 export const canUseAmazonOfficial = (user: Pick<User, 'active' | 'role' | 'storeId'>) =>
@@ -51,7 +52,7 @@ function amazonPhysicalFields(physical?: AmazonPhysical) {
   const converted = (measure: { value: number; unit: string } | undefined, factors: Record<string, number>) => {
     if (!measure) return undefined;
     const result = measure.value * factors[measure.unit.toLowerCase()];
-    return Number.isFinite(result) && result > 0 ? Number(result.toPrecision(12)) : undefined;
+    return Number.isFinite(result) && result > 0 ? roundPhysicalMeasurement(result) : undefined;
   };
   const mass = { grams: 1, gram: 1, g: 1, kilograms: 1000, kilogram: 1000, kg: 1000, pounds: 453.59237, pound: 453.59237, lb: 453.59237,
     ounces: 28.349523125, ounce: 28.349523125, oz: 28.349523125, milligrams: .001, milligram: .001, mg: .001 };

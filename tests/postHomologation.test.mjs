@@ -16,6 +16,8 @@ const bundle = await build({
     export { searchBookByIsbnDistribuidoraCuritiba, mergeBookWithDistribuidora } from './src/services/distribuidoraCuritiba';
     export { default as ImagesSection } from './src/components/magazord/ImagesSection';
     export { default as IdentitySection } from './src/components/magazord/ProductIdentitySection';
+    export { default as CommercialSection } from './src/components/magazord/CommercialSection';
+    export { default as PhysicalSection } from './src/components/magazord/PhysicalAttributesSection';
   ` }, bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic',
   plugins: [{ name: 'offline-only', setup(builder) {
     const mocks = [[/^react$/, 'module.exports=deps.react'],
@@ -145,6 +147,34 @@ test('Brazilian prices are parsed entirely and formatted with exactly two decima
     assert.equal(utils.formatRegistrationPrice(input).replace(/\s/g, ' '), label);
   }
   for (const input of ['', '-10', '1e3', 'Infinity', '1.23,45', '50,001', '1,2,3', '10 reais']) assert.equal(utils.parseRegistrationPrice(input), undefined, input);
+});
+
+test('price typing preserves the entered text and formats two Brazilian decimal places only on blur', () => {
+  const view = mount('CommercialSection', utils.createRegistrationDraft(book));
+  const input = () => view.find(node => node.props['data-registration-field'] === 'price');
+  for (const [typed, completed] of [['5', '5,00'], ['50', '50,00'], ['50,00', '50,00'], ['1.234,56', '1.234,56'], ['50,', '50,'], ['-10', '-10']]) {
+    input().props.onChange({ target: { value: typed } }); view.render();
+    assert.equal(input().props.value, typed, 'typing cannot move the caret by rewriting the value');
+    input().props.onBlur({ target: { value: typed } }); view.render();
+    assert.equal(input().props.value, completed);
+  }
+  assert.ok(utils.validateRegistrationDraft(view.draft()).errors.price, 'invalid negative input remains invalid');
+});
+
+test('imported float noise is rounded for g/cm fields, while raw source axes and suspicious weight remain available', () => {
+  const source = { id: 'amazon-spapi-fixture', title: 'The Art of the Batman', isbn13: '9781419762109', provider: 'Amazon SP-API',
+    weight: 10.000000001, weightUnit: 'g', dimensionsUnit: 'cm', width: 24.2999999752, height: 3.1799999676, depth: 30.4999999689,
+    amazonPhysical: { item: { width: { value: 24.2999999752, unit: 'centimeters' }, height: { value: 3.1799999676, unit: 'centimeters' }, length: { value: 30.4999999689, unit: 'centimeters' } } } };
+  const before = structuredClone(source), draft = utils.createRegistrationDraft(source), view = mount('PhysicalSection', draft);
+  for (const [field, expected] of [['weight', 10], ['width', 24.3], ['height', 3.18], ['depth', 30.5]]) {
+    assert.equal(view.find(node => node.props['data-registration-field'] === field).props.value, expected);
+  }
+  assert.deepEqual(source, before, 'original measurements are not rewritten');
+  const report = utils.validateRegistrationDraft(draft, source);
+  assert.match(report.warnings.weight, /10 g/); assert.match(report.warnings.height, /height.*3,18 cm/);
+  assert.match(report.warnings.depth, /length.*30,5 cm.*não fazemos troca automática/);
+  const corrected = utils.validateRegistrationDraft({ ...draft, height: 30.5, depth: 3.18 }, source);
+  assert.equal(corrected.warnings.height, undefined); assert.equal(corrected.warnings.depth, undefined);
 });
 
 test('9781419762109: 10 g is a red-review observation, not a blocker or an invented replacement; declared kg always convert reliably', () => {

@@ -224,6 +224,28 @@ test('Registration submission guard prevents duplicate service calls and complet
   assert.equal(completions, 1); assert.equal(calls, 1);
 });
 
+test('NEW/USED codes retain their actual rules: no initial red on untouched manual codes, valid prefilled codes pass and empty codes still block review', async () => {
+  for (const condition of ['novo', 'usado']) {
+    let calls = 0; const deps = dependencies(); deps.magazord.createProduct = async () => { calls++; return { success: true }; };
+    const props = { draft: { condition, parentCode: '', childCode: condition === 'novo' ? input.isbn : '', title: 'Livro', category: 'Livro', price: '50', quantity: 1 }, originalBook: {} };
+    const view = mount(form, deps, props);
+    assert.equal(view.find(n => n.type === 'ProductIdentitySection').props.errors.parentCode, undefined);
+    assert.equal(view.find(n => n.type === 'ProductIdentitySection').props.errors.childCode, undefined);
+    view.find(n => typeof n.props?.onBlurCapture === 'function').props.onBlurCapture({ target: { getAttribute: () => 'parentCode' } }); await flush();
+    assert.match(view.find(n => n.type === 'ProductIdentitySection').props.errors.parentCode, /^Erro obrigatório/);
+    props.draft = { ...props.draft, parentCode: 'LV26579-P' }; view.render();
+    assert.equal(view.find(n => n.type === 'ProductIdentitySection').props.errors.parentCode, undefined, 'a real populated value is valid for either condition');
+    view.find(n => n.props?.id === 'btn-submit-magazord-registration').props.onClick(); await flush();
+    if (condition === 'usado') {
+      assert.equal(view.find(n => n.props?.id === 'btn-confirm-magazord-registration'), null);
+      assert.match(view.find(n => n.type === 'ProductIdentitySection').props.errors.childCode, /manual/);
+      props.draft = { ...props.draft, childCode: 'USED-1' }; view.render();
+      view.find(n => n.props?.id === 'btn-submit-magazord-registration').props.onClick(); await flush();
+    }
+    assert.ok(view.find(n => n.props?.id === 'btn-confirm-magazord-registration')); assert.equal(calls, 0);
+  }
+});
+
 test('mandatory review and return preserve all new/used fields and chosen images without writing; warnings remain red and confirmation formats reais', async () => {
   for (const condition of ['novo', 'usado']) {
     const calls = [], completions = [], deps = dependencies();

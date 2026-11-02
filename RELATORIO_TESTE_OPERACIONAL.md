@@ -401,3 +401,55 @@ Storage, políticas, fontes operacionais, preços/estoque existentes ou produç�
 
 Não houve merge nem deploy de produção. O Preview é destinado à homologação; a
 integração comercial permanece simulada e a liberação em produção depende de autorização.
+
+## Correções pontuais após a homologação da Etapa 2 — 02/11/2026
+
+Base analisada: `f00f725b6faa37cd0c931ac921ff832aecc2f4b4`, branch
+`feat/amazon-spapi-official`, PR #1. A revisão visual já aprovada foi preservada.
+
+### Causas, correções e limites
+
+| Ponto | Evidência e resultado |
+| --- | --- |
+| Código Pai vermelho ao abrir | `createRegistrationDraft` inicia o Código Pai vazio e manual; `Ex: LV26579-P` em `ProductIdentitySection` é um placeholder, não geração automática. Um valor realmente preenchido passa na validação tanto para NOVO quanto para USADO. O erro obrigatório estava sendo apresentado antes da interação. Agora códigos manuais vazios mostram o erro após sair do campo ou solicitar revisão; continuam impedindo o avanço enquanto ausentes. Código Filho NOVO segue ISBN/EAN; USADO continua manual. Não foram enfraquecidas as regras. |
+| Preço durante a edição | O campo mantinha o texto livre sem formatar ao sair. Continua preservando a digitação e o cursor; somente ao perder o foco um valor completo e válido recebe duas casas decimais em pt-BR. Aceita `50`, `50,00`, `1.234,56`; valores incompletos ou inválidos permanecem disponíveis para correção e não passam pela validação. Revisão e conclusão continuam em reais. |
+| Casas decimais nas medidas | A conversão de unidades da Amazon mantinha 12 algarismos significativos, retendo ruído como `24.2999999752`. Medidas operacionais em g/cm agora usam até duas casas decimais, inclusive na inicialização e na revisão. Valores positivos muito pequenos não são zerados. Os valores e unidades originais de `amazonPhysical` continuam preservados e nenhuma fonte foi consultada novamente. |
+| Altura e espessura | O mapeamento existente é `width → largura`, `height → altura`, `length → profundidade/espessura`, usando dimensões de `item`, não `package`. Não houve inversão introduzida na Etapa 2. A Amazon não define esses eixos como orientação bibliográfica; não é seguro trocar por tamanho. Mantivemos os eixos originais, com aviso não bloqueante quando a profundidade importada excede a altura. No caso relatado, a apresentação é `3,18 cm` e `30,5 cm`; a orientação requer conferência física pelo operador. O alerta vermelho de aproximadamente `10 g` continua sem bloquear. |
+| Galeria do Batman | Não foi encontrada regressão entre o complemento SP-API/Laboratório, resultado, rascunho, seleção e revisão. A Etapa 2 não alterou esse mapeamento. Teste integrado com ISBN `9781419762109`, capa MAIN, cinco fotografias distintas e um redimensionamento duplicado preserva uma capa e cinco adicionais em todo o fluxo, sem nova consulta nem persistência personalizada. Quando o Laboratório não fornece galeria válida, a capa oficial continua sendo o resultado válido. |
+
+Referência dos eixos: [modelo oficial Catalog Items v2022-04-01](https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/models/catalog-items-api-model/catalogItems_2022-04-01.json),
+definições `Dimensions`/`ItemDimensions`. A conferência do código não substitui uma
+medição física do exemplar e não confirma que a fixture de teste reproduz o corpo
+original da consulta real.
+
+Foi feita somente leitura dos logs recentes do Preview anterior
+`dpl_9RQKztoNJd6vdddxDDo9rTDw94xa`. Há um evento `amazon_lab` em
+`2026-11-02T22:18:56.034Z`, duração `482,11 ms`, Function/HTTP `200` e código
+`amazon_unexpected`. O código atual interrompe esse caso quando não recebe HTML
+utilizável; HTTP 200 não garante uma galeria. O log não contém ISBN nem corpo da
+resposta, portanto não permite atribuir esse evento com certeza ao teste do Batman
+ou determinar o motivo exato da ausência de HTML. Não foi alterado o timeout,
+o limite de consultas, o tratamento de bloqueio ou a política de ausência de retries.
+Não foi feita nova consulta real à Amazon nem tentativa de contornar restrições.
+
+### Verificação desta correção
+
+- TypeScript (`npm.cmd run typecheck`) e lint (`npm.cmd run lint`): aprovados.
+- Build (`npm.cmd run build`): aprovado; mesmos avisos conhecidos de chunk >500 kB
+  e importação estática/dinâmica do cliente Supabase.
+- SP-API (`npm.cmd run test:spapi`): **78/78 aprovados**.
+- Fluxo relacionado (`postHomologation`, `operations`, `history`, `spapiIntegrated`,
+  `bibliographicContract`, `registrationLookup`): **180/180 aprovados**.
+- Bateria completa: **616 testes, 612 aprovados, quatro falhas anteriores**:
+  três mocks React sem `lazy` em `infrastructureUi.test.mjs` e o marcador textual
+  sensível a CRLF em `magazordMode.test.mjs`. Nenhuma nova falha identificada.
+- Novas regressões cobrem códigos NOVO/USADO sem aviso prematuro, preenchimento
+  real e bloqueio obrigatório, preço sem reformatação durante a digitação,
+  conversão sem ruído, preservação dos eixos originais e das fontes prioritárias,
+  revisão com alertas não bloqueantes, cinco fotos disponíveis até a revisão/retorno
+  e Laboratório interrompido com HTTP 200 preservando a capa.
+
+Banco, Storage, políticas, credenciais e integração real Magazord não foram alterados.
+Não houve merge ou deploy de produção. O novo Preview serve para conferir códigos,
+preço e medidas; a existência de fotos adicionais em uma resposta futura continua
+dependendo do conteúdo disponibilizado pelo Laboratório, sem garantia artificial.

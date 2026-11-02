@@ -1,5 +1,17 @@
 export const COVER_FORMATS = ['CC - Capa Convencional', 'CD - Capa Dura'] as const;
 
+/** Operational g/cm precision. Raw Amazon measurements remain in amazonPhysical. */
+export function roundPhysicalMeasurement(value: number): number {
+  if (!Number.isFinite(value)) return value;
+  const rounded = Number(value.toFixed(2));
+  return rounded === 0 && value !== 0 ? Number(value.toPrecision(3)) : rounded;
+}
+
+export function formatPhysicalMeasurement(value: number): string {
+  return new Intl.NumberFormat('pt-BR', { useGrouping: false, maximumFractionDigits: value !== 0 && Math.abs(value) < .01 ? 6 : 2 })
+    .format(roundPhysicalMeasurement(value));
+}
+
 function lookupKey(value: string): string {
   return value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ');
 }

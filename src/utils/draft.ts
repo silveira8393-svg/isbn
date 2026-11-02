@@ -7,7 +7,7 @@ import { BookInfo, BookCondition, RegistrationDraft, RegistrationMode } from '..
 import { sanitizeSynopsis } from './sanitizer';
 import { canonicalBookIsbn, cleanIsbn } from './isbn';
 import { imageReferences, isImageReference } from './imageUrls';
-import { normalizeLanguage } from './bibliographicNormalization';
+import { formatPhysicalMeasurement, normalizeLanguage, roundPhysicalMeasurement } from './bibliographicNormalization';
 
 export function registrationModeForCondition(condition: BookCondition, mode?: RegistrationMode): RegistrationMode {
   if (condition === 'usado') return 'new_used_from_known_edition';
@@ -51,7 +51,7 @@ function normalizeWeightToGrams(book: BookInfo): number | undefined {
       ? book.weight
       : Number(String(book.weight).replace(',', '.'));
   if (!Number.isFinite(num)) return undefined;
-  return book.weightUnit === 'kg' ? num * 1000 : num;
+  return roundPhysicalMeasurement(book.weightUnit === 'kg' ? num * 1000 : num);
 }
 
 /**
@@ -95,11 +95,11 @@ export function createRegistrationDraft(
 
   // Dimensões exatas (NÃO acrescentar 1 cm!)
   const width =
-    typeof book.width === 'number' && Number.isFinite(book.width) ? book.width : undefined;
+    typeof book.width === 'number' && Number.isFinite(book.width) ? roundPhysicalMeasurement(book.width) : undefined;
   const height =
-    typeof book.height === 'number' && Number.isFinite(book.height) ? book.height : undefined;
+    typeof book.height === 'number' && Number.isFinite(book.height) ? roundPhysicalMeasurement(book.height) : undefined;
   const depth =
-    typeof book.depth === 'number' && Number.isFinite(book.depth) ? book.depth : undefined;
+    typeof book.depth === 'number' && Number.isFinite(book.depth) ? roundPhysicalMeasurement(book.depth) : undefined;
 
   return {
     condition: initialCondition,
@@ -163,6 +163,12 @@ export function formatRegistrationPrice(value: string): string {
   }).format(amount);
 }
 
+/** Format only a completed, valid edit; preserve incomplete/invalid input for correction. */
+export function formatRegistrationPriceInput(value: string): string {
+  const amount = parseRegistrationPrice(value);
+  return amount === undefined ? value : new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+}
+
 export type RegistrationValidation = { errors: Record<string, string>; warnings: Record<string, string> };
 const absentText = (value?: string) => !value?.trim() || /^(?:(?:titulo|autores?|editora|idioma|formato)\s+)?(?:-|n\/a|null|none|indisponivel|desconhecid[oa]|nao\s+(?:cadastrad[oa]|informad[oa]|disponivel|encontrad[oa])|sem\s+(?:titulo|informacao))$/i
   .test(value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[.!:;]+$/, '').trim());
@@ -207,14 +213,21 @@ export function validateRegistrationDraft(draft: RegistrationDraft, source?: Boo
   if (draft.weight != null) {
     const grams = draft.weight * (draft.weightUnit === 'kg' ? 1000 : 1);
     if (!['g', 'kg'].includes(draft.weightUnit)) warn('weight', 'A unidade de peso não é reconhecida. Confira o valor em g ou kg.');
-    else if (!Number.isFinite(grams) || grams < 30 || grams > 30000) warn('weight', `ATENÇÃO — PESO POSSIVELMENTE INCORRETO: ${draft.weight} ${draft.weightUnit}. Confira a informação antes de confirmar o cadastro.`);
-    else if (source?.weight != null && !source.weightUnit && draft.weight === source.weight) warn('weight', 'A fonte não declarou a unidade de peso; este campo está em gramas. Confira antes de utilizar.');
+    else if (!Number.isFinite(grams) || grams < 30 || grams > 30000) warn('weight', `ATENÇÃO — PESO POSSIVELMENTE INCORRETO: ${formatPhysicalMeasurement(draft.weight)} ${draft.weightUnit}. Confira a informação antes de confirmar o cadastro.`);
+    else if (source?.weight != null && !source.weightUnit && roundPhysicalMeasurement(draft.weight) === roundPhysicalMeasurement(source.weight)) warn('weight', 'A fonte não declarou a unidade de peso; este campo está em gramas. Confira antes de utilizar.');
   }
   for (const field of ['width', 'height', 'depth'] as const) {
     const value = draft[field];
     if (value == null) continue;
     if (!Number.isFinite(value) || value <= 0 || value > 100) warn(field, 'Dimensão possivelmente incorreta. Confira o valor em centímetros.');
-    else if (source?.[field] === value && source.dimensionsUnit !== 'cm') warn(field, 'A fonte não declarou centímetros; confirme a unidade antes de utilizar.');
+    else if (source?.[field] != null && roundPhysicalMeasurement(source[field]) === roundPhysicalMeasurement(value) && source.dimensionsUnit !== 'cm') warn(field, 'A fonte não declarou centímetros; confirme a unidade antes de utilizar.');
+  }
+  const amazonAxis = (field: 'height' | 'depth') => source?.amazonPhysical?.item && source[field] != null && draft[field] != null
+    && (source.provider === 'Amazon SP-API' || source.provenance?.[field] === 'amazon_spapi_catalog_2022-04-01')
+    && roundPhysicalMeasurement(source[field]!) === roundPhysicalMeasurement(draft[field]!);
+  if (amazonAxis('height') && amazonAxis('depth') && draft.height! > 0 && draft.depth! > draft.height!) {
+    const orientation = `Confira a orientação: height da Amazon foi importado como altura (${formatPhysicalMeasurement(draft.height!)} cm) e length como profundidade (${formatPhysicalMeasurement(draft.depth!)} cm). Esses eixos não confirmam a espessura bibliográfica; não fazemos troca automática.`;
+    warn('height', orientation); warn('depth', orientation);
   }
   for (const field of ['mainImageUrl', 'additionalImageUrls'] as const) {
     const references = field === 'mainImageUrl' ? [draft.mainImageUrl].filter(Boolean) as string[] : draft.additionalImageUrls || [];

@@ -4,6 +4,7 @@
  */
 
 import { RegistrationDraft } from '../../types';
+import { formatRegistrationPriceInput } from '../../utils/draft';
 import { DollarSign, Package, MapPin, AlertCircle } from 'lucide-react';
 
 interface CommercialSectionProps {
@@ -17,7 +18,7 @@ export default function CommercialSection({
   onChange,
   errors,
 }: CommercialSectionProps) {
-  // Formata valor digitado para estilo moeda amigável se desejado
+  // Keep the caret and partial input intact; format only after leaving the field.
   const handlePriceChange = (val: string) => {
     // Permite digitação livre de números e vírgula/ponto
     onChange({ price: val });
@@ -59,6 +60,10 @@ export default function CommercialSection({
               data-registration-field="price"
               inputMode="decimal"
               onChange={(e) => handlePriceChange(e.target.value)}
+              onBlur={(e) => {
+                const price = formatRegistrationPriceInput(e.target.value);
+                if (price !== e.target.value) onChange({ price });
+              }}
               placeholder="0,00"
               className={`w-full pl-9 pr-3.5 py-2.5 rounded-lg border text-sm font-bold text-slate-900 transition-colors focus:outline-none focus:ring-2 ${
                 errors.price

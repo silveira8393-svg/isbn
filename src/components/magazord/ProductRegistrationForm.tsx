@@ -13,7 +13,7 @@ import {
 import { magazordMockService, type MagazordSimulationMode } from '../../services/magazordMockService';
 import { buildFinalDescription, formatRegistrationPrice, parseRegistrationPrice, registrationModeForCondition, validateRegistrationDraft } from '../../utils/draft';
 import { cleanIsbn } from '../../utils/isbn';
-import { normalizeLanguage } from '../../utils/bibliographicNormalization';
+import { formatPhysicalMeasurement, normalizeLanguage, roundPhysicalMeasurement } from '../../utils/bibliographicNormalization';
 import RegistrationImage from '../dashboard/RegistrationImage';
 import { imageReferences } from '../../utils/imageUrls';
 import ProductIdentitySection from './ProductIdentitySection';
@@ -63,6 +63,7 @@ export default function ProductRegistrationForm({
   const [reviewing, setReviewing] = useState(false);
   const [reviewRequested, setReviewRequested] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
+  const [touchedCodes, setTouchedCodes] = useState<Record<string, boolean>>({});
   const [focusField, setFocusField] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -88,7 +89,8 @@ export default function ProductRegistrationForm({
   };
   const validation = validateRegistrationDraft(draft, originalBook);
   const visibleRequired = Object.entries(validation.errors).filter(([field]) => field !== editingField);
-  const errors = Object.fromEntries(Object.entries({ ...validation.warnings, ...validation.errors }).filter(([field]) => field !== editingField));
+  const errors = Object.fromEntries(Object.entries({ ...validation.warnings, ...validation.errors }).filter(([field]) => field !== editingField
+    && !(validation.errors[field] && ['parentCode', 'childCode'].includes(field) && !reviewRequested && !touchedCodes[field] && !draft[field as 'parentCode' | 'childCode']?.trim())));
   const validFields = ['parentCode', 'childCode', 'title', 'category', 'price', 'quantity', 'isbn13', 'isbn10', 'ean', 'publisher', 'year', 'edition', 'language', 'format', 'pageCount', 'weight', 'width', 'height', 'depth']
     .filter(field => !validation.errors[field] && !validation.warnings[field] && field !== editingField && draft[field as keyof RegistrationDraft] != null && String(draft[field as keyof RegistrationDraft]).trim() !== '');
   useEffect(() => {
@@ -135,7 +137,7 @@ export default function ProductRegistrationForm({
         price: parseRegistrationPrice(draft.price)!.toFixed(2).replace('.', ','),
         ean: cleanIsbn(draft.ean), isbn13: cleanIsbn(draft.isbn13), isbn10: cleanIsbn(draft.isbn10),
         language: normalizeLanguage(draft.language),
-        weight: draft.weight == null ? undefined : draft.weight * (draft.weightUnit === 'kg' ? 1000 : 1), weightUnit: 'g',
+        weight: draft.weight == null ? undefined : roundPhysicalMeasurement(draft.weight * (draft.weightUnit === 'kg' ? 1000 : 1)), weightUnit: 'g',
       };
       const result = await magazordMockService.createProduct(draftToSubmit, actionMode);
       if (!result.success) throw new Error('Cadastro simulado não concluído.');
@@ -250,8 +252,8 @@ export default function ProductRegistrationForm({
     ...(draft.condition === 'usado' ? [['Conservação', draft.usedBookConditionNotes] as [string, unknown]] : []),
     ['Código Pai', draft.parentCode], ['Código Filho', draft.childCode], ['Preço', formatRegistrationPrice(draft.price)],
     ['Quantidade', draft.quantity], ['Localização', draft.location], ['Categoria', draft.category], ['Marca', draft.brand],
-    ['Peso', draft.weight == null ? undefined : `${draft.weight * (draft.weightUnit === 'kg' ? 1000 : 1)} g`],
-    ['Largura', draft.width == null ? undefined : `${draft.width} cm`], ['Altura', draft.height == null ? undefined : `${draft.height} cm`], ['Espessura', draft.depth == null ? undefined : `${draft.depth} cm`],
+    ['Peso', draft.weight == null ? undefined : `${formatPhysicalMeasurement(draft.weight * (draft.weightUnit === 'kg' ? 1000 : 1))} g`],
+    ['Largura', draft.width == null ? undefined : `${formatPhysicalMeasurement(draft.width)} cm`], ['Altura', draft.height == null ? undefined : `${formatPhysicalMeasurement(draft.height)} cm`], ['Espessura / profundidade', draft.depth == null ? undefined : `${formatPhysicalMeasurement(draft.depth)} cm`],
     ['NCM', draft.ncm], ['Origem fiscal', draft.fiscalOrigin], ['Unidade', draft.unit],
   ];
 
@@ -282,7 +284,11 @@ export default function ProductRegistrationForm({
       </section>}
       <div hidden={reviewing} className="space-y-6" onChangeCapture={event => {
         const field = (event.target as HTMLElement).getAttribute?.('data-registration-field'); if (field) setEditingField(field);
-      }} onBlurCapture={() => setEditingField(null)}>
+      }} onBlurCapture={event => {
+        const field = (event?.target as HTMLElement | undefined)?.getAttribute?.('data-registration-field');
+        if (field === 'parentCode' || field === 'childCode') setTouchedCodes(previous => ({ ...previous, [field]: true }));
+        setEditingField(null);
+      }}>
       {/* Barra de Navegação e Título da Tela */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
