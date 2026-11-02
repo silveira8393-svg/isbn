@@ -309,6 +309,9 @@ export default function BookDetailsCard({ book }: BookDetailsCardProps) {
             <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight leading-snug">
               {book.title}
             </h2>
+            {Object.values(book.provenance || {}).includes('amazon_spapi_catalog_2022-04-01') && (
+              <p className="text-xs text-slate-500">Fonte complementar: Amazon SP-API.</p>
+            )}
 
             {hasValue(book.subtitle) && (
               <p className="text-base text-slate-600 font-normal mt-1 leading-normal">

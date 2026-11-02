@@ -31,6 +31,7 @@ import {
   OperationType,
 } from './types';
 import { searchBookByIsbnBrasilApi } from './services/brasilApi';
+import { searchAmazonOfficial, complementWithAmazon } from './services/amazonOfficial';
 import {
   mergeBookWithDistribuidora,
   searchBookByIsbnDistribuidoraCuritiba,
@@ -173,6 +174,8 @@ export default function App() {
     setActiveTab('consultar');
 
     try {
+      const searchActor = currentUserRef.current;
+      const amazonPending = searchAmazonOfficial(cleaned, searchActor);
       const result = await searchBookByIsbnBrasilApi(cleaned).catch(() => ({
         book: null, diagnostic: { status: 'FALHA_CONEXAO' },
       }));
@@ -182,18 +185,26 @@ export default function App() {
       }));
       const identifiers = cleaned.length === 13 ? { isbn13: cleaned } : { isbn10: cleaned };
       const isbnBook: BookInfo = { id: `isbn-${cleaned}`, title: '', ...identifiers };
-      const enrichedBook = result.book || distribuidoraResult.book ? {
+      const primaryBook = result.book || distribuidoraResult.book ? {
         ...(distribuidoraResult.book ? mergeBookWithDistribuidora(result.book || isbnBook, distribuidoraResult.book) : result.book!),
         ...identifiers,
       } : null;
+      const amazonResult = await amazonPending;
+      // Never carry an account/store's supplementary data into a newer identity.
+      const sameActor = currentUserRef.current.id === searchActor.id && currentUserRef.current.storeId === searchActor.storeId
+        && currentUserRef.current.role === searchActor.role && currentUserRef.current.active;
+      const amazonBook = sameActor ? amazonResult.book : null;
+      const enrichedBook = complementWithAmazon(primaryBook, amazonBook);
       const failedStatus = (status: number | string) => status !== 404 && !(typeof status === 'number' && status >= 200 && status < 300);
       const brasilFailure = failedStatus(result.diagnostic.status);
       const curitibaFailure = distribuidoraResult.diagnostic.state === 'unavailable' || failedStatus(distribuidoraResult.diagnostic.status);
-      const technicalFailure = brasilFailure || curitibaFailure;
+      const amazonFailure = amazonResult.status === 'unavailable';
+      const technicalFailure = brasilFailure || curitibaFailure || amazonFailure;
       setBibliographicState(enrichedBook ? 'found' : technicalFailure ? 'error' : 'not_found');
       if (technicalFailure) {
         const sources = [brasilFailure ? `BrasilAPI (${typeof result.diagnostic.status === 'number' ? 'HTTP ' : ''}${result.diagnostic.status})` : null,
-          curitibaFailure ? `Distribuidora Curitiba (${typeof distribuidoraResult.diagnostic.status === 'number' ? 'HTTP ' : ''}${distribuidoraResult.diagnostic.status})` : null].filter(Boolean).join('; ');
+          curitibaFailure ? `Distribuidora Curitiba (${typeof distribuidoraResult.diagnostic.status === 'number' ? 'HTTP ' : ''}${distribuidoraResult.diagnostic.status})` : null,
+          amazonFailure ? 'Amazon SP-API (indisponível)' : null].filter(Boolean).join('; ');
         setErrorText(`Falha na consulta bibliográfica: ${sources}. Isso não confirma que a obra inexiste. ${enrichedBook
           ? 'Os dados disponíveis foram preservados; complete os campos ausentes no cadastro.'
           : 'Você pode continuar com cadastro manual após a verificação do simulador abaixo.'}`);
@@ -249,6 +260,7 @@ export default function App() {
           isbn: cleaned, title: enrichedBook.title, operationType: 'isbn_search', status: 'success',
           completedAt: new Date(newItem.timestamp).toISOString(),
           metadata: { resultFound: true, sources: {
+            amazonSpapi: { status: amazonResult.status, resultFound: Boolean(amazonBook) },
             brasilApi: { status: result.diagnostic.status, resultFound: Boolean(result.book), partialFailure: brasilFailure },
             distribuidoraCuritiba: { status: distribuidoraResult.diagnostic.status, resultFound: Boolean(distribuidoraResult.book),
               partialFailure: curitibaFailure },
@@ -282,6 +294,7 @@ export default function App() {
             errorMessage: normalCompletion ? undefined : 'Falha do serviço na consulta bibliográfica.',
             completedAt: new Date(newItem.timestamp).toISOString(),
             metadata: { flow: 'isbn_search', resultFound: false, sources: {
+              amazonSpapi: { status: amazonResult.status, resultFound: false },
               brasilApi: { status, resultFound: false },
               distribuidoraCuritiba: { consulted: true, status: distribuidoraResult.diagnostic.status, resultFound: false, partialFailure: curitibaFailure },
             } },

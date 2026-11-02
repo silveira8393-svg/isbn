@@ -11,10 +11,10 @@ const compiled = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts',
   export { default as catalog } from './api/amazon/spapi/catalog';
 ` }, bundle: true, write: false, metafile: true, platform: 'node', format: 'esm', target: 'node24' });
 const api = await import('data:text/javascript;base64,' + Buffer.from(compiled.outputFiles[0].text).toString('base64'));
-const uid = '11111111-1111-4111-8111-111111111111', sid = '22222222-2222-4222-8222-222222222222';
+const uid = '11111111-1111-4111-8111-111111111111', sid = api.PRIVATE_STORE_ID;
 const env = { AMAZON_SPAPI_ENABLED: 'true', AMAZON_SPAPI_EXTERNAL_AUTH_APPROVED: 'true', AMAZON_SPAPI_ORIGIN: 'https://isbn.example.invalid',
   AMAZON_SPAPI_APP_ID: 'amzn1.sellerapps.app.synthetic', AMAZON_SPAPI_CLIENT_ID: 'synthetic-client', AMAZON_SPAPI_CLIENT_SECRET: 'synthetic-secret',
-  AMAZON_SPAPI_TOKEN_KEY: 'ab'.repeat(32), AMAZON_SPAPI_STORE_ID: sid, AMAZON_SPAPI_SELLER_ID: 'SELLERTEST',
+  AMAZON_SPAPI_TOKEN_KEY: 'ab'.repeat(32), AMAZON_SPAPI_STORE_ID: sid, AMAZON_SPAPI_SELLER_ID: 'SELLERTEST', AMAZON_SPAPI_REFRESH_TOKEN: 'Atzr|synthetic-refresh',
   SUPABASE_URL: 'https://db.example.invalid', SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_synthetic', SUPABASE_SERVICE_ROLE_KEY: 'synthetic-service' };
 const isbn = '9788535914849', principal = { user_id: uid, store_id: sid };
 const tokens = { access_token: 'synthetic-access', refresh_token: 'synthetic-refresh', token_type: 'bearer', expires_in: 3600 };
@@ -37,6 +37,8 @@ function harness(settings = {}) {
     calls.push({ url: String(url), init }); assert.equal(init.redirect, 'error'); assert.equal(init.cache, 'no-store');
     const parsed = new URL(url);
     if (parsed.pathname === '/auth/v1/user') return Response.json(settings.user || { id: uid });
+    if (parsed.pathname === '/rest/v1/profiles') return Response.json(active ? [{ id: uid, active: true }] : []);
+    if (parsed.pathname === '/rest/v1/store_users') return Response.json(active ? [{ user_id: uid, store_id: sid, role: 'developer', active: true }] : []);
     if (parsed.href === 'https://api.amazon.com/auth/o2/token') {
       assert.equal(init.method, 'POST'); assert.equal(init.body.get('client_secret'), env.AMAZON_SPAPI_CLIENT_SECRET);
       if (settings.lwaError) return new Response('sensitive-upstream-error', { status: settings.lwaError });
@@ -145,7 +147,7 @@ test('ISBN validates check digits and accepts 10/13 plus hyphens; no request inj
 });
 test('catalog returns projected bibliographic fields only, filters ISBN mismatch, refreshes without persistence', async () => {
   const h = harness({ catalog: { numberOfResults: 2, items: [item, { ...item, identifiers: [] }] } });
-  assert.equal((await h.handler('catalog')(h.request('catalog', { isbn }))).status, 409);
+  assert.equal((await h.handler('catalog')(h.request('catalog', { isbn }))).status, 200);
   await h.callback(await h.start());
   const response = await h.handler('catalog')(h.request('catalog', { isbn })); assert.equal(response.status, 200);
   const result = await response.json(); assert.equal(result.items.length, 1); assert.equal(result.items[0].title, 'Synthetic Book');

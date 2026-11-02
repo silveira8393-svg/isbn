@@ -1,5 +1,7 @@
 # Provisionamento da autoautorização privada Silveira Lab
 
+**Documento histórico. Não executar provisionamento para a consulta ISBN atual.** O fluxo vigente usa o refresh token protegido no servidor Vercel, sem armazenamento de autorização no Supabase. Consulte [o guia atual de consulta ISBN](amazon-spapi-env-query.md). Tabelas, dados e utilitário anterior foram preservados, mas não são dependências desse endpoint.
+
 Complemento da PR #1, branch `feat/amazon-spapi-official`. O utilitário foi implementado e testado com dados sintéticos; o provisionamento real não foi executado. Nenhuma migração, consulta remota, autorização real, merge ou publicação foi realizada nesta etapa.
 
 `vercel.json` desabilita deployments Git automáticos exclusivamente da branch `feat/amazon-spapi-official`, para permitir atualizar a PR sem publicar Preview. As demais branches mantêm o comportamento padrão. Homologação futura requer autorização e revisão separadas dessa configuração ou uso de uma branch própria de homologação.

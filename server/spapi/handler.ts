@@ -1,9 +1,10 @@
-import { configuration, SpapiError, fail, nonce, hash, cookie, browserCookie, encrypt, decrypt } from './core.js';
-import { createStore, authorize, type Store, type State } from './store.js';
+import { configuration, catalogConfiguration, SpapiError, fail, nonce, hash, cookie, browserCookie, encrypt } from './core.js';
+import { createStore, authorize, authorizeCatalog, type Store, type State } from './store.js';
 import { lwa, normalizeIsbn, searchCatalog } from './catalog.js';
 
 type Mode = 'start' | 'login' | 'callback' | 'catalog';
 export function createSpapiHandler(mode: Mode, options: { env?: NodeJS.ProcessEnv; fetcher?: typeof fetch; store?: Store } = {}) {
+  if (mode === 'catalog') return createCatalogHandler(options);
   const env = options.env || process.env, fetcher = options.fetcher || fetch;
   return async (request: Request): Promise<Response> => {
     const headers: Record<string, string> = { 'Cache-Control': 'private, no-store', 'CDN-Cache-Control': 'no-store',
@@ -13,13 +14,13 @@ export function createSpapiHandler(mode: Mode, options: { env?: NodeJS.ProcessEn
     const redirect = (url: URL) => new Response(null, { status: 303, headers: { ...headers, Location: url.href } });
     try {
       const config = configuration(env), url = new URL(request.url), store = options.store || createStore(config, fetcher);
-      const path = mode === 'catalog' ? '/api/amazon/spapi/catalog' : `/api/amazon/oauth/${mode}`;
+      const path = `/api/amazon/oauth/${mode}`;
       if (url.origin !== config.origin || url.pathname !== path) fail(404, 'not_found');
       if (request.method !== (mode === 'start' ? 'POST' : 'GET')) {
         headers.Allow = mode === 'start' ? 'POST' : 'GET'; return reply({ code: 'method_not_allowed' }, 405);
       }
       // Exact parameters and no duplicates: no ambiguous proxy/framework interpretation.
-      const allowed = mode === 'start' ? [] : mode === 'catalog' ? ['isbn'] : mode === 'login'
+      const allowed = mode === 'start' ? [] : mode === 'login'
         ? ['amazon_callback_uri', 'amazon_state', 'selling_partner_id', 'version'] : ['state', 'selling_partner_id', 'spapi_oauth_code', 'error', 'error_description'];
       if (url.search.length > 12000 || [...url.searchParams.keys()].some(k => !allowed.includes(k) || url.searchParams.getAll(k).length !== 1)) fail(400, 'invalid_parameters');
       const param = (name: string, max = 4096) => {
@@ -43,16 +44,6 @@ export function createSpapiHandler(mode: Mode, options: { env?: NodeJS.ProcessEn
         target.search = new URLSearchParams({ application_id: config.app, state, redirect_uri: config.redirect,
           ...(config.beta ? { version: 'beta' } : {}) }).toString();
         return reply({ authorization_url: target.href });
-      }
-      if (mode === 'catalog') {
-        const origin = request.headers.get('origin');
-        if ((origin && origin !== config.origin) || request.headers.get('sec-fetch-site') === 'cross-site') fail(403, 'origin_denied');
-        await authorize(request, config, store, fetcher);
-        const isbn = normalizeIsbn(param('isbn', 32)), token = await store.token(config.store, config.seller);
-        if (!token || token.store_id !== config.store || token.selling_partner_id !== config.seller) fail(409, 'amazon_authorization_required');
-        const refresh = decrypt(token, config.key, context);
-        const access = await lwa(config, fetcher, { grant_type: 'refresh_token', refresh_token: refresh });
-        return reply(await searchCatalog(config, fetcher, isbn, access.access_token));
       }
       approved();
       const browser = browserCookie(request);
@@ -90,6 +81,31 @@ export function createSpapiHandler(mode: Mode, options: { env?: NodeJS.ProcessEn
       return reply({ code: 'amazon_authorized' });
     } catch (error) {
       // Never log request URLs, query strings, upstream bodies, credentials or exception messages.
+      const safe = error instanceof SpapiError ? error : new SpapiError(503, 'spapi_unavailable');
+      if (safe.status === 429) headers['Retry-After'] = '2';
+      return reply({ code: safe.code }, safe.status);
+    }
+  };
+}
+
+function createCatalogHandler(options: { env?: NodeJS.ProcessEnv; fetcher?: typeof fetch }) {
+  return async (request: Request) => {
+    const headers: Record<string, string> = { 'Cache-Control': 'private, no-store', 'CDN-Cache-Control': 'no-store', 'Vercel-CDN-Cache-Control': 'no-store',
+      'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff', Vary: 'Authorization' };
+    const reply = (data: object, status = 200) => Response.json(data, { status, headers });
+    try {
+      const url = new URL(request.url);
+      if (url.pathname !== '/api/amazon/spapi/catalog') fail(404, 'not_found');
+      if (request.method !== 'GET') { headers.Allow = 'GET'; return reply({ code: 'method_not_allowed' }, 405); }
+      if (url.search.length > 100 || [...url.searchParams.keys()].some(k => k !== 'isbn') || url.searchParams.getAll('isbn').length !== 1) fail(400, 'invalid_parameters');
+      const env = options.env || process.env, fetcher = options.fetcher || fetch, config = catalogConfiguration(env, request);
+      const origin = request.headers.get('origin');
+      if ((origin && origin !== config.origin) || request.headers.get('sec-fetch-site') === 'cross-site') fail(403, 'origin_denied');
+      await authorizeCatalog(request, config, fetcher);
+      const isbn = normalizeIsbn(url.searchParams.get('isbn') || '');
+      const token = await lwa(config, fetcher, { grant_type: 'refresh_token', refresh_token: config.refresh });
+      return reply({ ...await searchCatalog(config, fetcher, isbn, token.access_token), contentPolicy: 'images_and_synopsis_omitted' });
+    } catch (error) {
       const safe = error instanceof SpapiError ? error : new SpapiError(503, 'spapi_unavailable');
       if (safe.status === 429) headers['Retry-After'] = '2';
       return reply({ code: safe.code }, safe.status);

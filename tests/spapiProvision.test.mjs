@@ -9,7 +9,7 @@ const compiled = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts',
   export * from './server/spapi/handler'; export * from './server/spapi/supabaseHeaders';
 ` }, bundle: true, write: false, platform: 'node', format: 'esm', target: 'node24' });
 const api = await import('data:text/javascript;base64,' + Buffer.from(compiled.outputFiles[0].text).toString('base64'));
-const ref = 'a'.repeat(20), store = '22222222-2222-4222-8222-222222222222', uid = '11111111-1111-4111-8111-111111111111';
+const ref = 'a'.repeat(20), store = api.PRIVATE_STORE_ID, uid = '11111111-1111-4111-8111-111111111111';
 const jwt = (claims) => Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url') + '.' + Buffer.from(JSON.stringify(claims)).toString('base64url') + '.syntheticSignature';
 const env = { ISBN_EXPECTED_SUPABASE_PROJECT_REF: ref, SUPABASE_URL: `https://${ref}.supabase.co`, ISBN_CONFIRM_PRIVATE_OWN_ACCOUNT: 'YES',
   AMAZON_SPAPI_STORE_ID: store, AMAZON_SPAPI_SELLER_ID: 'SELLERTEST', AMAZON_SPAPI_TOKEN_KEY: 'ab'.repeat(32),
@@ -135,18 +135,18 @@ test('insert failures and ambiguous success stop without retry or credential dis
     assert.doesNotMatch(output.join(), /sensitive|Atzr\||syntheticSignature|confirmed ISBN project/);
   }
 });
-test('privately provisioned row supports ISBN query with external authorization still blocked', async () => {
-  const h = harness(); await api.provisionSelfAuthorization(env, h.fetcher); const row = [...h.saved.values()][0], calls = [];
+test('server environment token supports ISBN query without provisioned rows and keeps external authorization blocked', async () => {
+  const calls = [];
   const runtimeEnv = { ...env, AMAZON_SPAPI_ENABLED: 'true', AMAZON_SPAPI_EXTERNAL_AUTH_APPROVED: 'false', AMAZON_SPAPI_ORIGIN: 'https://isbn.example.invalid',
     AMAZON_SPAPI_APP_ID: 'amzn1.sellerapps.app.synthetic', AMAZON_SPAPI_CLIENT_ID: 'synthetic-client', AMAZON_SPAPI_CLIENT_SECRET: 'synthetic-client-secret',
     SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_synthetic', SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_' + 's'.repeat(32) };
   const fetcher = async (target, init) => {
     const url = new URL(target); calls.push(url.href);
     if (url.pathname === '/auth/v1/user') return Response.json({ id: uid });
-    if (url.pathname.startsWith('/rest/')) { assert.equal(init.headers.apikey, runtimeEnv.SUPABASE_SERVICE_ROLE_KEY); assert.equal(init.headers.Authorization, undefined); }
-    if (url.pathname.endsWith('/profiles')) return Response.json([{ id: uid }]);
-    if (url.pathname.endsWith('/store_users')) return Response.json([{ user_id: uid }]);
-    if (url.pathname.endsWith('/amazon_spapi_authorizations')) return Response.json([row]);
+    if (url.pathname.startsWith('/rest/')) { assert.equal(init.headers.apikey, runtimeEnv.SUPABASE_PUBLISHABLE_KEY); assert.equal(init.headers.Authorization, 'Bearer synthetic-session-token'); }
+    if (url.pathname.endsWith('/profiles')) return Response.json([{ id: uid, active: true }]);
+    if (url.pathname.endsWith('/store_users')) return Response.json([{ user_id: uid, store_id: store, active: true, role: 'developer' }]);
+    assert.ok(!url.pathname.includes('amazon_spapi_authorizations'));
     if (url.href === 'https://api.amazon.com/auth/o2/token') {
       assert.equal(init.body.get('refresh_token'), env.AMAZON_SPAPI_REFRESH_TOKEN);
       return Response.json({ access_token: 'synthetic-access', token_type: 'bearer', expires_in: 3600 });
@@ -156,15 +156,15 @@ test('privately provisioned row supports ISBN query with external authorization 
   };
   const response = await api.createSpapiHandler('catalog', { env: runtimeEnv, fetcher })(new Request(runtimeEnv.AMAZON_SPAPI_ORIGIN + '/api/amazon/spapi/catalog?isbn=9788535914849', { headers: { authorization: 'Bearer synthetic-session-token' } }));
   assert.equal(response.status, 200); assert.deepEqual((await response.json()).items, []);
-  const start = await api.createSpapiHandler('start', { env: runtimeEnv, fetcher })(new Request(runtimeEnv.AMAZON_SPAPI_ORIGIN + '/api/amazon/oauth/start', { method: 'POST', headers: { authorization: 'Bearer synthetic-session-token', origin: runtimeEnv.AMAZON_SPAPI_ORIGIN } }));
+  const start = await api.createSpapiHandler('start', { env: runtimeEnv, fetcher, store: { active: async () => {} } })(new Request(runtimeEnv.AMAZON_SPAPI_ORIGIN + '/api/amazon/oauth/start', { method: 'POST', headers: { authorization: 'Bearer synthetic-session-token', origin: runtimeEnv.AMAZON_SPAPI_ORIGIN } }));
   assert.equal(start.status, 403); assert.equal((await start.json()).code, 'developer_classification_pending');
   assert.equal(calls.filter(url => /sellercentral/.test(url)).length, 0);
 });
-test('HTTP route bundles exclude the administrative provisioning module and refresh-token input', async () => {
+test('HTTP route bundles exclude administrative provisioning and CLI confirmation input', async () => {
   const routes = await build({ entryPoints: ['api/amazon/spapi/catalog.ts', 'api/amazon/oauth/start.ts', 'api/amazon/oauth/login.ts', 'api/amazon/oauth/callback.ts'],
     outdir: 'unused', bundle: true, write: false, metafile: true, platform: 'node', format: 'esm' });
   assert.ok(!Object.keys(routes.metafile.inputs).some(p => /provision/.test(p)));
-  for (const file of routes.outputFiles) assert.doesNotMatch(file.text, /AMAZON_SPAPI_REFRESH_TOKEN|ISBN_CONFIRM_PRIVATE_OWN_ACCOUNT/);
+  for (const file of routes.outputFiles) assert.doesNotMatch(file.text, /ISBN_CONFIRM_PRIVATE_OWN_ACCOUNT/);
 });
 test('frontend bundle contains no provisioning code, administrative variables or synthetic credentials', async () => {
   const frontend = await build({ entryPoints: ['src/main.tsx'], bundle: true, write: false, metafile: true, platform: 'browser', format: 'esm',

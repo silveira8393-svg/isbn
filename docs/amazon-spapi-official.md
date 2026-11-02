@@ -1,5 +1,7 @@
 # Amazon SP-API oficial — preparação para revisão
 
+**Fluxo atual:** [consulta ISBN com refresh token protegido no servidor](amazon-spapi-env-query.md). A consulta simplificada substitui o provisionamento descrito historicamente abaixo: não exige tabela de autorizações, chave AES, service role, APP_ID ou migração. O conteúdo restante registra o fluxo OAuth anterior, mantido independente e desligado.
+
 Complemento para a própria conta Silveira Lab: [provisionamento seguro de autoautorização privada](amazon-spapi-self-authorization.md), com execução administrativa separada, sem OAuth externo. As exigências de regularização do fluxo externo descritas abaixo não bloqueiam a consulta privada com token próprio já provisionado; `AMAZON_SPAPI_EXTERNAL_AUTH_APPROVED` deve continuar `false` nesse caso.
 
 Branch: `feat/amazon-spapi-official`, baseada em `origin/main` no commit `84b6e76`.

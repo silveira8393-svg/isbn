@@ -8,7 +8,7 @@ export function normalizeIsbn(input: string) {
   } else if (/^97[89]\d{10}$/.test(isbn) && [...isbn].reduce((sum, c, i) => sum + Number(c) * (i % 2 ? 3 : 1), 0) % 10 === 0) return isbn;
   return fail(422, 'invalid_isbn');
 }
-export async function lwa(config: Config, fetcher: typeof fetch, grant: Record<string, string>) {
+export async function lwa(config: Pick<Config, 'client' | 'secret'>, fetcher: typeof fetch, grant: Record<string, string>) {
   const data = await jsonRequest(fetcher, 'https://api.amazon.com/auth/o2/token', {
     method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ ...grant, client_id: config.client, client_secret: config.secret }),
@@ -26,10 +26,10 @@ function equivalent(value: string) {
   return base + ((10 - sum % 10) % 10);
 }
 // Strict projection: never return raw attributes, seller information, offers, prices or inventory.
-export async function searchCatalog(config: Config, fetcher: typeof fetch, isbn: string, access: string) {
+export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, fetcher: typeof fetch, isbn: string, access: string) {
   const url = new URL('https://sellingpartnerapi-na.amazon.com/catalog/2022-04-01/items');
   url.search = new URLSearchParams({ identifiers: isbn, identifiersType: 'ISBN', marketplaceIds: MARKETPLACE,
-    includedData: 'summaries,attributes,identifiers,images', pageSize: '20' }).toString();
+    includedData: 'summaries,attributes,identifiers', pageSize: '20' }).toString();
   const data = await jsonRequest(fetcher, url, { method: 'GET', headers: { 'x-amz-access-token': access,
     'x-amz-date': new Date().toISOString().replace(/[:-]|\.\d{3}/g, ''), 'User-Agent': 'ISBN/1.0 (Language=TypeScript)', Accept: 'application/json' } });
   if (!data || !Array.isArray(data.items) || data.items.length > 20 || !Number.isInteger(data.numberOfResults) || data.numberOfResults < 0) fail(502, 'invalid_catalog_response');
@@ -40,14 +40,12 @@ export async function searchCatalog(config: Config, fetcher: typeof fetch, isbn:
     const summary = Array.isArray(item.summaries) ? item.summaries.find((s: any) => s.marketplaceId === MARKETPLACE) : null;
     const attr = (name: string) => Array.isArray(item.attributes?.[name]) ? item.attributes[name].filter((a: any) => a.marketplace_id === MARKETPLACE) : [];
     const value = (name: string) => text(attr(name)[0]?.value);
-    const images = Array.isArray(item.images) ? item.images.find((g: any) => g.marketplaceId === MARKETPLACE)?.images : [];
     return { asin: text(item.asin), isbn, title: text(summary?.itemName) || value('item_name'),
-      authors: attr('author').map((a: any) => text(a.value)).filter(Boolean), publisher: value('publisher'),
-      publicationDate: value('publication_date'), language: value('language'), binding: value('binding'),
+      authors: attr('author').map((a: any) => text(a.name) || text(a.value)).filter(Boolean), publisher: value('publisher'),
+      publicationDate: value('publication_date') || value('street_date'), language: value('language'), binding: value('binding'), edition: value('edition'),
       pageCount: typeof attr('number_of_pages')[0]?.value === 'number' ? attr('number_of_pages')[0].value : null,
-      synopsis: value('product_description'), images: Array.isArray(images) ? images.slice(0, 20).flatMap((image: any) => {
-        try { const url = new URL(image.link); return url.protocol === 'https:' && !url.username && !url.password ? [{ url: url.href, variant: text(image.variant) }] : []; } catch { return []; }
-      }) : [], source: 'amazon_spapi_catalog_2022-04-01', marketplaceId: MARKETPLACE };
+      // No assumed license for Amazon descriptions/images in an external registration flow.
+      synopsis: null, images: [], source: 'amazon_spapi_catalog_2022-04-01', marketplaceId: MARKETPLACE };
   });
   return { isbn, items, hasMore: Boolean(data.pagination?.nextToken), requiresReview: true };
 }

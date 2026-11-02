@@ -1,4 +1,4 @@
-import { type Config, type Principal, type Envelope, fail, jsonRequest, limitedJson, UUID } from './core.js';
+import { type Config, type AuthConfig, type Principal, type Envelope, fail, jsonRequest, limitedJson, UUID } from './core.js';
 import { serviceHeaders } from './supabaseHeaders.js';
 
 export type State = Principal & { state_hash: string; browser_hash: string; seller_id: string; phase: 'start' | 'callback'; expires_at: string };
@@ -34,7 +34,7 @@ export function createStore(config: Config, fetcher: typeof fetch): Store {
     },
   };
 }
-export async function authorize(request: Request, config: Config, store: Store, fetcher: typeof fetch): Promise<Principal> {
+export async function authorize(request: Request, config: AuthConfig, store: Pick<Store, 'active'>, fetcher: typeof fetch): Promise<Principal> {
   const bearer = request.headers.get('authorization');
   if (!bearer || !/^Bearer [A-Za-z0-9._~-]{16,8192}$/.test(bearer)) return fail(401, 'unauthenticated');
   // Auth validates the JWT; no trust in client role headers or user_metadata.
@@ -46,4 +46,16 @@ export async function authorize(request: Request, config: Config, store: Store, 
   const principal = { user_id: user.id, store_id: config.store };
   await store.active(principal);
   return principal;
+}
+export function authorizeCatalog(request: Request, config: AuthConfig, fetcher: typeof fetch) {
+  return authorize(request, config, { async active(principal) {
+    const headers = { apikey: config.publishable, Authorization: request.headers.get('authorization')! };
+    const call = (table: string, query: Record<string, string>) => jsonRequest(fetcher,
+      `${config.supabase}/rest/v1/${table}?${new URLSearchParams(query)}`, { method: 'GET', headers }, 65536);
+    const profiles = await call('profiles', { id: `eq.${principal.user_id}`, active: 'eq.true', select: 'id,active', limit: '1' });
+    const members = await call('store_users', { user_id: `eq.${principal.user_id}`, store_id: `eq.${config.store}`, role: 'eq.developer', active: 'eq.true', select: 'user_id,store_id,role,active', limit: '1' });
+    if (!Array.isArray(profiles) || profiles.length !== 1 || profiles[0]?.id !== principal.user_id || profiles[0]?.active !== true
+      || !Array.isArray(members) || members.length !== 1 || members[0]?.user_id !== principal.user_id || members[0]?.store_id !== config.store
+      || members[0]?.role !== 'developer' || members[0]?.active !== true) fail(403, 'developer_required');
+  } }, fetcher);
 }

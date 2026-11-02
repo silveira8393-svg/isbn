@@ -9,6 +9,8 @@ export const nonce = () => randomBytes(32).toString('base64url');
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const SELLER = /^[A-Z0-9]{4,100}$/;
 export const MARKETPLACE = 'A2Q3Y263D00KWC';
+// Private self-authorization belongs only to this homologation store, never to the client bookstore.
+export const PRIVATE_STORE_ID = '492af2ad-905c-42f8-90f4-aa6c1dc142f3';
 export const COOKIE = '__Host-isbn_spapi';
 export const cookie = (value: string) => `${COOKIE}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${value ? 600 : 0}`;
 export function browserCookie(request: Request) {
@@ -38,6 +40,29 @@ export function configuration(env: NodeJS.ProcessEnv) {
     service: env.SUPABASE_SERVICE_ROLE_KEY!, publishable: env.SUPABASE_PUBLISHABLE_KEY!, beta: env.AMAZON_SPAPI_DRAFT === 'true' };
 }
 export type Config = ReturnType<typeof configuration>;
+export type AuthConfig = Pick<Config, 'supabase' | 'publishable' | 'store'>;
+export function catalogConfiguration(env: NodeJS.ProcessEnv, request: Request) {
+  if (env.AMAZON_SPAPI_ENABLED !== 'true') fail(503, 'spapi_disabled');
+  if (env.AMAZON_SPAPI_STORE_ID !== PRIVATE_STORE_ID) fail(403, 'private_account_store_mismatch');
+  let supabase: URL;
+  try { supabase = new URL((env.SUPABASE_URL || env.VITE_SUPABASE_URL)!); } catch { return fail(503, 'configuration'); }
+  if (supabase.protocol !== 'https:' || supabase.username || supabase.password || supabase.pathname !== '/' || supabase.search || supabase.hash) fail(503, 'configuration');
+  const publishable = env.SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
+  let validKey = publishable.startsWith('sb_publishable_');
+  if (publishable.startsWith('eyJ')) {
+    try { validKey = JSON.parse(Buffer.from(publishable.split('.')[1], 'base64url').toString()).role === 'anon'; } catch { validKey = false; }
+  }
+  const origin = new URL(request.url).origin;
+  const allowed = [env.AMAZON_SPAPI_ORIGIN, ...[env.VERCEL_URL, env.VERCEL_BRANCH_URL].filter(Boolean).map(host => `https://${host}`)];
+  if (!allowed.some(value => {
+    try { const url = new URL(value!); return url.protocol === 'https:' && url.origin === value && value === origin; } catch { return false; }
+  })) fail(403, 'origin_denied');
+  const refresh = env.AMAZON_SPAPI_REFRESH_TOKEN || '';
+  if (!validKey || !env.AMAZON_SPAPI_CLIENT_ID || !env.AMAZON_SPAPI_CLIENT_SECRET || !SELLER.test(env.AMAZON_SPAPI_SELLER_ID || '')
+    || !/^Atzr\|[\x21-\x7e]+$/.test(refresh) || refresh.length > 2048) fail(503, 'configuration');
+  return { origin, supabase: supabase.origin, publishable, store: PRIVATE_STORE_ID,
+    client: env.AMAZON_SPAPI_CLIENT_ID!, secret: env.AMAZON_SPAPI_CLIENT_SECRET!, refresh };
+}
 export type Principal = { user_id: string; store_id: string };
 export type Envelope = { ciphertext: string; iv: string; tag: string; key_version: number };
 // AAD prevents swapping encrypted tokens between stores/sellers. Key v1 must remain available until re-encryption.
