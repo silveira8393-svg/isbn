@@ -1,5 +1,6 @@
 // Transporte e validacao compartilhados entre o servidor local e a Vercel Function.
 import { request as httpsRequest } from 'node:https';
+import { MIMEType } from 'node:util';
 import { canonicalBookIsbn } from '../../src/utils/bibliographicEvaluation.js';
 import { cleanIsbn } from '../../src/utils/isbn.js';
 export const MAX_BYTES = 8 * 1024 * 1024;
@@ -27,7 +28,12 @@ export function fetchHtml(isbn: string, requestHttps: typeof httpsRequest = http
       const status = response.statusCode || 0;
       const stop = (mensagem: string) => { resolve({ html: null, status_http: status, mensagem }); response.destroy(); };
       if (status !== 200) return stop('Resposta não 200; interrompido sem redirecionamento ou nova tentativa.');
-      if (!/^(text\/html|application\/xhtml\+xml)(?:;|$)/i.test(response.headers['content-type'] || '')) return stop('Resposta sem conteúdo HTML; consulta interrompida.');
+      const contentType = response.headers['content-type'];
+      if (!contentType?.trim()) return stop('Content-Type ausente; consulta interrompida antes da leitura do corpo.');
+      let mime: string;
+      try { mime = new MIMEType(contentType).essence; }
+      catch { return stop('Content-Type inválido; consulta interrompida antes da leitura do corpo.'); }
+      if (!['text/html', 'application/xhtml+xml'].includes(mime)) return stop('Content-Type não HTML; consulta interrompida antes da leitura do corpo.');
       const chunks: Buffer[] = [];
       let length = 0;
       response.on('data', (chunk: Buffer) => {
@@ -37,6 +43,7 @@ export function fetchHtml(isbn: string, requestHttps: typeof httpsRequest = http
       });
       response.on('end', () => {
         const html = Buffer.concat(chunks).toString('utf8');
+        if (!html.trim()) return stop('Corpo HTML vazio; consulta interrompida.');
         if (/captcha|validatecaptcha|robot check|automated access|acesso automatizado/i.test(html)) return stop('CAPTCHA ou restrição detectada; nenhuma tentativa de contorno.');
         resolve({ html, status_http: status, tamanho_bytes: length });
       });
