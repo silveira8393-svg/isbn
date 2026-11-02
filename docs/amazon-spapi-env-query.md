@@ -4,9 +4,50 @@ Este é o fluxo vigente da PR #1. `GET /api/amazon/spapi/catalog?isbn=...` usa `
 
 ## Fluxo existente
 
-O mesmo formulário ISBN consulta BrasilAPI e Curitiba com a prioridade anterior, e inicia a Amazon em paralelo quando o usuário é Desenvolvimento ativo da loja de homologação Silveira Lab. A Amazon preenche somente campos bibliográficos ausentes: título, autores, editora, data, idioma, acabamento, edição e páginas. Não substitui dados das outras fontes nem escolhe automaticamente entre múltiplos ASINs correspondentes. Falha/timeout da fonte preserva as outras fontes e o cadastro manual. Não há novos botões, telas, consentimento, escrita de catálogo, preços ou estoque.
+O mesmo formulário ISBN consulta BrasilAPI e Curitiba com a prioridade anterior, e inicia a Amazon em paralelo quando o usuário é Desenvolvimento ativo da loja de homologação Silveira Lab. A Amazon preenche somente campos ausentes: título, autores, editora, data/ano, idioma, acabamento, edição, páginas, ISBNs e medidas físicas do item. Não substitui dados válidos das outras fontes nem escolhe automaticamente entre múltiplos ASINs correspondentes. Falha/timeout da fonte preserva as outras fontes e o cadastro manual. Não há novos botões, telas, consentimento, escrita de catálogo, preços ou estoque.
 
 O servidor normaliza e valida ISBN-10/13 com dígito verificador, consulta Catalog Items v2022-04-01 no marketplace Brasil e filtra o resultado pelos identificadores retornados pela Amazon. ISBN-10 e sua equivalência 978 são aceitos. A ficha identifica a origem dos campos complementados. Histórico e auditoria mantêm o fluxo já existente, sem gravações administrativas adicionais. Troca de conta/loja/perfil descarta o complemento Amazon tardio.
+
+## Extração ampliada na mesma consulta — 02/11/2026
+
+A mesma operação `searchCatalogItems` solicita `summaries,attributes,identifiers,dimensions,images`, sem chamada adicional por ASIN, paginação automática ou retry. Os conjuntos são opcionais na resposta: solicitá-los não garante que todo ASIN tenha todos os campos. São usados somente grupos do marketplace Brasil e atributos globais ou desse marketplace, com preferência para os atributos específicos do Brasil. Nenhum dado da página HTML é usado como fallback.
+
+| Campo | Localização suportada na resposta oficial | Tratamento no ISBN |
+| --- | --- | --- |
+| Título | `summaries[].itemName`, `attributes.item_name[].value` | Complementa título ausente |
+| Autores | `attributes.author[].name/value`, `summaries[].contributors[]` com `role.value=author` | Deduplica; editor/ator não vira autor |
+| Editora | `attributes.publisher[].value/name`, `attributes.publisher_name[].value/name` | Aceita atributos globais e alias explícito; fabricante/marca não são presumidos como editora |
+| Publicação e ano | `attributes.publication_date[].value`, `attributes.street_date[].value` | Data de calendário e ano de quatro dígitos; preserva data/ano prioritários |
+| Idioma | `attributes.language[].value/type` | Prefere original, depois publicado; traduz nomes/códigos conhecidos, por exemplo `english` → `Inglês`; desconhecidos são preservados |
+| Formato | `attributes.binding[].value` | Por exemplo `paperback` → `Capa comum`; desconhecidos são preservados |
+| Edição | `attributes.edition[].value` | Texto ou número inteiro positivo; não infere edição |
+| Páginas | `attributes.number_of_pages[].value` | Inteiro positivo, aceitando valor numérico ou string numérica; não soma volumes nem inventa total |
+| Peso | `dimensions[].item.weight`, `attributes.item_weight[]` | Preserva valor/unidade originais em `physical.item`/`amazonPhysical.item`; converte unidades conhecidas para o campo existente em gramas |
+| Dimensões | `dimensions[].item.height/width/length`, `attributes.item_dimensions[]` | Preserva valor/unidade originais; converte unidades conhecidas para cm; `length` corresponde a `depth`, sem ordenar ou trocar eixos |
+| Embalagem | `dimensions[].package`, `attributes.item_package_dimensions[]`, `attributes.item_package_weight[]` | Preservada separadamente em `physical.package`/`amazonPhysical.package`; não substitui as medidas do item nem é exportada como metadado de embalagem |
+| ISBNs | `identifiers[].identifiers[]`, atributos explícitos `externally_assigned_product_identifier`, `isbn`, `isbn_10`, `isbn_13` | Mantém somente ISBNs válidos e equivalentes ao consultado; expõe ISBN-10/13 e identificadores efetivamente retornados; não deduz ISBN de ASIN |
+| Imagens | `images[].images[]` | Só `imageMetadata`: presença do dataset, quantidade, variantes, largura/altura em pixels e indicador de URL; nenhum link |
+| Descrição | Atributos como `product_description` | Conteúdo descartado; `synopsis=null` e `images=[]` permanecem no contrato |
+
+O dataset `dimensions` tem preferência por medida sobre os atributos equivalentes. Unidades desconhecidas são preservadas nos metadados físicos, mas não são rotuladas como g/cm. Peso e unidade são complementados juntos; medidas válidas das fontes prioritárias e suas unidades não são reinterpretadas. `amazonPhysical` não integra a exportação do rascunho.
+
+Para o ISBN `9780515154559` / ASIN `0515154555`, o [teste real anterior](amazon-spapi-validation-2026-11-02.md) comprovou título, autor, data, idioma e formato na resposta projetada. **Não foi guardado o JSON original da Amazon. Esta ampliação foi validada com fixtures sintéticas e o JSON projetado já fornecido; não houve nova consulta real ou diagnóstico nesta etapa.** Portanto, não se afirma que os novos campos já foram retornados para esse ASIN.
+
+| Campo | Página Amazon, conforme informação do usuário | Resposta projetada já confirmada | Distinção entre ausência e descarte anterior |
+| --- | --- | --- | --- |
+| Título | Jack Reacher Boxed Set | Jack Reacher Boxed Set | Retornado e aproveitado |
+| Autor | Lee Child | Child, Lee | Retornado e aproveitado, preservando a grafia fornecida |
+| Editora | Jove Books | `null` | JSON original indisponível; não prova ausência na Amazon. Agora são aceitos atributos globais, `name` e alias de editora |
+| Publicação/ano | 07/05/2013 | `2013-05-07T00:00:01Z` | Retornado; normalização de ano já homologada para `2013` |
+| Idioma/formato | Inglês / Capa comum | `english` / `paperback` | Retornados; agora traduzidos no cliente |
+| Edição/páginas | Não informadas pelo usuário | `null` / `null` | JSON original indisponível; não se conclui ausência. Inteiros numéricos e páginas em string passam a ser aceitos |
+| Peso | 1,89 kg | Não projetado | Código ignorava medidas; disponibilidade real ainda depende da resposta ampliada |
+| Dimensões | 19,7 × 10,8 × 19,4 cm | Não projetadas | Dataset não era solicitado e atributos físicos eram ignorados; não se infere ordem de eixos da página |
+| ISBN-10 | 0515154555 | Não preservado como ISBN-10 | Identificadores eram usados apenas para conferir a edição; ASIN coincidente não comprova identificador retornado |
+| ISBN-13 | 9780515154559 | 9780515154559 | Consulta/edição confirmadas; ambos os formatos efetivamente retornados passam a ser preservados |
+| Imagens/descrição | Disponíveis na página | `[]` / `null` | Imagens não eram solicitadas; URLs e descrição eram descartadas deliberadamente. Isso não comprova ausência no catálogo |
+
+Não foram criados módulos, ferramentas, scripts, diagnósticos ou rotas adicionais. A autenticação existente e a configuração protegida do Preview permanecem as mesmas.
 
 ## Limite de autorização
 
@@ -38,23 +79,24 @@ O navegador usa URL relativa, Bearer da sessão Supabase e cookie de mesma orige
 
 ## Imagens, sinopses e condições Amazon
 
-O fluxo simplificado não solicita o dataset de imagens, não devolve URLs de imagens/sinopses da Amazon e não as copia para ficha, rascunho, histórico ou Magazord. Conteúdo de descrição que venha no dataset de atributos é descartado. Imagens e sinopses já fornecidas pelas outras fontes são preservadas. Isso evita presumir licença de reutilização de conteúdo da Amazon fora do uso autorizado.
+O fluxo solicita o dataset de imagens apenas para verificar a presença e projetar metadados sem URLs. Não baixa arquivos, não devolve URLs de imagens/sinopses da Amazon e não as copia para ficha, rascunho, histórico ou Magazord. Conteúdo de descrição que venha no dataset de atributos é descartado. `imageMetadata` não é importado para `BookInfo` ou rascunho. Imagens e sinopses já fornecidas pelas outras fontes são preservadas. A reutilização de conteúdo segue bloqueada até a confirmação das permissões aplicáveis.
 
 A [AUP oficial](https://sellercentral.amazon.com/solution-provider/policy?policyType=AUP&locale=en_US) limita o uso a atividades Amazon permitidas e a usuários que tenham autorizado o acesso, com restrições de compartilhamento (seções 1.1, 3.4, 4.6). A consulta técnica privada não comprova que a reutilização dos metadados para um cadastro externo seja permitida. Antes de usar os resultados comercialmente fora da finalidade Amazon autorizada, confirmar esse uso com a Amazon e a autorização da conta relevante. Não se confunde SP-API com uma licença genérica de catálogo, nem com regras de Product Advertising API.
 
-## Primeira consulta real: pendências concretas
+## Homologação do mapeamento ampliado
 
-- Disponibilizar um Preview autorizado. `vercel.json` ainda desabilita deployments Git automáticos desta branch; nenhum deploy foi feito nesta tarefa. A primeira execução online exige uma publicação de Preview separada, após revisão; produção continua fora do escopo.
-- Conferir as variáveis acima no Preview, inclusive token privado/clientes do mesmo aplicativo, vendedor e acesso ao Product Listing/Catalog Items do marketplace Brasil. Não foram lidos segredos nem feitas chamadas com credenciais reais para comprovar esse acesso.
-- Ter sessão válida com perfil e vínculo Desenvolvimento ativos na loja Silveira Lab do projeto ISBN. Não foi consultado o banco real para comprovar esse vínculo; não são necessárias novas tabelas ou migrações.
-- Para o Sebo Livraria Sul ou uso externo dos resultados, resolver autorização própria e finalidade permitida antes de usar o token/dados. O token da Silveira Lab não cobre esse impedimento.
+A autenticação LWA e a consulta real já foram comprovadas no Preview, conforme o [relatório da validação anterior](amazon-spapi-validation-2026-11-02.md). Esta ampliação reutiliza a mesma configuração; não exige novas variáveis, credenciais, tabelas, migrações ou provisionamento.
+
+Resta disponibilizar separadamente um Preview do novo commit e conferir os campos efetivamente retornados na pesquisa normal por ISBN, com a mesma sessão Desenvolvimento/Silveira Lab. `vercel.json` ainda desabilita deployments Git automáticos desta branch; o envio da PR não publica um Preview. Nenhum deploy foi feito nesta etapa e produção permanece fora do escopo. A presença de novos campos no schema ou nas fixtures não comprova sua disponibilidade real para o livro consultado.
+
+Permissões de reutilização de imagens/descrições e autorização própria para atender outra loja continuam independentes desta validação técnica. O token privado da Silveira Lab permanece limitado à homologação autorizada.
 
 Fontes: [Catalog Items API](https://developer-docs.amazon/sp-api/docs/catalog-items-api-v2022-04-01-reference), [LWA e conexão SP-API](https://developer-docs.amazon/sp-api/docs/connecting-to-the-selling-partner-api), [políticas Amazon](https://developer-docs.amazon/sp-api/docs/policies-and-agreements), [variáveis de sistema Vercel](https://vercel.com/docs/environment-variables/system-environment-variables).
 
 ## Validação desta etapa
 
-Node 24.19.0: `npm.cmd run test:spapi` com **47/47 testes aprovados**, TypeScript, lint (`tsc --noEmit`) e build aprovados. Suíte geral: **562 testes, 558 aprovados e as mesmas quatro falhas preexistentes** (três mocks de React.lazy nos testes de infraestrutura e um marcador de fonte ausente no teste Magazord). Permanecem os avisos conhecidos de tamanho do bundle e import Supabase estático/dinâmico.
+Node 24.19.0: `npm.cmd run test:spapi` com **56/56 testes aprovados**, TypeScript, lint (`tsc --noEmit`) e build aprovados. Suíte geral: **571 testes, 567 aprovados e as mesmas quatro falhas preexistentes** (três mocks de React.lazy nos testes de infraestrutura e um marcador de fonte ausente no teste Magazord). Permanecem os avisos conhecidos de tamanho do bundle e import Supabase estático/dinâmico.
 
-Os testes novos exercitam o handler real com Auth/LWA/Catalog simulados, ausência completa de AES/tabela/service role/APP_ID, host Preview diferente de produção, bloqueio de outra loja e perfis, ISBN correspondente/incompatível, supressão de imagens/sinopses, cliente com sessão, ambiguidade e o formulário ISBN existente até o rascunho. As outras fontes mantêm seus valores; falhas e respostas tardias não transferem complemento Amazon entre contas. O bundle frontend não contém módulos de servidor nem entradas de segredos Amazon.
+Os testes exercitam o handler real com Auth/LWA/Catalog simulados, ausência completa de AES/tabela/service role/APP_ID, host Preview diferente de produção, bloqueio de outra loja e perfis, ISBN correspondente/incompatível e dígitos verificadores inválidos, supressão de imagens/sinopses, cliente com sessão, ambiguidade e o formulário ISBN existente até o rascunho. A ampliação cobre editora global/alias, autores por função, páginas numéricas/string, edição, peso/dimensões por dataset e atributos, conversão g/cm com preservação das unidades originais, separação da embalagem e metadados de imagens sem links. As outras fontes mantêm seus valores e unidades; falhas e respostas tardias não transferem complemento Amazon entre contas. O bundle frontend não contém módulos de servidor nem entradas de segredos Amazon.
 
 Nenhuma credencial real foi lida, impressa ou usada nos testes. Nenhuma chamada real, migração, registro de produto, alteração Magazord ou publicação foi feita. O diff de `supabase/`, `experimentos/`, Amazon experimental e componentes/serviço Magazord nesta etapa é vazio.

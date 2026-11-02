@@ -40,6 +40,11 @@ export interface BookInfo {
   height?: number;
   depth?: number;
   dimensionsUnit?: 'cm';
+  // Original Amazon units and item/package distinction; not part of the registration export.
+  amazonPhysical?: {
+    item?: Partial<Record<'height' | 'width' | 'length' | 'weight', { value: number; unit: string }>>;
+    package?: Partial<Record<'height' | 'width' | 'length' | 'weight', { value: number; unit: string }>>;
+  };
   enrichmentSource?: string;
   provenance?: Record<string, string>;
   provider?: string;

@@ -26,26 +26,81 @@ function equivalent(value: string) {
   const sum = [...base].reduce((n, c, i) => n + Number(c) * (i % 2 ? 3 : 1), 0);
   return base + ((10 - sum % 10) % 10);
 }
+function matchesIsbn(value: unknown, isbn: string) {
+  try { return typeof value === 'string' && equivalent(normalizeIsbn(value)) === equivalent(isbn); }
+  catch { return false; }
+}
+type Measurement = { value: number; unit: string };
+type PhysicalDimensions = Partial<Record<'height' | 'width' | 'length' | 'weight', Measurement>>;
+function physicalDimensions(value: any): PhysicalDimensions {
+  const result: PhysicalDimensions = {};
+  for (const key of ['height', 'width', 'length', 'weight'] as const) {
+    const measure = value?.[key];
+    if (typeof measure?.value === 'number' && Number.isFinite(measure.value) && measure.value > 0
+      && typeof measure.unit === 'string' && /^[a-zA-Z _-]{1,40}$/.test(measure.unit)) result[key] = { value: measure.value, unit: measure.unit };
+  }
+  return result;
+}
 // Strict projection: never return raw attributes, seller information, offers, prices or inventory.
 export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, fetcher: typeof fetch, isbn: string, access: string) {
   const url = new URL('https://sellingpartnerapi-na.amazon.com/catalog/2022-04-01/items');
   url.search = new URLSearchParams({ identifiers: isbn, identifiersType: 'ISBN', marketplaceIds: MARKETPLACE,
-    includedData: 'summaries,attributes,identifiers', pageSize: '20' }).toString();
+    includedData: 'summaries,attributes,identifiers,dimensions,images', pageSize: '20' }).toString();
   const data = await jsonRequest(fetcher, url, { method: 'GET', headers: { 'x-amz-access-token': access,
     'x-amz-date': new Date().toISOString().replace(/[:-]|\.\d{3}/g, ''), 'User-Agent': 'ISBN/1.0 (Language=TypeScript)', Accept: 'application/json' } });
   if (!data || !Array.isArray(data.items) || data.items.length > 20 || !Number.isInteger(data.numberOfResults) || data.numberOfResults < 0) fail(502, 'invalid_catalog_response');
-  const text = (value: unknown): string | null => typeof value === 'string' && value.length <= 10000 ? value : null;
-  const items = data.items.filter((item: any) => Array.isArray(item?.identifiers) && item.identifiers.some((group: any) => group.marketplaceId === MARKETPLACE
-    && Array.isArray(group.identifiers) && group.identifiers.some((id: any) => ['ISBN', 'EAN', 'GTIN'].includes(id.identifierType)
-      && typeof id.identifier === 'string' && equivalent(id.identifier) === equivalent(isbn)))).map((item: any) => {
-    const summary = Array.isArray(item.summaries) ? item.summaries.find((s: any) => s.marketplaceId === MARKETPLACE) : null;
-    const attr = (name: string) => Array.isArray(item.attributes?.[name]) ? item.attributes[name].filter((a: any) => a.marketplace_id === MARKETPLACE) : [];
-    const value = (name: string) => text(attr(name)[0]?.value);
+  const text = (value: unknown): string | null => typeof value === 'string' && value.trim() && value.length <= 10000 ? value.trim() : null;
+  const matching = data.items.filter((item: any) => Array.isArray(item?.identifiers) && item.identifiers.some((group: any) => group?.marketplaceId === MARKETPLACE
+    && Array.isArray(group.identifiers) && group.identifiers.some((id: any) => ['ISBN', 'EAN', 'GTIN'].includes(id?.identifierType)
+      && matchesIsbn(id.identifier, isbn))));
+  const items = matching.map((item: any) => {
+    const summary = Array.isArray(item.summaries) ? item.summaries.find((s: any) => s?.marketplaceId === MARKETPLACE) : null;
+    const attr = (name: string) => {
+      const values = Array.isArray(item.attributes?.[name]) ? item.attributes[name] : [];
+      return [...values.filter((a: any) => a?.marketplace_id === MARKETPLACE), ...values.filter((a: any) => a && a.marketplace_id === undefined)];
+    };
+    const value = (name: string) => attr(name).map((a: any) => text(a.value) || text(a.name)).find(Boolean) || null;
+    const positiveInteger = (v: unknown) => (typeof v === 'number' || (typeof v === 'string' && /^\d+$/.test(v)))
+      && Number.isSafeInteger(Number(v)) && Number(v) > 0 ? Number(v) : null;
+    const authors = attr('author').map((a: any) => text(a.name) || text(a.value)).filter(Boolean);
+    if (!authors.length && Array.isArray(summary?.contributors)) authors.push(...summary.contributors
+      .filter((c: any) => c?.role?.value === 'author').map((c: any) => text(c.value)).filter(Boolean));
+    const reportedIdentifiers = (item.identifiers as any[]).filter(g => g?.marketplaceId === MARKETPLACE && Array.isArray(g.identifiers)).flatMap(g => g.identifiers)
+      .filter(id => ['ISBN', 'EAN', 'GTIN'].includes(id?.identifierType)).map(id => id.identifier);
+    reportedIdentifiers.push(...attr('externally_assigned_product_identifier').filter((id: any) => typeof id.type === 'string' && ['isbn', 'ean', 'gtin'].includes(id.type.toLowerCase())).map((id: any) => id.value));
+    for (const key of ['isbn', 'isbn_10', 'isbn_13']) reportedIdentifiers.push(...attr(key).map((id: any) => id.value));
+    const identifiers = reportedIdentifiers.filter(id => matchesIsbn(id, isbn)).map(id => {
+      const identifier = normalizeIsbn(id);
+      return { type: identifier.length === 10 ? 'ISBN_10' : 'ISBN_13', identifier };
+    });
+    const physicalGroup = Array.isArray(item.dimensions) ? item.dimensions.find((g: any) => g?.marketplaceId === MARKETPLACE) : undefined;
+    const physical: { item?: PhysicalDimensions; package?: PhysicalDimensions } = {};
+    for (const [scope, dimensionName, weightName] of [['item', 'item_dimensions', 'item_weight'], ['package', 'item_package_dimensions', 'item_package_weight']]) {
+      const selected = physicalDimensions(physicalGroup?.[scope]);
+      const fallback = Object.assign({}, ...attr(dimensionName).reverse().map(physicalDimensions));
+      const weight = attr(weightName).map((v: unknown) => physicalDimensions({ weight: v }).weight).find(Boolean);
+      if (weight) fallback.weight = weight;
+      const dimensions = { ...fallback, ...selected };
+      if (Object.keys(dimensions).length) physical[scope as 'item' | 'package'] = dimensions;
+    }
+    const languages = attr('language');
+    const language = languages.find((v: any) => v.type === 'original' && text(v.value)) || languages.find((v: any) => v.type === 'published' && text(v.value)) || languages.find((v: any) => text(v.value));
+    const images = (Array.isArray(item.images) ? item.images : []).filter((g: any) => g?.marketplaceId === MARKETPLACE)
+      .flatMap((g: any) => Array.isArray(g.images) ? g.images : []);
+    const pixels = (n: unknown) => typeof n === 'number' && Number.isSafeInteger(n) && n > 0 ? n : null;
     return { asin: text(item.asin), isbn, title: text(summary?.itemName) || value('item_name'),
-      authors: attr('author').map((a: any) => text(a.name) || text(a.value)).filter(Boolean), publisher: value('publisher'),
+      authors: [...new Set(authors)], publisher: value('publisher') || value('publisher_name'),
       publicationDate: normalizePublicationDate(value('publication_date')) || normalizePublicationDate(value('street_date')) || null,
-      language: value('language'), binding: value('binding'), edition: value('edition'),
-      pageCount: typeof attr('number_of_pages')[0]?.value === 'number' ? attr('number_of_pages')[0].value : null,
+      language: text(language?.value), binding: value('binding'),
+      edition: value('edition') || (positiveInteger(attr('edition')[0]?.value)?.toString() ?? null),
+      pageCount: attr('number_of_pages').map((a: any) => positiveInteger(a.value)).find((n: number | null) => n !== null) ?? null,
+      identifiers: [...new Map(identifiers.map(id => [id.identifier, id])).values()],
+      isbn10: identifiers.find(id => id.type === 'ISBN_10')?.identifier || null,
+      isbn13: identifiers.find(id => id.type === 'ISBN_13')?.identifier || null,
+      physical: Object.keys(physical).length ? physical : null,
+      imageMetadata: { datasetReturned: Array.isArray(item.images), count: images.length,
+        entries: images.map((image: any) => ({ variant: /^(MAIN|PT\d{2}|SWCH)$/.test(image?.variant) ? image.variant : 'other',
+          width: pixels(image?.width), height: pixels(image?.height), hasUrl: typeof image?.link === 'string' && Boolean(image.link) })) },
       // No assumed license for Amazon descriptions/images in an external registration flow.
       synopsis: null, images: [], source: 'amazon_spapi_catalog_2022-04-01', marketplaceId: MARKETPLACE };
   });

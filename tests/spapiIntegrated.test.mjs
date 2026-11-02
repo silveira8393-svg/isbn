@@ -36,7 +36,7 @@ function server(options = {}) {
     }
     assert.equal(url.origin, 'https://sellingpartnerapi-na.amazon.com'); assert.equal(url.pathname, '/catalog/2022-04-01/items');
     assert.equal(init.method, 'GET'); assert.equal(url.searchParams.get('identifiersType'), 'ISBN');
-    assert.ok(!url.searchParams.get('includedData').includes('images'));
+    assert.equal(url.searchParams.get('includedData'), 'summaries,attributes,identifiers,dimensions,images');
     return Response.json({ numberOfResults: 1, items: [options.item || item] });
   };
   const handler = api.createSpapiHandler('catalog', { env: { ...env, ...options.env }, fetcher,
@@ -192,7 +192,8 @@ test('Amazon timestamp for reported ISBN becomes year 2013 through the official 
   const merged = client.complementWithAmazon(null, result.book);
   assert.equal(merged.year, '2013'); assert.equal(api.createRegistrationDraft(merged).year, '2013');
   const priority = { id: 'priority', title: 'Priority title', isbn13: reportedIsbn, publishedDate: '1998-03-02', year: '1998' };
-  assert.deepEqual(client.complementWithAmazon(priority, result.book), { ...priority, authors: ['Synthetic Author'], publisher: 'Synthetic Publisher', provenance: { authors: 'amazon_spapi_catalog_2022-04-01', publisher: 'amazon_spapi_catalog_2022-04-01' } });
+  assert.deepEqual(client.complementWithAmazon(priority, result.book), { ...priority, authors: ['Synthetic Author'], publisher: 'Synthetic Publisher',
+    rawIdentifiers: [{ type: 'ISBN_13', identifier: reportedIsbn }], provenance: { authors: 'amazon_spapi_catalog_2022-04-01', publisher: 'amazon_spapi_catalog_2022-04-01', rawIdentifiers: 'amazon_spapi_catalog_2022-04-01' } });
   const noYear = { ...priority, year: undefined };
   assert.equal(client.complementWithAmazon(noYear, result.book).publishedDate, '1998-03-02');
   assert.equal(client.complementWithAmazon(noYear, result.book).year, undefined, 'Amazon year must not override a priority source date');
@@ -225,8 +226,107 @@ test('recorded Preview response for Jack Reacher retains bibliographic fields an
   t.mock.method(globalThis, 'fetch', async () => Response.json(response));
   const result = await client.searchAmazonOfficial(response.isbn, user);
   assert.equal(result.book.title, 'Jack Reacher Boxed Set'); assert.deepEqual(result.book.authors, ['Child, Lee']);
-  assert.equal(result.book.language, 'english'); assert.equal(result.book.format, 'paperback');
+  assert.equal(result.book.language, 'Inglês'); assert.equal(result.book.format, 'Capa comum');
   assert.equal(result.book.publishedDate, '2013-05-07'); assert.equal(result.book.year, '2013');
   assert.equal(api.createRegistrationDraft(client.complementWithAmazon(null, result.book)).year, '2013');
   assert.equal(result.book.publisher, undefined); assert.equal(result.book.coverUrl, undefined); assert.equal(result.book.synopsis, undefined);
+});
+
+// Synthetic catalog attributes/measurements exercise the official schema, not a claim about the live book.
+const expandedItem = { ...item,
+  summaries: [{ marketplaceId: api.MARKETPLACE, itemName: 'Fixture Book', contributors: [
+    { role: { value: 'editor' }, value: 'Not an author' }, { role: { value: 'author' }, value: 'Fixture Author' }] }],
+  identifiers: [{ marketplaceId: api.MARKETPLACE, identifiers: [
+    { identifierType: 'ISBN', identifier: '8535914846' }, { identifierType: 'EAN', identifier: isbn },
+    { identifierType: 'ISBN', identifier: '8535914847' }, { identifierType: 'EAN', identifier: '9780515154559' }] }],
+  attributes: { publisher: [{ marketplace_id: 'OTHER', value: 'Wrong marketplace' }, { name: 'Fixture Press' }],
+    number_of_pages: [{ value: 0 }, { marketplace_id: api.MARKETPLACE, value: '320' }], edition: [{ value: 2 }],
+    language: [{ type: 'translated', value: 'spanish' }, { type: 'original', value: 'english' }], binding: [{ value: 'paperback' }],
+    externally_assigned_product_identifier: [{ type: 'isbn', value: '8535914846' }],
+    item_weight: [{ value: 99, unit: 'grams' }], product_description: [{ value: 'Restricted prose' }], list_price: [{ value: 100 }] },
+  dimensions: [{ marketplaceId: 'OTHER', item: { weight: { value: 999, unit: 'kilograms' } } }, { marketplaceId: api.MARKETPLACE,
+    item: { weight: { value: 1.5, unit: 'kilograms' }, height: { value: 8, unit: 'inches' },
+      width: { value: 100, unit: 'millimeters' }, length: { value: 2, unit: 'centimeters' } },
+    package: { weight: { value: 2, unit: 'kilograms' }, height: { value: 30, unit: 'centimeters' } } }],
+  images: [{ marketplaceId: 'OTHER', images: [{ variant: 'MAIN', link: 'https://images.example.invalid/other.jpg' }] },
+    { marketplaceId: api.MARKETPLACE, images: [{ variant: 'MAIN', width: 300, height: 400, link: 'https://images.example.invalid/restricted.jpg' },
+      { variant: 'PT01', width: 600, height: 800, link: 'https://images.example.invalid/restricted2.jpg' }] }] };
+
+test('catalog projects publisher, pages, edition, authors, exact ISBN identifiers and item/package measurements in one request', async () => {
+  const h = server({ item: expandedItem }), response = await h.handler(h.request()), data = await response.json(), book = data.items[0];
+  assert.equal(response.status, 200); assert.equal(book.publisher, 'Fixture Press'); assert.equal(book.pageCount, 320); assert.equal(book.edition, '2');
+  assert.deepEqual(book.authors, ['Fixture Author']); assert.equal(book.language, 'english');
+  assert.equal(book.isbn10, '8535914846'); assert.equal(book.isbn13, isbn);
+  assert.deepEqual(book.identifiers, [{ type: 'ISBN_10', identifier: '8535914846' }, { type: 'ISBN_13', identifier: isbn }]);
+  assert.deepEqual(book.physical, { item: expandedItem.dimensions[1].item, package: expandedItem.dimensions[1].package });
+  assert.equal(h.calls.length, 5); assert.equal(h.calls.filter(c => c.url.pathname.includes('/catalog/')).length, 1);
+  assert.doesNotMatch(JSON.stringify(data), /Wrong marketplace|999|Not an author|Restricted prose|list_price|diagnostics/);
+});
+
+test('image presence, variants and pixel sizes are projected without URLs, downloads or description content', async () => {
+  const h = server({ item: expandedItem }), data = await (await h.handler(h.request())).json();
+  assert.deepEqual(data.items[0].imageMetadata, { datasetReturned: true, count: 2, entries: [
+    { variant: 'MAIN', width: 300, height: 400, hasUrl: true }, { variant: 'PT01', width: 600, height: 800, hasUrl: true }] });
+  assert.deepEqual(data.items[0].images, []); assert.equal(data.items[0].synopsis, null);
+  assert.doesNotMatch(JSON.stringify(data), /https?:\/\/|restricted\.jpg|Restricted prose|synthetic-secret|synthetic-access|Atzr\|/);
+  assert.equal(h.calls.length, 5);
+  for (const [images, returned] of [[undefined, false], [[], true]]) {
+    const empty = server({ item: { ...expandedItem, images } }), result = await (await empty.handler(empty.request())).json();
+    assert.deepEqual(result.items[0].imageMetadata, { datasetReturned: returned, count: 0, entries: [] });
+  }
+});
+
+test('client fills physical/bibliographic fields in existing book flow, keeps original units and never imports restricted content', async t => {
+  const h = server({ item: expandedItem }), payload = await (await h.handler(h.request())).json();
+  globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
+  t.after(() => { delete globalThis.__spapiSession; });
+  t.mock.method(globalThis, 'fetch', async () => Response.json(payload));
+  const { book } = await client.searchAmazonOfficial(isbn, user);
+  assert.equal(book.language, 'Inglês'); assert.equal(book.format, 'Capa comum'); assert.equal(book.weight, 1500); assert.equal(book.weightUnit, 'g');
+  assert.equal(book.height, 20.32); assert.equal(book.width, 10); assert.equal(book.depth, 2); assert.equal(book.dimensionsUnit, 'cm');
+  assert.deepEqual(book.amazonPhysical, payload.items[0].physical); assert.deepEqual(book.rawIdentifiers, payload.items[0].identifiers);
+  const primary = { id: 'primary', title: 'Priority', authors: ['Priority Author'], publisher: 'Priority Press', pageCount: 200,
+    year: '1998', edition: '1', language: 'Português', format: 'Brochura', isbn10: '8535914846', isbn13: isbn,
+    weight: .5, weightUnit: 'kg', width: 15, height: 20, dimensionsUnit: 'cm' };
+  const before = structuredClone(primary), merged = client.complementWithAmazon(primary, book);
+  for (const key of Object.keys(primary)) assert.deepEqual(merged[key], primary[key], 'primary value preserved: ' + key);
+  assert.deepEqual(primary, before); assert.equal(merged.depth, 2); assert.equal(merged.provenance.depth, 'amazon_spapi_catalog_2022-04-01');
+  assert.equal(merged.provenance.weight, undefined); assert.equal(merged.provenance.weightUnit, undefined);
+  const draft = api.createRegistrationDraft(merged);
+  assert.equal(draft.weight, 500); assert.equal(draft.weightUnit, 'g'); assert.equal(draft.depth, 2);
+  assert.equal(draft.amazonPhysical, undefined); assert.equal(book.coverUrl, undefined); assert.equal(book.synopsis, undefined); assert.equal(book.imageMetadata, undefined);
+});
+
+test('attribute measurements and explicit publisher aliases supplement missing datasets without inventing publisher or pages', async () => {
+  const fixture = { ...expandedItem, dimensions: undefined, attributes: { publisher_name: [{ value: 'Fixture Publisher Alias' }],
+    manufacturer: [{ value: 'Manufacturer must not become publisher' }], number_of_pages: [{ value: -1 }, { value: 'unknown' }],
+    item_dimensions: [{ width: { value: 12, unit: 'centimeters' }, height: { value: 20, unit: 'centimeters' }, length: { value: 3, unit: 'centimeters' } }],
+    item_weight: [{ value: 0, unit: 'grams' }, { value: 250, unit: 'grams' }], item_package_weight: [{ value: 300, unit: 'grams' }] } };
+  const h = server({ item: fixture }), data = await (await h.handler(h.request())).json();
+  assert.equal(data.items[0].publisher, 'Fixture Publisher Alias'); assert.equal(data.items[0].pageCount, null);
+  assert.equal(data.items[0].physical.item.weight.value, 250); assert.equal(data.items[0].physical.package.weight.value, 300);
+  assert.equal(data.items[0].physical.item.length.value, 3);
+  const missing = server({ item: { ...fixture, attributes: { manufacturer: [{ value: 'Manufacturer' }] } } });
+  const result = await (await missing.handler(missing.request())).json();
+  assert.equal(result.items[0].publisher, null); assert.equal(result.items[0].physical, null);
+});
+
+test('package-only, invalid and unsupported measurements never masquerade as item g/cm; invalid ISBN check digits ignored', async t => {
+  globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
+  t.after(() => { delete globalThis.__spapiSession; });
+  let payload, label;
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ isbn, items: [{ isbn, asin: 'SYNTHETIC1', marketplaceId: api.MARKETPLACE,
+    title: 'Fixture', language: label, binding: label, physical: payload, identifiers: [{ type: 'ISBN_10', identifier: '8535914847' }, { type: 'ISBN_13', identifier: '9780515154559' }, { type: 'ISBN_13', identifier: Number(isbn) }] }] }));
+  for (const physical of [{ package: { weight: { value: 3, unit: 'kilograms' }, width: { value: 30, unit: 'centimeters' } } },
+    { item: { weight: { value: 7, unit: 'unknown' }, width: { value: -1, unit: 'centimeters' }, height: { value: '20', unit: 'centimeters' } } }]) {
+    payload = physical; label = physical.item ? '__proto__' : 'constructor';
+    const { book } = await client.searchAmazonOfficial(isbn, user);
+    assert.equal(book.weight, undefined); assert.equal(book.weightUnit, undefined); assert.equal(book.width, undefined); assert.equal(book.height, undefined);
+    assert.equal(book.rawIdentifiers, undefined); assert.equal(book.isbn10, undefined); assert.equal(book.isbn13, isbn);
+    assert.equal(book.language, label); assert.equal(book.format, label);
+    if (physical.item) assert.deepEqual(book.amazonPhysical, { item: { weight: { value: 7, unit: 'unknown' } } });
+    else assert.deepEqual(book.amazonPhysical, physical);
+  }
+  const invalidId = server({ item: { ...item, identifiers: [{ marketplaceId: api.MARKETPLACE, identifiers: [{ identifierType: 'ISBN', identifier: '8535914847' }] }] } });
+  assert.deepEqual((await (await invalidId.handler(invalidId.request())).json()).items, []);
 });
