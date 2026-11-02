@@ -63,6 +63,7 @@ export default function App() {
   const { saveOperation, pending: pendingAudit, saving: savingAudit, retry: retryAudit, storageUnavailable: auditStorageUnavailable, lastConfirmation: auditConfirmation } = useOperationAudit(currentUser);
   const searchInFlight = useRef(false);
   const stockLinkInFlight = useRef(false);
+  const imageUploadInFlight = useRef(false);
   const currentUserRef = useRef(currentUser);
   currentUserRef.current = currentUser;
   const operationEnvironmentRef = useRef(operationEnvironment);
@@ -155,7 +156,7 @@ export default function App() {
 
   // Handler to carry out lookup
   const handleSearch = async (targetIsbn: string) => {
-    if (searchInFlight.current) return;
+    if (searchInFlight.current || imageUploadInFlight.current) return;
     const cleaned = cleanIsbn(targetIsbn);
     if (!cleaned) {
       setErrorText('Por favor, informe um código ISBN válido.');
@@ -340,12 +341,18 @@ export default function App() {
 
   // Abre a tela única de cadastro garantindo a condição desejada (Novo ou Usado)
   const handleOpenRegistration = (condition?: BookCondition) => {
-    if (!foundBook) return;
+    if (!foundBook || imageUploadInFlight.current) return;
     const targetCondition =
       condition ||
       visibleMagazordCheck?.existingCondition ||
       'novo';
     const draft = createRegistrationDraft(foundBook, targetCondition);
+    // Preserve image decisions during ordinary navigation; general draft recovery is a later stage.
+    if (registrationDraft) {
+      draft.mainImageUrl = registrationDraft.mainImageUrl;
+      draft.additionalImageUrls = [...registrationDraft.additionalImageUrls];
+      draft.imageSelectionManual = registrationDraft.imageSelectionManual;
+    }
     draft.language = foundBook.language || '';
     draft.format = foundBook.format || '';
     setRegistrationDraft(draft);
@@ -504,6 +511,7 @@ export default function App() {
 
   // Prepara interface para o próximo livro
   const handleProcessNextBook = () => {
+    if (imageUploadInFlight.current) return;
     setFoundBook(null);
     setRegistrationDraft(null);
     setMagazordCheckResult(null);
@@ -626,10 +634,10 @@ export default function App() {
       {/* 1. Header azul profissional com navegação Consultar | Cadastro | Histórico */}
       <Header
         activeTab={activeTab}
-        onTabChange={(tab) => setActiveTab(
+        onTabChange={(tab) => { if (imageUploadInFlight.current) return; setActiveTab(
           (tab === 'dashboard' && !canViewProduction) || (tab === 'configuracoes' && !canViewSettings)
             ? 'consultar' : tab
-        )}
+        ); }}
         historyCount={visibleHistory.length}
         hasActiveDraft={Boolean(registrationDraft)}
       />
@@ -763,6 +771,8 @@ export default function App() {
                 draft={registrationDraft}
                 captureActionMode={captureActionMode}
                 originalBook={foundBook}
+                imageUser={currentUser}
+                onImageUploadBusyChange={busy => { imageUploadInFlight.current = busy; }}
                 onUpdateDraft={(updates) =>
                   setRegistrationDraft((prev) => (prev ? { ...prev, ...updates } : null))
                 }

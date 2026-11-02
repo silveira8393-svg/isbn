@@ -175,3 +175,101 @@ NOVOS eventos. Esses ensaios não foram executados pelo agente nesta etapa.
 Após homologação, commit/push/deploy permanecem dependentes de autorização específica.
 Nenhuma limpeza deve ocorrer antes de sua autorização própria; os novos eventos não usam
 demo_batch_id e ficam fora do recibo de IDs do lote demonstrativo.
+
+## Etapa 1 — gerenciamento de imagens (2026-11-02)
+
+Implementação sobre `32b856c`, na branch `feat/amazon-spapi-official`, para homologação
+em Preview. Amazon SP-API, Laboratório, BrasilAPI, Curitiba e regras comerciais foram
+preservados. Não foram criadas rotas, módulos de aplicação, credenciais ou tabelas.
+
+### Experiência do operador e persistência
+
+- A galeria existente mantém a seleção automática inicial e permite trocar a capa,
+  remover qualquer imagem (inclusive indisponível) e cadastrar sem imagens. A decisão
+  manual de capa prevalece sobre carregamentos posteriores. Redimensionamentos Amazon
+  continuam deduplicados pelo identificador do arquivo, preservando imagens distintas.
+- As escolhas e a ordem sobrevivem ao retorno à pesquisa e à reabertura do cadastro do
+  mesmo livro, inclusive troca NOVO/USADO. Uma nova pesquisa inicia outra ficha. A
+  recuperação geral do rascunho após recarregar a página pertence à etapa seguinte.
+- Fotografias locais são selecionadas em lote, verificadas e pré-visualizadas antes da
+  confirmação. JPEG/PNG/WebP até 5 MiB; MIME, assinatura e decodificação precisam ser
+  válidos. O hash SHA-256 evita repetição por conteúdo, independentemente do nome.
+- A confirmação envia sequencialmente e preserva cada sucesso. Falhas mantêm a ficha,
+  as fotos já adicionadas e a prévia que falhou; nenhuma tentativa é repetida
+  automaticamente. Cadastro/navegação ficam protegidos enquanto há processamento.
+- São reutilizados `RegistrationDraft`, `mainImageUrl`, `additionalImageUrls`, o
+  snapshot e o cliente Supabase existentes. Somente referências persistentes entram no
+  snapshot; arquivos, URLs `blob:`, URLs assinadas e tokens não são persistidos nele.
+- A galeria e a ficha histórica leem fotos privadas com a sessão Supabase e exibem
+  URLs de objeto temporárias em memória, liberadas ao remover/desmontar. Fotos públicas
+  das fontes existentes conservam seu comportamento. Remover uma foto da ficha remove
+  sua referência, sem apagar o arquivo privado que pode estar em snapshots anteriores.
+
+### Storage: alteração preparada, ainda não aplicada
+
+A inspeção somente de leitura no projeto ISBN `jcxdkrpmrfbrhzwbzhph` retornou zero
+buckets e zero políticas em `storage.objects`. A RLS está habilitada. As estruturas
+existentes `profiles` e `store_users` fornecem usuário ativo, loja, vínculo ativo e perfil.
+
+O arquivo [supabase/setup/registration_images.sql](supabase/setup/registration_images.sql)
+prepara exclusivamente:
+
+1. Bucket privado `isbn-registration-images`, limite de 5 MiB e MIME JPEG/PNG/WebP.
+2. SELECT autenticado para usuários ativos vinculados à loja do caminho, nos perfis
+   `admin`, `operator` ou `developer`.
+3. INSERT autenticado no caminho `<loja>/<usuário>/<sha256>.<extensão>`, limitado ao
+   próprio usuário e à loja autorizada. Sem UPDATE, sobrescrita ou DELETE.
+
+Não há alteração de tabelas de produtos, dados comerciais ou políticas preexistentes.
+O SQL é transacional e falha se já existir recurso homônimo, evitando alterar uma
+configuração desconhecida. Revalidar a estrutura antes de aplicar. Por ser uma mudança
+persistente no projeto compartilhado, sua execução depende da autorização explícita
+solicitada pelo responsável. Sem ela, prévias locais e gerenciamento das imagens
+automáticas funcionam; o envio persistente apresenta erro seguro e preserva a ficha.
+
+O aplicativo usa o cliente já configurado e recusa upload/download privado fora do
+projeto ISBN. Não há novas variáveis nem leitura de credenciais protegidas. O upload
+usa `upsert: false`; respostas de duplicidade 400/409 são confirmadas pela leitura e
+comparação do hash do arquivo existente. O limite de espera é 30 segundos. Se a
+transferência concluir depois do limite, o arquivo permanece privado; nova confirmação
+manual reutiliza o mesmo caminho/hash sem sobrescrever.
+
+Referências oficiais: [uploads e duplicidade](https://supabase.com/docs/guides/storage/uploads/standard-uploads),
+[controle de acesso](https://supabase.com/docs/guides/storage/security/access-control).
+
+### Limite da preparação Magazord
+
+O fluxo existente recebe uma única `mainImageUrl` e uma lista `additionalImageUrls`
+ordenada, sem duplicidades. Referências autenticadas são deliberadamente privadas;
+não são links públicos para a Magazord baixar. O futuro conector deverá obter o arquivo
+autorizado, enviar/converter o formato se exigido pelo contrato real e associar os IDs
+de mídia ao produto, com `principal` e `ordem`. Nenhuma publicação ou envio real à
+Magazord foi implementado ou executado; o simulador foi mantido.
+
+Referência oficial: [associação de mídia ao produto](https://docs-v2.api.magazord.com.br/api/put-midia-relaciona-produto-yaml/).
+
+### Validação desta etapa
+
+- `npm.cmd run typecheck`: aprovado.
+- `npm.cmd run lint`: aprovado (`tsc --noEmit`, conforme configuração existente).
+- `npm.cmd run build`: aprovado; permanece o aviso de bundle maior que 500 kB e de
+  importações estáticas/dinâmicas do mesmo cliente Supabase.
+- `npm.cmd run test:spapi`: 75/75 aprovados.
+- Galeria, upload, snapshot, navegação e Laboratório controlados:
+  `node --test tests/amazonLab.test.mjs tests/postHomologation.test.mjs tests/registrationLookup.test.mjs tests/spapiIntegrated.test.mjs`:
+  84/84 aprovados. Incluem remoção de imagens quebradas, precedência manual,
+  deduplicação, prévia sem envio, tipos/tamanhos/conteúdo inválidos, projeto/sessão,
+  envio parcial, troca manual durante envio, referências privadas, retry explícito,
+  liberação de blobs e payload compatível com o simulador.
+- Bateria completa: 602 testes, 598 aprovados, quatro falhas anteriores à etapa:
+  três em `infrastructureUi.test.mjs` (mock React sem `lazy`) e uma inicialização em
+  `magazordMode.test.mjs` (marcador textual sensível ao CRLF). Esses arquivos e seus
+  componentes de infraestrutura/modo não foram modificados. Não representam falhas
+  dos novos cenários de imagens, mas a bateria geral ainda não está totalmente verde.
+- Os testes usam arquivos e respostas sintéticos em memória, sem uploads reais,
+  consultas Amazon adicionais, publicação Magazord ou gravações no banco.
+
+Para concluir a homologação: autorizar/aplicar somente o Storage preparado e, no
+Preview autenticado, confirmar uma foto local, escolher como capa, voltar/reabrir a
+ficha e conferir a referência no resultado simulado. O envio persistente real e sua
+RLS não foram apresentados como validados antes dessa aprovação e desse ensaio.

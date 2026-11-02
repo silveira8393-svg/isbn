@@ -8,10 +8,12 @@ import {
   RegistrationDraft,
   MagazordRegistrationResult,
   BookInfo,
+  User,
 } from '../../types';
 import { magazordMockService, type MagazordSimulationMode } from '../../services/magazordMockService';
 import { buildFinalDescription, registrationModeForCondition } from '../../utils/draft';
 import { magazordPresentation } from '../../utils/magazordPresentation';
+import { imageReferences } from '../../utils/imageUrls';
 import ProductIdentitySection from './ProductIdentitySection';
 import CategoryAndBrandSection from './CategoryAndBrandSection';
 import CommercialSection from './CommercialSection';
@@ -40,6 +42,8 @@ interface ProductRegistrationFormProps {
   onSuccessRegistration: (result: MagazordRegistrationResult, draft: RegistrationDraft, actionMode?: MagazordSimulationMode) => void;
   onRegistrationError?: (draft: RegistrationDraft) => void;
   onProcessNextBook: () => void;
+  imageUser?: User;
+  onImageUploadBusyChange?: (busy: boolean) => void;
 }
 
 export default function ProductRegistrationForm({
@@ -51,6 +55,8 @@ export default function ProductRegistrationForm({
   onSuccessRegistration,
   onRegistrationError,
   onProcessNextBook,
+  imageUser,
+  onImageUploadBusyChange,
 }: ProductRegistrationFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,6 +64,11 @@ export default function ProductRegistrationForm({
   const [successResult, setSuccessResult] = useState<MagazordRegistrationResult | null>(null);
   const submissionInFlight = useRef(false);
   const submissionCompleted = useRef(false);
+  const imageUploadInFlight = useRef(false);
+  const [imageUploadBusy, setImageUploadBusy] = useState(false);
+  const handleImageBusy = (busy: boolean) => {
+    imageUploadInFlight.current = busy; setImageUploadBusy(busy); onImageUploadBusyChange?.(busy);
+  };
 
   // Validações antes do envio
   const validateForm = (): boolean => {
@@ -104,7 +115,7 @@ export default function ProductRegistrationForm({
   };
 
   const handleSubmit = async () => {
-    if (submissionInFlight.current || submissionCompleted.current || successResult) return;
+    if (submissionInFlight.current || submissionCompleted.current || successResult || imageUploadInFlight.current) return;
     setSubmitError(null);
 
     if (!validateForm()) {
@@ -122,11 +133,13 @@ export default function ProductRegistrationForm({
 
     try {
       const finalDescription = buildFinalDescription(draft);
+      const images = imageReferences([draft.mainImageUrl, ...(draft.additionalImageUrls || [])]);
       const draftToSubmit: RegistrationDraft = {
         ...draft,
         registrationMode: registrationModeForCondition(draft.condition, draft.registrationMode),
         authors: [...(draft.authors || [])],
-        additionalImageUrls: [...(draft.additionalImageUrls || [])],
+        mainImageUrl: images[0],
+        additionalImageUrls: images.slice(1),
         description: finalDescription,
       };
       const result = await magazordMockService.createProduct(draftToSubmit, actionMode);
@@ -239,7 +252,7 @@ export default function ProductRegistrationForm({
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={onBackToSearch}
+            onClick={() => { if (!imageUploadInFlight.current) onBackToSearch(); }}
             className="p-2 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
             title="Voltar para a pesquisa de ISBN"
           >
@@ -263,7 +276,7 @@ export default function ProductRegistrationForm({
         <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
           <button
             type="button"
-            onClick={onBackToSearch}
+            onClick={() => { if (!imageUploadInFlight.current) onBackToSearch(); }}
             className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
           >
             Cancelar
@@ -272,7 +285,7 @@ export default function ProductRegistrationForm({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={isSubmitting}
+            disabled={isSubmitting || imageUploadBusy}
             className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-60"
           >
             {isSubmitting ? (
@@ -367,6 +380,8 @@ export default function ProductRegistrationForm({
       <ImagesSection
         draft={draft}
         onChange={onUpdateDraft}
+        user={imageUser}
+        onUploadBusyChange={handleImageBusy}
       />
 
       {/* Seção 7: Descrição Única (Sinopse e, se Usado, Estado do Exemplar) */}
@@ -407,7 +422,7 @@ export default function ProductRegistrationForm({
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <button
             type="button"
-            onClick={onBackToSearch}
+            onClick={() => { if (!imageUploadInFlight.current) onBackToSearch(); }}
             className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-semibold transition-colors cursor-pointer"
           >
             Voltar
@@ -416,7 +431,7 @@ export default function ProductRegistrationForm({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={isSubmitting}
+            disabled={isSubmitting || imageUploadBusy}
             id="btn-submit-magazord-registration"
             className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-7 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-bold shadow-lg transition-all cursor-pointer disabled:opacity-60"
           >

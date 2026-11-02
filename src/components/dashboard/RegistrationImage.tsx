@@ -1,10 +1,23 @@
-import { useRef, useState } from 'react';
-import { isImageReference } from '../../utils/imageUrls';
+import { useEffect, useRef, useState } from 'react';
+import { isImageReference, isStoredBookImage, openStoredBookImage } from '../../utils/imageUrls';
+import { supabase, supabaseUrl } from '../../lib/supabase';
 
 export default function RegistrationImage({ url, label }: { url: string; label: string }) {
   const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
   const [expanded, setExpanded] = useState(false);
   const previewRef = useRef<HTMLDialogElement>(null);
+  const [privateSource, setPrivateSource] = useState<{ reference: string; url: string } | null>(null);
+  useEffect(() => {
+    if (!isStoredBookImage(url)) return;
+    const controller = new AbortController(); let release: (() => void) | undefined;
+    setPrivateSource(null); setStatus('loading');
+    void openStoredBookImage(url, { client: supabase, projectUrl: supabaseUrl }, controller.signal).then(opened => {
+      if (controller.signal.aborted) { opened.release(); return; }
+      release = opened.release; setPrivateSource({ reference: url, url: opened.url });
+    }).catch(() => { if (!controller.signal.aborted) setStatus('error'); });
+    return () => { controller.abort(); release?.(); };
+  }, [url]);
+  const source = isStoredBookImage(url) ? (privateSource?.reference === url ? privateSource.url : null) : url;
   let secure = false;
   try {
     const parsed = new URL(url);
@@ -19,12 +32,12 @@ export default function RegistrationImage({ url, label }: { url: string; label: 
       aria-label={`Ampliar ${label.toLocaleLowerCase('pt-BR')}`} aria-haspopup="dialog"
       onClick={() => { if (status === 'loaded') { setExpanded(true); previewRef.current?.showModal(); } }}
       className="relative flex h-36 w-28 items-center justify-center overflow-hidden rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-500 enabled:cursor-zoom-in focus-visible:outline-blue-600">
-      <img src={url} alt={label} loading="lazy" decoding="async" referrerPolicy="no-referrer"
+      {source && <img src={source} alt={label} loading="lazy" decoding="async" referrerPolicy="no-referrer"
         onLoad={() => setStatus('loaded')} onError={() => setStatus('error')}
-        className={`h-full w-full object-contain ${status === 'loaded' ? '' : 'opacity-0'}`} />
+        className={`h-full w-full object-contain ${status === 'loaded' ? '' : 'opacity-0'}`} />}
       {status === 'loading' && <span className="absolute inset-0 flex items-center justify-center p-2">Carregando imagem…</span>}
     </button> : unavailable}
-    {secure ? <a href={url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"
+    {secure && !isStoredBookImage(url) ? <a href={url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"
       className="block break-all text-blue-700 underline focus-visible:outline-blue-600">{url}</a>
       : <span className="block break-all">{url}</span>}
     {canPreview && <dialog ref={previewRef} aria-label={`${label} ampliada`} aria-modal="true"
@@ -36,7 +49,7 @@ export default function RegistrationImage({ url, label }: { url: string; label: 
           className="shrink-0 cursor-pointer rounded text-sm text-blue-700 underline focus-visible:outline-blue-600">Fechar imagem</button>
       </div>
       <div className="min-h-0 overflow-y-auto overscroll-contain p-4">
-        {expanded && (status === 'error' ? unavailable : <img src={url} alt={`${label} ampliada`} decoding="async" referrerPolicy="no-referrer"
+        {expanded && (status === 'error' ? unavailable : <img src={source || undefined} alt={`${label} ampliada`} decoding="async" referrerPolicy="no-referrer"
           onError={() => setStatus('error')} className="mx-auto h-[70dvh] w-full object-contain" />)}
       </div>
     </dialog>}

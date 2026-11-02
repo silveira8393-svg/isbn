@@ -106,6 +106,7 @@ export interface RegistrationDraft {
   // Imagens
   mainImageUrl?: string;
   additionalImageUrls: string[];
+  imageSelectionManual?: boolean; // Editing state only; never exported in a registration snapshot.
 
   // Configurações Fiscais e Avançadas
   ncm: string;

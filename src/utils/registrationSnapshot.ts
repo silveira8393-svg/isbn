@@ -1,4 +1,5 @@
 import type { RegistrationDraft } from '../types';
+import { imageReferences } from './imageUrls';
 
 export const registrationFields = {
   condition: 'Condição', registrationMode: 'Modo de cadastro', parentCode: 'Código Pai', childCode: 'Código Filho',
@@ -41,7 +42,8 @@ function allowedFields(source: Record<string, unknown>): RegistrationSnapshot['f
 }
 
 export function createRegistrationSnapshot(draft: RegistrationDraft, capturedAt: string): RegistrationSnapshot {
-  return { version: 1, capturedAt, fields: allowedFields(draft as unknown as Record<string, unknown>) };
+  const images = imageReferences([draft.mainImageUrl, ...(draft.additionalImageUrls || [])]);
+  return { version: 1, capturedAt, fields: allowedFields({ ...draft, mainImageUrl: images[0], additionalImageUrls: images.slice(1) }) };
 }
 
 export function readRegistrationSnapshot(value: unknown): RegistrationSnapshot | null {

@@ -619,6 +619,7 @@ const registrationBuild = await build({ stdin: { resolveDir: process.cwd(), load
   bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic', plugins: [{ name: 'registration-images', setup(b) {
     const mocks = [[/^react$/, 'module.exports=deps.react'], [/^react\/jsx-runtime$/, 'exports.jsx=exports.jsxs=(type,props)=>({type,props})'],
       [/^lucide-react$/, 'module.exports=new Proxy({},{get:(_,key)=>String(key)})'],
+      [/\/lib\/supabase$/, 'exports.supabase={};exports.supabaseUrl="https://jcxdkrpmrfbrhzwbzhph.supabase.co"'],
       [/\/services\/magazordMockService$/, 'exports.magazordMockService=deps.service']];
     for (const name of ['ProductIdentitySection', 'CategoryAndBrandSection', 'CommercialSection', 'BibliographicSection', 'PhysicalAttributesSection', 'SynopsisSection', 'AdvancedFiscalSection'])
       mocks.push([new RegExp(`(?:^|/)${name}$`), `module.exports=${JSON.stringify(name)}`]);
@@ -684,4 +685,51 @@ test('manual image management preserves the chosen cover and rejects another res
   gallery.find(n => n.type === 'input' && n.props.type === 'url').props.onChange({ target: { value: back.replace('.jpg', '._SX75_.jpg') } }); gallery.render();
   gallery.find(n => n.type === 'input' && n.props.type === 'url').props.onKeyDown({ key: 'Enter', preventDefault() {} }); gallery.render();
   assert.equal(draft.mainImageUrl, back); assert.deepEqual(draft.additionalImageUrls, [cover]);
+});
+
+test('normal navigation preserves selected and removed images; pending uploads block navigation and new searches', async t => {
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => { calls++; return Response.json({ isbn, items: [] }); });
+  const view = mountApp(); await view.search(); view.render();
+  const search = view.find('SearchForm').props.onSearch;
+  view.find('Header').props.onTabChange('cadastro'); view.render();
+  const main = 'https://example.invalid/operator.jpg', extra = 'https://example.invalid/detail.jpg';
+  let form = view.find('ProductRegistrationForm');
+  form.props.onUpdateDraft({ mainImageUrl: main, additionalImageUrls: [extra], imageSelectionManual: true }); view.render();
+  form = view.find('ProductRegistrationForm'); form.props.onImageUploadBusyChange(true);
+  view.find('Header').props.onTabChange('consultar'); view.render();
+  assert.ok(view.find('ProductRegistrationForm'), 'header cannot unmount the form during upload');
+  // Return to the form using normal navigation after the protected work finishes.
+  const before = calls; await search(isbn); assert.equal(calls, before);
+  form.props.onImageUploadBusyChange(false);
+  view.find('Header').props.onTabChange('consultar'); view.render();
+  view.find('MagazordStatusCard').props.onOpenRegistration('usado'); view.render();
+  const reopened = view.find('ProductRegistrationForm').props.draft;
+  assert.equal(reopened.mainImageUrl, main); assert.deepEqual(reopened.additionalImageUrls, [extra]);
+  assert.equal(reopened.imageSelectionManual, true);
+  view.find('ProductRegistrationForm').props.onUpdateDraft({ mainImageUrl: undefined, additionalImageUrls: [] }); view.render();
+  view.find('Header').props.onTabChange('consultar'); view.render();
+  view.find('MagazordStatusCard').props.onOpenRegistration('novo'); view.render();
+  assert.equal(view.find('ProductRegistrationForm').props.draft.mainImageUrl, undefined);
+  assert.deepEqual(view.find('ProductRegistrationForm').props.draft.additionalImageUrls, [], 'normal reopen cannot reinsert removed images');
+});
+
+test('registration waits for photo processing and forwards one main plus ordered deduplicated private references', async () => {
+  const privateRef = `https://jcxdkrpmrfbrhzwbzhph.supabase.co/storage/v1/object/authenticated/isbn-registration-images/${sid}/${uid}/${'a'.repeat(64)}.png`;
+  const cover = cdn('MAIN'), inside = cdn('INSIDE');
+  const draft = { ...api.createRegistrationDraft({ id: 'book', title: 'Fixture', isbn13: isbn }), parentCode: 'IMG-P', price: '10',
+    mainImageUrl: privateRef, additionalImageUrls: [cover, privateRef, cover.replace('.jpg', '._SX75_.jpg'), inside] };
+  const calls = [], busy = []; let back = 0;
+  const form = mountRegistration('Form', { draft, originalBook: {}, imageUser: user, onUpdateDraft() {},
+    onImageUploadBusyChange: value => busy.push(value), onBackToSearch: () => back++, onSuccessRegistration() {} },
+    { getSimulationConfig: () => ({ mode: 'auto' }), createProduct: async payload => { calls.push(payload); return { success: true }; } });
+  form.find(n => typeof n.type === 'function' && n.type.name === 'ImagesSection').props.onUploadBusyChange(true);
+  form.render(); assert.equal(form.find(n => n.props.id === 'btn-submit-magazord-registration').props.disabled, true);
+  await form.find(n => n.props.id === 'btn-submit-magazord-registration').props.onClick();
+  form.find(n => n.props.title === 'Voltar para a pesquisa de ISBN').props.onClick();
+  assert.equal(calls.length, 0); assert.equal(back, 0);
+  form.find(n => typeof n.type === 'function' && n.type.name === 'ImagesSection').props.onUploadBusyChange(false); form.render();
+  await form.find(n => n.props.id === 'btn-submit-magazord-registration').props.onClick();
+  assert.equal(calls.length, 1); assert.equal(calls[0].mainImageUrl, privateRef);
+  assert.deepEqual(calls[0].additionalImageUrls, [cover, inside]); assert.deepEqual(busy, [true, false]);
 });

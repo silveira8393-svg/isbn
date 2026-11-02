@@ -21,7 +21,7 @@ const bundle = await build({
     const mocks = [[/^react$/, 'module.exports=deps.react'],
       [/^react\/jsx-runtime$/, 'exports.jsx=exports.jsxs=(type,props)=>({type,props})'],
       [/^lucide-react$/, 'module.exports=new Proxy({},{get:(_,key)=>String(key)})'],
-      [/\/lib\/supabase$/, 'exports.supabase={}']];
+      [/\/lib\/supabase$/, 'exports.supabase=deps.supabase||{};exports.supabaseUrl=deps.supabaseUrl||"https://jcxdkrpmrfbrhzwbzhph.supabase.co"']];
     builder.onResolve({ filter: /.*/ }, args => {
       const mock = mocks.find(([pattern]) => pattern.test(args.path));
       return mock ? { path: args.path, namespace: 'mock', pluginData: mock[1] } : undefined;
@@ -41,15 +41,44 @@ const cover = `${directory}lv491848_1.jpg`;
 const extra = `${directory}lv491848_2.jpg`;
 const book = { isbn13: '9786555113655', title: 'O Atlas da Terra Média', authors: ['Autor'], coverUrl: cover, additionalImages: [extra] };
 const at = '2026-10-15T14:21:31.110Z';
+const photoUser = { id: '11111111-1111-4111-8111-111111111111', storeId: '492af2ad-905c-42f8-90f4-aa6c1dc142f3', active: true, role: 'developer' };
+const pngBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
+const photoFile = (name = 'foto.png', tail = '') => new File([pngBytes, tail], name, { type: 'image/png' });
+const photoConfig = storage => ({ client: storage.supabase, projectUrl: storage.supabaseUrl || 'https://jcxdkrpmrfbrhzwbzhph.supabase.co' });
+function bitmapMock(t) {
+  const previous = globalThis.createImageBitmap;
+  globalThis.createImageBitmap = async file => {
+    if (file.name === 'corrupt.png') throw new Error('decode failed');
+    return { width: 1, height: 1, close() {} };
+  };
+  t.after(() => { if (previous) globalThis.createImageBitmap = previous; else delete globalThis.createImageBitmap; });
+}
+function photoStorage(options = {}) {
+  const files = new Map(), calls = [];
+  const bucket = {
+    async upload(path, file, config) {
+      calls.push({ method: 'upload', path, config });
+      if (options.upload) return options.upload(path, file, config);
+      if (files.has(path)) return { error: { statusCode: '409' } };
+      files.set(path, file); return { data: { path }, error: null };
+    },
+    async download(path, ...args) { calls.push({ method: 'download', path, args }); return { data: files.get(path) || null, error: files.has(path) ? null : { message: 'unavailable' } }; },
+  };
+  const supabase = { auth: { getSession: async () => ({ data: { session: { user: { id: options.actor || photoUser.id } } } }) },
+    storage: { from(name) { assert.equal(name, 'isbn-registration-images'); return bucket; } } };
+  return { files, calls, supabase, ...options };
+}
 
 function nodes(node) {
   if (!node || typeof node !== 'object') return [];
   return Array.isArray(node) ? node.flatMap(nodes) : [node, ...nodes(node.props?.children)];
 }
-function mount(name, initial) {
+function mount(name, initial, options = {}) {
   let draft = structuredClone(initial), tree, cursor, dirty, effects;
   const slots = [], updates = [];
-  const deps = { react: {
+  const cleanups = [];
+  const deps = { ...options, react: {
+    useRef(initial) { const i = cursor++; return slots[i] ??= { current: initial }; },
     useState(initial) { const i = cursor++; if (!(i in slots)) slots[i] = typeof initial === 'function' ? initial() : initial;
       return [slots[i], next => { const value = typeof next === 'function' ? next(slots[i]) : next;
         if (!Object.is(value, slots[i])) { slots[i] = value; dirty = true; } }]; },
@@ -66,11 +95,12 @@ function mount(name, initial) {
     do {
       assert.ok(++count < 12, 'Effects must settle without repeatedly replacing the cover');
       cursor = 0; effects = []; dirty = false;
-      tree = component({ draft, onChange, errors: {} }); effects.forEach(effect => effect());
+      tree = component({ draft, onChange, errors: {}, ...options.props }); effects.forEach(effect => { const cleanup = effect(); if (cleanup) cleanups.push(cleanup); });
     } while (dirty);
   }
   render();
-  return { render, draft: () => draft, updates, find: predicate => nodes(tree).find(predicate),
+  return { render, draft: () => draft, updates, find: predicate => nodes(tree).find(predicate), all: predicate => nodes(tree).filter(predicate),
+    unmount: () => cleanups.forEach(cleanup => cleanup()),
     image: url => nodes(tree).find(node => node.type === 'img' && node.props.src === url),
     click(label) { nodes(tree).find(node => node.type === 'button' && nodes(node).some(child => child.props?.children === label)).props.onClick(); render(); } };
 }
@@ -148,6 +178,144 @@ test('Failed images do not promote another failed URL or cause an update loop', 
   view.image(cover).props.onError(); view.render();
   assert.equal(view.updates.length, 0);
   view.render(); assert.equal(view.updates.length, 0);
+});
+
+test('failed cover and additional images remain removable, including removal of every image', () => {
+  const view = mount('ImagesSection', utils.createRegistrationDraft(book));
+  view.image(extra).props.onError(); view.image(cover).props.onError(); view.render();
+  assert.ok(view.find(node => node.props.title === 'Remover capa principal'));
+  view.find(node => node.props.title === 'Remover foto').props.onClick(); view.render();
+  assert.deepEqual(view.draft().additionalImageUrls, []);
+  view.find(node => node.props.title === 'Remover capa principal').props.onClick(); view.render();
+  assert.equal(view.draft().mainImageUrl, undefined);
+  assert.deepEqual(utils.createRegistrationSnapshot(view.draft(), at).fields.additionalImageUrls, []);
+});
+
+test('a manually selected cover is not automatically replaced after failure or later image loads', () => {
+  const inside = 'https://example.invalid/inside.jpg';
+  const view = mount('ImagesSection', utils.createRegistrationDraft({ ...book, additionalImages: [extra, inside] }));
+  view.find(node => node.props.title === 'Tornar capa principal').props.onClick(); view.render();
+  assert.equal(view.draft().mainImageUrl, extra);
+  view.image(extra).props.onError(); view.image(cover).props.onLoad(); view.image(inside).props.onLoad(); view.render();
+  assert.equal(view.draft().mainImageUrl, extra, 'manual choice survives the automatic fallback');
+  view.all(node => node.props.title === 'Remover foto')[0].props.onClick(); view.render();
+  assert.deepEqual(view.draft().additionalImageUrls, [inside]);
+  view.render(); assert.deepEqual(view.draft().additionalImageUrls, [inside], 'removed image is not reinserted');
+});
+
+test('local file validation rejects MIME, size, signature and decode failures before Storage is contacted', async t => {
+  bitmapMock(t);
+  for (const file of [new File(['<svg/>'], 'x.svg', { type: 'image/svg+xml' }), new File([], 'empty.png', { type: 'image/png' }),
+    new File([new Uint8Array(utils.BOOK_IMAGE_MAX_BYTES + 1)], 'large.png', { type: 'image/png' }),
+    new File(['not an image'], 'fake.png', { type: 'image/png' }), new File([pngBytes], 'fake.jpg', { type: 'image/jpeg' }), photoFile('corrupt.png')]) {
+    await assert.rejects(utils.prepareLocalBookImage(file), /JPEG|conteúdo|5 MiB|imagem válido/);
+  }
+  const a = await utils.prepareLocalBookImage(photoFile('a.png')), b = await utils.prepareLocalBookImage(photoFile('different-name.png'));
+  assert.equal(a.hash, b.hash); assert.equal(a.extension, 'png');
+});
+
+test('upload validates project/session, scopes files to store/user, deduplicates content without overwriting and opens private files without signed URLs', async t => {
+  bitmapMock(t); const storage = photoStorage(), images = api(storage), prepared = await images.prepareLocalBookImage(photoFile());
+  const reference = await images.uploadLocalBookImage(prepared, photoUser, photoConfig(storage));
+  assert.match(reference, new RegExp(`/authenticated/isbn-registration-images/${photoUser.storeId}/${photoUser.id}/${prepared.hash}\\.png$`));
+  assert.equal(images.isStoredBookImage(reference), true);
+  assert.equal(await images.uploadLocalBookImage(prepared, photoUser, photoConfig(storage)), reference);
+  const legacyDuplicate = photoStorage({ upload: async () => ({ error: { statusCode: '400', message: 'The resource already exists' } }) });
+  legacyDuplicate.files.set(storage.calls[0].path, prepared.file);
+  assert.equal(await images.uploadLocalBookImage(prepared, photoUser, photoConfig(legacyDuplicate)), reference, 'documented 400 duplicate is verified without overwrite');
+  assert.ok(storage.calls.filter(call => call.method === 'upload').every(call => call.config.upsert === false));
+  assert.equal(storage.files.size, 1);
+  const opened = await images.openStoredBookImage(reference, photoConfig(storage));
+  assert.match(opened.url, /^blob:/); opened.release();
+  for (const wrong of [reference.replace('jcxdkrpmrfbrhzwbzhph.supabase.co', 'evil.invalid'), reference + '?token=secret']) {
+    assert.equal(images.isStoredBookImage(wrong), false); await assert.rejects(images.openStoredBookImage(wrong, photoConfig(storage)), /inválida/);
+  }
+  const before = storage.calls.length;
+  await assert.rejects(images.uploadLocalBookImage(prepared, photoUser, photoConfig({ ...storage, supabaseUrl: 'https://other.supabase.co' })), /projeto ISBN/);
+  await assert.rejects(images.uploadLocalBookImage(prepared, photoUser, photoConfig(photoStorage({ actor: 'different-user' }))), /sessão mudou/);
+  await assert.rejects(images.uploadLocalBookImage(prepared, { ...photoUser, active: false }, photoConfig(storage)), /Entre novamente/);
+  assert.equal(storage.calls.length, before);
+  storage.files.set(storage.calls[0].path, new Blob(['wrong content']));
+  await assert.rejects(images.uploadLocalBookImage(prepared, photoUser, photoConfig(storage)), /Nenhum arquivo foi substituído/);
+});
+
+test('multiple local photos are previewed before upload; duplicate files are ignored and selected references survive snapshots in order', async t => {
+  bitmapMock(t); const storage = photoStorage(), busy = [];
+  const view = mount('ImagesSection', utils.createRegistrationDraft(book), { ...storage,
+    props: { user: photoUser, onUploadBusyChange: value => busy.push(value) } });
+  t.after(view.unmount);
+  await view.find(node => node.props.type === 'file').props.onChange({ target: { files: [photoFile('a.png'), photoFile('same.png'), photoFile('b.png', 'different')], value: 'input' } }); view.render();
+  assert.equal(view.all(node => node.type === 'img' && /^Prévia/.test(node.props.alt)).length, 2);
+  assert.equal(storage.calls.length, 0, 'selection does not upload before confirmation');
+  await view.find(node => node.type === 'button' && node.props.children === 'Confirmar fotos selecionadas').props.onClick(); view.render();
+  const refs = view.draft().additionalImageUrls;
+  assert.equal(view.draft().mainImageUrl, cover); assert.equal(refs[0], extra); assert.equal(refs.length, 3);
+  assert.ok(refs.slice(1).every(utils.isStoredBookImage));
+  assert.equal(storage.calls.filter(call => call.method === 'upload').length, 2);
+  const saved = utils.readRegistrationSnapshot(utils.createRegistrationSnapshot(view.draft(), at));
+  assert.equal(saved.fields.mainImageUrl, cover); assert.deepEqual(saved.fields.additionalImageUrls, refs);
+  assert.doesNotMatch(JSON.stringify(saved), /blob:|data:|imageSelectionManual|access_token/);
+  assert.deepEqual(busy, [true, false, true, false]);
+  await new Promise(resolve => setImmediate(resolve)); view.render();
+  assert.equal(view.all(node => node.type === 'img' && /^Prévia/.test(node.props.alt)).length, 0);
+  assert.ok(view.all(node => node.type === 'img').every(node => !node.props.src.includes('/object/authenticated/')), 'private images use authenticated blobs, never naked protected URLs');
+});
+
+test('partial upload failure preserves the registration and pending photo, and completion respects manual changes made while upload was pending', async t => {
+  bitmapMock(t); let release, count = 0;
+  const started = new Promise(resolve => { release = resolve; });
+  let finish;
+  const waiting = new Promise(resolve => { finish = resolve; });
+  const storage = photoStorage({ upload: async () => { count++; if (count === 1) { release(); await waiting; return { error: null }; } return { error: { message: 'private server details' } }; } });
+  const view = mount('ImagesSection', utils.createRegistrationDraft(book), { ...storage, props: { user: photoUser } });
+  t.after(view.unmount);
+  await view.find(node => node.props.type === 'file').props.onChange({ target: { files: [photoFile(), photoFile('b.png', 'different')], value: '' } }); view.render();
+  const uploading = view.find(node => node.type === 'button' && node.props.children === 'Confirmar fotos selecionadas').props.onClick(); await started;
+  view.find(node => node.props.title === 'Tornar capa principal').props.onClick(); view.render();
+  view.find(node => node.props.title === 'Remover foto').props.onClick(); view.render(); // Remove the previous automatic cover.
+  finish(); await uploading; view.render();
+  assert.equal(view.draft().mainImageUrl, extra);
+  assert.equal(view.draft().additionalImageUrls.length, 1); assert.ok(utils.isStoredBookImage(view.draft().additionalImageUrls[0]));
+  assert.ok(!view.draft().additionalImageUrls.includes(cover));
+  assert.equal(view.all(node => node.type === 'img' && /^Prévia/.test(node.props.alt)).length, 1);
+  assert.ok(view.find(node => node.props.role === 'alert')); assert.equal(view.draft().title, book.title);
+});
+
+test('prepared Storage change grants private store-scoped reads and owner-path inserts only, without new tables or overwrite/delete access', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const sql = await readFile('supabase/setup/registration_images.sql', 'utf8');
+  assert.match(sql, /false, 5242880/); assert.match(sql, /image\/jpeg.*image\/png.*image\/webp/);
+  assert.equal((sql.match(/create policy /g) || []).length, 2);
+  assert.match(sql, /for select to authenticated/); assert.match(sql, /for insert to authenticated/);
+  assert.equal((sql.match(/su\.store_id::text = \(storage.foldername\(name\)\)\[1\]/g) || []).length, 2);
+  assert.match(sql, /\[2\] = \(select auth.uid\(\)\)::text/);
+  assert.equal((sql.match(/p\.active/g) || []).length, 2); assert.equal((sql.match(/su\.active/g) || []).length, 2);
+  assert.doesNotMatch(sql, /create table|security definer|for (update|delete)|to anon|public = true/i);
+});
+
+test('unavailable private photographs remain removable and retry only on request; re-adding a removed reference downloads a fresh blob', async t => {
+  bitmapMock(t); const storage = photoStorage({ upload: async () => ({ error: null }) });
+  const view = mount('ImagesSection', utils.createRegistrationDraft({ id: 'manual', title: 'Manual' }), { ...storage, props: { user: photoUser } });
+  t.after(view.unmount);
+  await view.find(node => node.props.type === 'file').props.onChange({ target: { files: [photoFile()], value: '' } }); view.render();
+  await view.find(node => node.props.children === 'Confirmar fotos selecionadas').props.onClick(); view.render();
+  await new Promise(resolve => setImmediate(resolve)); view.render();
+  assert.ok(view.find(node => node.props.title === 'Remover capa principal'));
+  const downloadCount = () => storage.calls.filter(call => call.method === 'download').length;
+  assert.equal(downloadCount(), 1); view.render(); assert.equal(downloadCount(), 1);
+  const reference = view.draft().mainImageUrl, path = storage.calls[0].path;
+  storage.files.set(path, photoFile());
+  view.find(node => node.props.children === 'Tentar carregar imagens novamente').props.onClick(); view.render();
+  await new Promise(resolve => setImmediate(resolve)); view.render();
+  const previousBlob = view.find(node => node.type === 'img' && node.props.alt === 'Capa principal').props.src;
+  assert.match(previousBlob, /^blob:/); assert.equal(downloadCount(), 2);
+  view.find(node => node.props.title === 'Remover capa principal').props.onClick(); view.render();
+  view.click('Adicionar URL');
+  view.find(node => node.props.type === 'url').props.onChange({ target: { value: reference } }); view.render();
+  view.find(node => node.props.type === 'url').props.onKeyDown({ key: 'Enter', preventDefault() {} }); view.render();
+  await new Promise(resolve => setImmediate(resolve)); view.render();
+  const freshBlob = view.find(node => node.type === 'img' && node.props.alt === 'Capa principal').props.src;
+  assert.match(freshBlob, /^blob:/); assert.notEqual(freshBlob, previousBlob); assert.equal(downloadCount(), 3);
 });
 
 test('Draft defaults, explicit reuse mode and condition toggles match new/used condition', () => {
