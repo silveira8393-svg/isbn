@@ -84,15 +84,18 @@ function catalogImages(images: CatalogItem['images']) {
   }
   const ranked = [...best.values()].sort((a, b) => a.variant.localeCompare(b.variant) || b.area - a.area || b.width - a.width);
   const cover = ranked.find(image => image.variant === 'MAIN')?.link;
-  const additional = imageReferences(ranked.map(image => image.link)).filter(url => url !== cover);
-  return { coverUrl: cover, additionalImages: additional };
+  const additional = imageReferences(ranked.filter(image => image.variant !== 'MAIN').map(image => image.link));
+  return { coverUrl: cover, additionalImages: additional, amazonImages: ranked.map(({ variant, link }) => ({ variant, link })) };
 }
 
 /** Reuse the existing, bounded laboratory lookup only if the consolidated book lacks a gallery. */
 export async function complementAmazonImages(book: BookInfo | null, isbn: string, user: User, signal?: AbortSignal): Promise<BookInfo | null> {
   const existing = imageReferences([book?.coverUrl, book?.thumbnailUrl, ...(book?.additionalImages || [])]);
+  const coverIdentities = new Set(imageReferences([book?.coverUrl, book?.thumbnailUrl,
+    ...(book?.amazonImages || []).filter(image => image.variant === 'MAIN').map(image => image.link)]).map(imageIdentity));
+  const hasGallery = imageReferences(book?.additionalImages || []).some(url => !coverIdentities.has(imageIdentity(url)));
   const canonical = canonicalBookIsbn(isbn);
-  if (!canUseAmazonOfficial(user) || !canonical?.startsWith('978') || existing.length > 1) return book;
+  if (!canUseAmazonOfficial(user) || !canonical?.startsWith('978') || hasGallery) return book;
   try {
     const timeout = AbortSignal.timeout(10000);
     const result = await searchAmazonLab(cleanIsbn(isbn), 'http', signal ? AbortSignal.any([signal, timeout]) : timeout, user.id);
@@ -104,7 +107,11 @@ export async function complementAmazonImages(book: BookInfo | null, isbn: string
     const candidates = (Array.isArray(result.imagens?.itens) ? result.imagens.itens : [])
       .filter(image => image && ['principal', 'adicional'].includes(image.papel) && publicAmazonImage(image.referencia))
       .sort((a, b) => Number(b.papel === 'principal') - Number(a.papel === 'principal'));
-    const images = imageReferences([...existing, ...candidates.map(image => image.referencia)]);
+    const laboratoryCovers = candidates.filter(image => image.papel === 'principal');
+    for (const url of imageReferences(laboratoryCovers.flatMap(image => [image.referencia, image.miniatura]))) coverIdentities.add(imageIdentity(url));
+    const additions = candidates.filter(image => image.papel === 'adicional' && !coverIdentities.has(imageIdentity(image.referencia)));
+    const images = imageReferences([...existing, ...(existing.length ? [] : laboratoryCovers.map(image => image.referencia).slice(0, 1)),
+      ...additions.map(image => image.referencia)]);
     if (images.length === existing.length) return book;
     const base = book || { id: `isbn-${cleanIsbn(isbn)}`, title: '', ...(cleanIsbn(isbn).length === 13 ? { isbn13: cleanIsbn(isbn) } : { isbn10: cleanIsbn(isbn) }) };
     return { ...base, coverUrl: existing[0] || images[0], additionalImages: images.slice(1) };
@@ -152,6 +159,7 @@ export async function searchAmazonOfficial(isbn: string, user: User, signal?: Ab
       ...(physical ? { amazonPhysical: physical, ...amazonPhysicalFields(physical) } : {}),
       ...(images.coverUrl ? { coverUrl: images.coverUrl } : {}),
       ...(images.additionalImages.length ? { additionalImages: images.additionalImages } : {}),
+      ...(images.amazonImages.length ? { amazonImages: images.amazonImages } : {}),
       provider: 'Amazon SP-API',
       // Only public image references; never import HTML, synopsis, offers or raw attributes.
     };
@@ -188,6 +196,7 @@ export function complementWithAmazon(base: BookInfo | null, amazon: BookInfo | n
     if (!merged.dimensionsUnit && ['width', 'height', 'depth'].some(key => merged.provenance?.[key] === 'amazon_spapi_catalog_2022-04-01')) filled('dimensionsUnit', 'cm');
   }
   if (!merged.amazonPhysical && amazon.amazonPhysical) filled('amazonPhysical', amazon.amazonPhysical);
+  if (amazon.amazonImages?.length) merged.amazonImages = amazon.amazonImages.map(image => ({ ...image }));
   // Keep a valid primary-source cover; Amazon fills a missing cover and joins the existing gallery.
   const existing = imageReferences([merged.coverUrl, merged.thumbnailUrl, ...(merged.additionalImages || [])]);
   const amazonImages = imageReferences([amazon.coverUrl, ...(amazon.additionalImages || [])]);

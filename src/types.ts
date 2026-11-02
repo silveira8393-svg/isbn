@@ -45,6 +45,8 @@ export interface BookInfo {
     item?: Partial<Record<'height' | 'width' | 'length' | 'weight', { value: number; unit: string }>>;
     package?: Partial<Record<'height' | 'width' | 'length' | 'weight', { value: number; unit: string }>>;
   };
+  // Public SP-API image roles, retained for fallback decisions; not part of the registration export.
+  amazonImages?: { variant: string; link: string }[];
   enrichmentSource?: string;
   provenance?: Record<string, string>;
   provider?: string;
