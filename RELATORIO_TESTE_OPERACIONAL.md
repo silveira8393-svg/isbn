@@ -576,15 +576,18 @@ A recuperação das cinco imagens pelo backend deixa de ser apenas uma evidênci
 de fixtures. O evento anterior `content_type_missing` ocorria antes da extração;
 após a correção, esta execução chegou a `completed`.
 
-**Limite da evidência:** as contagens são da resposta do Laboratório antes da
-consolidação no navegador. O cliente continua exigindo correspondência exata do
-ISBN, descartando capas/redimensionamentos duplicados e preservando a capa oficial.
-Os logs do servidor não observam a seleção final do formulário. O acesso ao
-navegador retornou `The browser access host is unavailable`, e a mensagem do
-proprietário não preencheu o resultado visual. Portanto, a quantidade efetivamente
-exibida no resultado/cadastro ainda não foi confirmada nesta análise; não é correto
-equiparar automaticamente seis referências no Laboratório a seis imagens no
-cadastro.
+**Consolidação confirmada visualmente:** sem repetir a pesquisa, o proprietário
+confirmou **“Capa e cinco adicionais”** no resultado/galeria já aberto. Assim,
+esta homologação combina duas evidências: a resposta real da Function com uma
+principal e cinco adicionais e a confirmação humana de capa mais cinco adicionais
+na interface (seis imagens no total). A capa oficial permanece selecionada e a
+complementação voltou a disponibilizar a galeria esperada.
+
+O cliente continua exigindo correspondência exata do ISBN, descartando capas e
+redimensionamentos duplicados. Os logs do servidor não observam a seleção final
+do formulário: a contagem visual é uma confirmação expressa do proprietário,
+não uma leitura automatizada do DOM. O acesso ao navegador retornou
+`The browser access host is unavailable`; não foi feito contorno desse acesso.
 
 Nenhuma alteração de código, nova consulta Amazon, mudança em banco/Storage,
 merge ou deploy foi necessária para esta verificação. Os testes do código
