@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect, useState } from 'react';
-import { isImageReference } from '../../utils/imageUrls';
-import { RegistrationDraft } from '../../types';
+import { useEffect, useRef, useState } from 'react';
+import { imageIdentity, imageReferences, isImageReference, isStoredBookImage, openStoredBookImage, prepareLocalBookImage, uploadLocalBookImage, type LocalBookImage } from '../../utils/imageUrls';
+import { RegistrationDraft, User } from '../../types';
+import { supabase, supabaseUrl } from '../../lib/supabase';
 import {
   ImageIcon,
   Plus,
@@ -18,22 +19,132 @@ import {
 interface ImagesSectionProps {
   draft: RegistrationDraft;
   onChange: (updates: Partial<RegistrationDraft>) => void;
+  user?: User;
+  onUploadBusyChange?: (busy: boolean) => void;
+  onPendingPhotosChange?: (count: number) => void;
+  errors?: Record<string, string>;
 }
 
 export default function ImagesSection({
   draft,
   onChange,
+  user,
+  onUploadBusyChange,
+  onPendingPhotosChange,
+  errors = {},
 }: ImagesSectionProps) {
   const [newImageUrl, setNewImageUrl] = useState('');
   const [showAddInput, setShowAddInput] = useState(false);
   const [failedUrls, setFailedUrls] = useState<Set<string>>(new Set());
   const [loadedUrls, setLoadedUrls] = useState<Set<string>>(new Set());
   const [urlError, setUrlError] = useState('');
+  const [pendingPhotos, setPendingPhotos] = useState<(LocalBookImage & { preview: string; error?: string })[]>([]);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState('');
+  const [storedSources, setStoredSources] = useState<Record<string, string | null>>({});
+  const [sourceRevision, setSourceRevision] = useState(0);
+  const latest = useRef({ draft, user, onChange, onUploadBusyChange, onPendingPhotosChange });
+  latest.current = { draft, user, onChange, onUploadBusyChange, onPendingPhotosChange };
+  const queued = useRef(pendingPhotos), busy = useRef(false), mounted = useRef(true);
+  const downloads = useRef(new Map<string, { controller: AbortController; release?: () => void }>());
+  const access = `${user?.id || ''}:${user?.storeId || ''}:${user?.active || false}`;
+  const previousAccess = useRef(access);
+  const selection = imageReferences([draft.mainImageUrl, ...draft.additionalImageUrls]);
+  const privateKey = JSON.stringify(selection.filter(isStoredBookImage));
   useEffect(() => {
+    if (previousAccess.current !== access) {
+      previousAccess.current = access;
+      downloads.current.forEach(entry => { entry.controller.abort(); entry.release?.(); }); downloads.current.clear();
+      setStoredSources({});
+      queued.current.forEach(photo => URL.revokeObjectURL(photo.preview)); queued.current = []; setPendingPhotos([]);
+      latest.current.onPendingPhotosChange?.(0);
+    }
+    const selected: string[] = JSON.parse(privateKey);
+    for (const [url, entry] of downloads.current) if (!selected.includes(url)) {
+      entry.controller.abort(); entry.release?.(); downloads.current.delete(url);
+      setStoredSources(previous => { const next = { ...previous }; delete next[url]; return next; });
+    }
+    for (const url of selected) {
+      if (downloads.current.has(url)) continue;
+      const entry = { controller: new AbortController(), release: undefined as (() => void) | undefined };
+      downloads.current.set(url, entry);
+      void openStoredBookImage(url, { client: supabase, projectUrl: supabaseUrl }, entry.controller.signal).then(opened => {
+        if (!mounted.current || downloads.current.get(url) !== entry) { opened.release(); return; }
+        entry.release = opened.release; setStoredSources(previous => ({ ...previous, [url]: opened.url }));
+      }).catch(() => {
+        if (mounted.current && downloads.current.get(url) === entry) setStoredSources(previous => ({ ...previous, [url]: null }));
+      });
+    }
+  }, [privateKey, access, sourceRevision]);
+  useEffect(() => {
+    mounted.current = true;
+    const warn = (event: BeforeUnloadEvent) => { if (busy.current) { event.preventDefault(); event.returnValue = ''; } };
+    if (typeof window !== 'undefined') window.addEventListener('beforeunload', warn);
+    return () => {
+      mounted.current = false;
+      queued.current.forEach(photo => URL.revokeObjectURL(photo.preview));
+      downloads.current.forEach(entry => { entry.controller.abort(); entry.release?.(); }); downloads.current.clear();
+      latest.current.onUploadBusyChange?.(false);
+      latest.current.onPendingPhotosChange?.(0);
+      if (typeof window !== 'undefined') window.removeEventListener('beforeunload', warn);
+    };
+  }, []);
+  const sourceFor = (url: string) => isStoredBookImage(url) ? (previousAccess.current === access ? storedSources[url] : undefined) : url;
+  const available = (url: string) => isImageReference(url) && !failedUrls.has(url) && sourceFor(url) !== null;
+  const apply = (updates: Partial<RegistrationDraft>) => {
+    latest.current.draft = { ...latest.current.draft, ...updates }; latest.current.onChange(updates);
+  };
+  const changeQueue = (photos: typeof pendingPhotos) => { queued.current = photos; setPendingPhotos(photos); latest.current.onPendingPhotosChange?.(photos.length); };
+  const changeBusy = (value: boolean) => { busy.current = value; setUploadBusy(value); latest.current.onUploadBusyChange?.(value); };
+  const choosePhotos = async (files: File[]) => {
+    if (busy.current || !files.length) return;
+    const actor = latest.current.user;
+    if (!actor?.active) return;
+    changeBusy(true); setUploadMessage(''); const messages: string[] = [];
+    try {
+      for (const file of files) {
+        try {
+          const photo = await prepareLocalBookImage(file);
+          if (!mounted.current || latest.current.user?.id !== actor.id || latest.current.user?.storeId !== actor.storeId || !latest.current.user.active) return;
+          const existing = imageReferences([latest.current.draft.mainImageUrl, ...latest.current.draft.additionalImageUrls]);
+          if (queued.current.some(item => item.hash === photo.hash) || existing.some(url => isStoredBookImage(url) && url.includes(`/${photo.hash}.`))) {
+            messages.push('Uma foto repetida foi ignorada.'); continue;
+          }
+          changeQueue([...queued.current, { ...photo, preview: URL.createObjectURL(file) }]);
+        } catch (error) { messages.push(error instanceof Error ? error.message : 'Arquivo de imagem inválido.'); }
+      }
+    } finally { if (mounted.current) { setUploadMessage(messages.join(' ')); changeBusy(false); } }
+  };
+  const removePreview = (hash: string) => {
+    const photo = queued.current.find(item => item.hash === hash); if (photo) URL.revokeObjectURL(photo.preview);
+    changeQueue(queued.current.filter(item => item.hash !== hash));
+  };
+  const confirmPhotos = async () => {
+    const actor = latest.current.user;
+    if (busy.current || !actor || !queued.current.length) return;
+    changeBusy(true); setUploadMessage('');
+    try {
+      for (const photo of [...queued.current]) {
+        try {
+          const url = await uploadLocalBookImage(photo, actor, { client: supabase, projectUrl: supabaseUrl });
+          if (!mounted.current || latest.current.user?.id !== actor.id || latest.current.user?.storeId !== actor.storeId || !latest.current.user.active) return;
+          const current = latest.current.draft;
+          const images = imageReferences([current.mainImageUrl, ...current.additionalImageUrls, url]);
+          apply({ mainImageUrl: current.mainImageUrl || images[0], additionalImageUrls: images.filter(image => image !== (current.mainImageUrl || images[0])),
+            ...(!current.mainImageUrl ? { imageSelectionManual: true } : {}) });
+          removePreview(photo.hash);
+        } catch {
+          if (mounted.current) changeQueue(queued.current.map(item => item.hash === photo.hash ? { ...item, error: 'Não foi possível enviar. O cadastro e as outras fotos foram preservados.' } : item));
+        }
+      }
+    } finally { if (mounted.current) changeBusy(false); }
+  };
+  useEffect(() => {
+    if (draft.imageSelectionManual) return;
     if (isImageReference(draft.mainImageUrl) && !failedUrls.has(draft.mainImageUrl)) return;
     const fallback = draft.additionalImageUrls.find(url => isImageReference(url) && loadedUrls.has(url) && !failedUrls.has(url));
     if (fallback) onChange({ mainImageUrl: fallback, additionalImageUrls: draft.additionalImageUrls.filter(url => url !== fallback) });
-  }, [draft.mainImageUrl, draft.additionalImageUrls, failedUrls, loadedUrls, onChange]);
+  }, [draft.mainImageUrl, draft.additionalImageUrls, draft.imageSelectionManual, failedUrls, loadedUrls, onChange]);
   const handleImageLoad = (url: string) => setLoadedUrls(previous => previous.has(url) ? previous : new Set([...previous, url]));
 
   const handleImageError = (url: string) => {
@@ -46,27 +157,28 @@ export default function ImagesSection({
 
   const handleSetMain = (url: string) => {
     const currentMain = draft.mainImageUrl;
-    const newAdditionals = draft.additionalImageUrls.filter((u) => u !== url);
-    if (currentMain && currentMain !== url) {
-      newAdditionals.unshift(currentMain);
-    }
-    onChange({
+    const newAdditionals = imageReferences([url, currentMain, ...draft.additionalImageUrls]).slice(1);
+    apply({
       mainImageUrl: url,
       additionalImageUrls: newAdditionals,
+      imageSelectionManual: true,
     });
   };
 
   const handleRemoveImage = (url: string, isMain: boolean) => {
+    setFailedUrls(previous => { const next = new Set(previous); next.delete(url); return next; });
+    setLoadedUrls(previous => { const next = new Set(previous); next.delete(url); return next; });
     if (isMain) {
       const remaining = draft.additionalImageUrls;
       const nextMain = remaining[0] || undefined;
       const nextAdditionals = remaining.slice(1);
-      onChange({
+      apply({
         mainImageUrl: nextMain,
         additionalImageUrls: nextAdditionals,
+        imageSelectionManual: true,
       });
     } else {
-      onChange({
+      apply({
         additionalImageUrls: draft.additionalImageUrls.filter((u) => u !== url),
       });
     }
@@ -75,20 +187,16 @@ export default function ImagesSection({
   const handleAddManualImage = () => {
     const trimmed = newImageUrl.trim();
     if (!trimmed) return;
-    if (!isImageReference(trimmed)) { setUrlError('Informe uma URL HTTP/HTTPS de imagem, sem diretório ou página HTML.'); return; }
+    if (!isImageReference(trimmed) || new URL(trimmed).search || new URL(trimmed).hash) { setUrlError('Informe uma URL HTTP/HTTPS de imagem, sem parâmetros, fragmento, diretório ou página HTML.'); return; }
     setUrlError('');
     if (!draft.mainImageUrl) {
-      onChange({ mainImageUrl: trimmed });
-    } else if (!draft.additionalImageUrls.includes(trimmed)) {
-      onChange({ additionalImageUrls: [...draft.additionalImageUrls, trimmed] });
+      apply({ mainImageUrl: new URL(trimmed).href, imageSelectionManual: true });
+    } else if (!imageReferences([draft.mainImageUrl, ...draft.additionalImageUrls]).some(url => imageIdentity(url) === imageIdentity(trimmed))) {
+      apply({ additionalImageUrls: imageReferences([...draft.additionalImageUrls, trimmed]) });
     }
     setNewImageUrl('');
     setShowAddInput(false);
   };
-
-  const hasAnyImages =
-    (isImageReference(draft.mainImageUrl) && !failedUrls.has(draft.mainImageUrl)) ||
-    draft.additionalImageUrls.some((url) => isImageReference(url) && !failedUrls.has(url));
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-5">
@@ -143,12 +251,38 @@ export default function ImagesSection({
         </div>
       )}
 
+      <div className="space-y-3">
+        <label className="inline-flex cursor-pointer items-center rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold">
+          Selecionar fotos
+          <input type="file" multiple accept="image/jpeg,image/png,image/webp" disabled={uploadBusy || !user?.active}
+            aria-label="Selecionar fotografias locais" className="sr-only"
+            onChange={event => { const files = Array.from<File>(event.target.files || []); event.target.value = ''; return choosePhotos(files); }} />
+        </label>
+        <p className="text-xs text-slate-500">JPEG, PNG ou WebP, até 5 MiB por foto. Confira a prévia e confirme para adicionar.</p>
+        {uploadMessage && <p role="status" className="text-xs text-amber-800">{uploadMessage}</p>}
+        {pendingPhotos.length > 0 && <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{pendingPhotos.map(photo => <div key={photo.hash} className="space-y-1 rounded border border-slate-200 p-2">
+            <img src={photo.preview} alt={`Prévia de ${photo.file.name}`} className="h-28 w-full object-contain" />
+            <p className="break-all text-xs">{photo.file.name}</p>
+            {photo.error && <p role="alert" className="text-xs text-rose-700">{photo.error}</p>}
+            <button type="button" disabled={uploadBusy} onClick={() => removePreview(photo.hash)} className="text-xs text-red-700 underline">Remover prévia</button>
+          </div>)}</div>
+          <button type="button" data-registration-field="pendingPhotos" disabled={uploadBusy} onClick={() => confirmPhotos()} className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60">{uploadBusy ? 'Processando fotos...' : 'Confirmar fotos selecionadas'}</button>
+        </div>}
+      </div>
+
       {/* Visualização de Imagens */}
       {urlError && <p role="alert" className="text-xs text-rose-700">{urlError}</p>}
-      {failedUrls.size > 0 && <div className="text-xs text-amber-800" role="status">Uma imagem não carregou. Se uma foto adicional carregar, ela será utilizada como capa.
-        <button type="button" onClick={() => { setFailedUrls(new Set()); setLoadedUrls(new Set()); }} className="ml-2 cursor-pointer rounded underline">Tentar carregar imagens novamente</button>
+      {(selection.some(url => failedUrls.has(url) || sourceFor(url) === null)) && <div className="text-xs text-amber-800" role="status">Uma imagem não carregou. Você pode removê-la ou tentar novamente; sua escolha de capa será preservada.
+        <button type="button" onClick={() => {
+          for (const [url, entry] of downloads.current) if (storedSources[url] === null || failedUrls.has(url)) {
+            entry.controller.abort(); entry.release?.(); downloads.current.delete(url);
+            setStoredSources(previous => { const next = { ...previous }; delete next[url]; return next; });
+          }
+          setFailedUrls(new Set()); setLoadedUrls(new Set()); setSourceRevision(value => value + 1);
+        }} className="ml-2 cursor-pointer rounded underline">Tentar carregar imagens novamente</button>
       </div>}
-      {!hasAnyImages && !draft.mainImageUrl ? (
+      {!draft.additionalImageUrls.length && !draft.mainImageUrl ? (
         <div className="border border-dashed border-slate-300 rounded-xl p-8 text-center flex flex-col items-center justify-center bg-slate-50/50">
           <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center mb-2">
             <BookOpen className="w-6 h-6 stroke-[1.4]" />
@@ -161,31 +295,24 @@ export default function ImagesSection({
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-6 items-start">
           {/* Imagem Principal em Destaque */}
-          <div className="sm:col-span-5 flex flex-col items-center">
+          <div data-registration-field="mainImageUrl" tabIndex={-1} className="sm:col-span-5 flex flex-col items-center">
+            {errors.mainImageUrl && <p className="mb-2 text-xs font-medium text-red-600">{errors.mainImageUrl}</p>}
             <span className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5 self-start">
               <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
               <span>Capa Principal</span>
             </span>
 
             <div className="w-full max-w-[220px] aspect-[3/4] rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm relative group">
-              {isImageReference(draft.mainImageUrl) && !failedUrls.has(draft.mainImageUrl) ? (
+              {draft.mainImageUrl && available(draft.mainImageUrl) && sourceFor(draft.mainImageUrl) ? (
                 <>
                   <img
-                    src={draft.mainImageUrl}
+                    src={sourceFor(draft.mainImageUrl)!}
                     alt="Capa principal"
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
                     onLoad={() => handleImageLoad(draft.mainImageUrl!)}
                     onError={() => handleImageError(draft.mainImageUrl!)}
                   />
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveImage(draft.mainImageUrl!, true)}
-                    className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/60 text-white hover:bg-red-600 transition-colors opacity-90 sm:opacity-0 group-hover:opacity-100 cursor-pointer"
-                    title="Remover capa principal"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
                 </>
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center text-slate-400">
@@ -193,11 +320,13 @@ export default function ImagesSection({
                   <span className="text-xs font-mono">Sem capa principal</span>
                 </div>
               )}
+              {draft.mainImageUrl && <button type="button" onClick={() => handleRemoveImage(draft.mainImageUrl!, true)} title="Remover capa principal" className="absolute right-2 top-2 rounded bg-red-600 p-1.5 text-white"><Trash2 className="h-4 w-4" /></button>}
             </div>
           </div>
 
           {/* Miniaturas Adicionais */}
-          <div className="sm:col-span-7">
+          <div data-registration-field="additionalImageUrls" tabIndex={-1} className="sm:col-span-7">
+            {errors.additionalImageUrls && <p className="mb-2 text-xs font-medium text-red-600">{errors.additionalImageUrls}</p>}
             <span className="text-xs font-bold text-slate-700 mb-2 block">
               Fotos Adicionais ({draft.additionalImageUrls.length})
             </span>
@@ -213,40 +342,26 @@ export default function ImagesSection({
                     key={`${imgUrl}-${idx}`}
                     className="group relative aspect-[3/4] rounded-lg border border-slate-200 bg-slate-100 overflow-hidden shadow-2xs"
                   >
-                    {isImageReference(imgUrl) && !failedUrls.has(imgUrl) ? (
+                    {available(imgUrl) && sourceFor(imgUrl) ? (
                       <>
                         <img
-                          src={imgUrl}
+                          src={sourceFor(imgUrl)!}
                           alt=""
                           className="w-full h-full object-cover"
                           referrerPolicy="no-referrer"
                           onLoad={() => handleImageLoad(imgUrl)}
                           onError={() => handleImageError(imgUrl)}
                         />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-between p-1.5">
-                          <button
-                            type="button"
-                            onClick={() => handleSetMain(imgUrl)}
-                            className="p-1 rounded bg-white text-slate-800 text-[10px] font-bold flex items-center gap-1 hover:bg-amber-100 cursor-pointer shadow-xs"
-                            title="Tornar capa principal"
-                          >
-                            <Star className="w-3 h-3 text-amber-500 fill-amber-400" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveImage(imgUrl, false)}
-                            className="p-1 rounded bg-red-600 text-white hover:bg-red-700 cursor-pointer shadow-xs"
-                            title="Remover foto"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
                       </>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">
                         Indisponível
                       </div>
                     )}
+                    <div className="absolute inset-x-0 bottom-0 flex justify-between gap-1 bg-black/40 p-1.5">
+                      {available(imgUrl) && sourceFor(imgUrl) && <button type="button" onClick={() => handleSetMain(imgUrl)} title="Tornar capa principal" className="rounded bg-white p-1 text-slate-800"><Star className="h-3 w-3" /></button>}
+                      <button type="button" onClick={() => handleRemoveImage(imgUrl, false)} title="Remover foto" className="rounded bg-red-600 p-1 text-white"><Trash2 className="h-3 w-3" /></button>
+                    </div>
                   </div>
                 ))}
               </div>

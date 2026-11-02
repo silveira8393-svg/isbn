@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { fetchHtml, LabError, validateAmazonQuery } from '../experimentos/amazon/consulta_amazon.js';
+import { fetchHtml, HTML_STOP_REASONS, LabError, validateAmazonQuery } from '../experimentos/amazon/consulta_amazon.js';
 import { parseAmazonHtml, toLabResult } from '../experimentos/amazon/extrator_amazon.js';
 import { AmazonAccessError, authorizeAmazonDeveloper, readLimitedJson } from './amazonAuthorization.js';
 
@@ -15,13 +15,16 @@ export function createAmazonFunction(options: {
   return async (request: Request): Promise<Response> => {
     const started = performance.now(), id = randomUUID();
     let statusHttp: number | null = null;
+    let stopReason: string | undefined;
+    let imageCounts: { imagens_principais: number; imagens_adicionais: number } | undefined;
     function reply(status: number, payload: object, code: string) {
       // A Vercel limita a resposta da Function; nunca devolver HTML/extração gigante.
       if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > 4 * 1024 * 1024) {
         status = 502; code = 'response_limit'; payload = { mensagem: 'Resultado acima do limite de resposta do laboratório.' };
       }
       const diagnostico = { id, duracao_ms: Math.round((performance.now() - started) * 100) / 100,
-        status_function: status, status_http: statusHttp, codigo: code };
+        status_function: status, status_http: statusHttp, codigo: code,
+        ...(stopReason ? { motivo: stopReason } : {}), ...imageCounts };
       // Somente métricas e códigos controlados: sem ISBN, usuário, token, URL ou HTML.
       log(JSON.stringify({ evento: 'amazon_lab', ...diagnostico }));
       return Response.json({ ...payload, diagnostico }, { status, headers: {
@@ -67,11 +70,14 @@ export function createAmazonFunction(options: {
         statusHttp = metadata.status_http;
         const duration = Math.round((performance.now() - started) * 100) / 100;
         if (metadata.html === null) {
+          if (metadata.motivo && HTML_STOP_REASONS.includes(metadata.motivo)) stopReason = metadata.motivo;
           const code = /CAPTCHA/.test(metadata.mensagem || '') ? 'amazon_captcha' : statusHttp !== 200 ? 'amazon_http' : 'amazon_unexpected';
           return reply(200, { modo: 'http', isbn_pesquisado: isbn, total_campos: 9, status_http: statusHttp,
             status: 'interrompida', duracao_ms: duration, mensagem: metadata.mensagem }, code);
         }
         const result = toLabResult(parseAmazonHtml(metadata.html, isbn, 'memoria', 'http_local_experimental'), 'http', duration, statusHttp);
+        imageCounts = { imagens_principais: result.imagens?.itens.filter(image => image.papel === 'principal').length || 0,
+          imagens_adicionais: result.imagens?.itens.filter(image => image.papel === 'adicional').length || 0 };
         return reply(200, result, 'completed');
       } finally { busy = false; }
     } catch (error) {

@@ -11,6 +11,16 @@ export function cleanIsbn(isbn: string): string {
   return isbn.replace(/[\s-]/g, '').toUpperCase();
 }
 
+/** Check digits and book prefix; ISBN-10 is compared through its ISBN-13 equivalent. */
+export function canonicalBookIsbn(value?: string): string | undefined {
+  const isbn = cleanIsbn(value || '');
+  if (/^97[89][0-9]{10}$/.test(isbn) && [...isbn].reduce((sum, digit, i) => sum + Number(digit) * (i % 2 ? 3 : 1), 0) % 10 === 0) return isbn;
+  if (!/^[0-9]{9}[0-9X]$/.test(isbn) || isbn === '0000000000' ||
+    [...isbn].reduce((sum, digit, i) => sum + (digit === 'X' ? 10 : Number(digit)) * (10 - i), 0) % 11 !== 0) return;
+  const base = '978' + isbn.slice(0, 9);
+  return base + (10 - [...base].reduce((sum, digit, i) => sum + Number(digit) * (i % 2 ? 3 : 1), 0) % 10) % 10;
+}
+
 /**
  * Basic check if string is at least standard structure of ISBN-10 or ISBN-13.
  */

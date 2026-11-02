@@ -106,8 +106,9 @@ test('transporte fixo preserva GET único, ISBN-10, bloqueios, limites e nenhuma
   assert.equal(isbn10For(ISBN), '8535914846'); assert.equal(isbn10For('0-8044-2957-x'), '080442957X');
   assert.throws(() => isbn10For('9791090636071'), error => error.status === 422);
   for (const [status, mime, body, message] of [[200, 'text/html', '<html>produto</html>', null], [302, 'text/html', '', /não 200/],
-    [403, 'text/html', '', /não 200/], [200, 'application/json', '{}', /sem conteúdo HTML/],
-    [200, 'text/html', 'robot check captcha', /CAPTCHA/], [200, 'text/html', 'x'.repeat(MAX_BYTES + 1), /8 MiB/]]) {
+    [403, 'text/html', '', /não 200/], [200, 'application/json', '{}', /Content-Type não HTML/],
+    [200, 'text/html', 'robot check captcha', /CAPTCHA/], [200, 'text/html', 'x'.repeat(MAX_BYTES + 1), /8 MiB/],
+    [200, undefined, 'x'.repeat(MAX_BYTES + 1), /8 MiB/]]) {
     let calls = 0;
     const result = await fetchHtml(ISBN, (options, callback) => {
       calls++;
@@ -133,6 +134,80 @@ test('transporte fixo preserva GET único, ISBN-10, bloqueios, limites e nenhuma
     request.end = () => setImmediate(() => { request.emit('error', new Error('Falha simulada')); request.emit('close'); });
     return request;
   }), error => error.status === 502);
+});
+
+test('HTML MIME parsing reads split UTF-8 and validates documents without a header; explicitly invalid/non-HTML MIME stops before reading', async () => {
+  const document = '<!doctype html><html><body>Conteúdo bibliográfico</body></html>', bytes = Buffer.from(document);
+  for (const [mime, accepted, message] of [
+    ['text/html ; charset=UTF-8', true], [' Text/HTML\t; charset="utf-8" ', true],
+    ['application/xhtml+xml ; charset=utf-8', true],
+    [undefined, true], ['', true],
+    ['invalid-mime', false, /Content-Type inválido/],
+    ['application/json', false, /Content-Type não HTML/], ['text/plain', false, /Content-Type não HTML/],
+    ['text/html-example', false, /Content-Type não HTML/],
+  ]) {
+    let calls = 0, reads = 0, offset = 0;
+    const result = await fetchHtml('9781419762109', (options, callback) => {
+      calls++; assert.equal(options.path, '/dp/1419762109');
+      assert.equal(options.headers['Accept-Encoding'], 'identity'); assert.equal(options.headers.Cookie, undefined);
+      const request = new EventEmitter();
+      request.end = () => setImmediate(() => {
+        const response = new Readable({ read() { reads++; this.push(offset < bytes.length ? bytes.subarray(offset, ++offset) : null); } });
+        Object.assign(response, { statusCode: 200, headers: mime === undefined ? {} : { 'content-type': mime } });
+        response.once('close', () => request.emit('close')); callback(response);
+      });
+      request.destroy = error => { request.emit('error', error); request.emit('close'); };
+      return request;
+    });
+    assert.equal(calls, 1); assert.equal(result.status_http, 200);
+    if (accepted) { assert.equal(result.html, document); assert.equal(result.tamanho_bytes, bytes.length); assert.ok(reads > 1); }
+    else { assert.equal(result.html, null); assert.match(result.mensagem, message); assert.equal(reads, 0); }
+  }
+});
+
+test('9781419762109: a missing Content-Type permits only a recognizable bounded HTML document, never arbitrary text or JSON', async () => {
+  for (const [body, accepted, reason] of [
+    ['<!doctype html><html lang="pt-br"><body>Livro</body></html>', true],
+    ['<HTML><body>Livro</body></HTML>', true],
+    ['<!doctype html>{"book":"synthetic-body"}', false, 'content_type_missing'],
+    ['{"html":"<html>synthetic-body</html>"}', false, 'content_type_missing'],
+    ['synthetic-body', false, 'content_type_missing'],
+    ['', false, 'body_empty'], [' \n\t', false, 'body_empty'],
+    ['<html>captcha robot check</html>', false, 'blocked'],
+  ]) {
+    let calls = 0;
+    const result = await fetchHtml('9781419762109', (options, callback) => {
+      calls++; assert.equal(options.path, '/dp/1419762109');
+      const request = new EventEmitter();
+      request.end = () => setImmediate(() => {
+        const response = Readable.from([Buffer.from(body)]);
+        Object.assign(response, { statusCode: 200, headers: {} });
+        response.once('close', () => request.emit('close')); callback(response);
+      });
+      request.destroy = error => { request.emit('error', error); request.emit('close'); };
+      return request;
+    });
+    assert.equal(calls, 1); assert.equal(result.html, accepted ? body : null); assert.equal(result.motivo, reason);
+  }
+});
+
+test('HTTP 200 with an HTML header and an empty body is interrupted rather than passed to the extractor', async () => {
+  for (const body of ['', ' \r\n\t']) {
+    let calls = 0;
+    const result = await fetchHtml('9781419762109', (_, callback) => {
+      calls++;
+      const request = new EventEmitter();
+      request.end = () => setImmediate(() => {
+        const response = Readable.from([Buffer.from(body)]);
+        Object.assign(response, { statusCode: 200, headers: { 'content-type': 'text/html' } });
+        response.once('close', () => request.emit('close')); callback(response);
+      });
+      request.destroy = error => { request.emit('error', error); request.emit('close'); };
+      return request;
+    });
+    assert.equal(calls, 1); assert.equal(result.status_http, 200); assert.equal(result.html, null);
+    assert.match(result.mensagem, /Corpo HTML vazio/);
+  }
 });
 
 test('servidor local valida Host, Origin, cabeçalho, JSON e tamanho; contrato real sem Python', async t => {

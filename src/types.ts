@@ -40,6 +40,13 @@ export interface BookInfo {
   height?: number;
   depth?: number;
   dimensionsUnit?: 'cm';
+  // Original Amazon units and item/package distinction; not part of the registration export.
+  amazonPhysical?: {
+    item?: Partial<Record<'height' | 'width' | 'length' | 'weight', { value: number; unit: string }>>;
+    package?: Partial<Record<'height' | 'width' | 'length' | 'weight', { value: number; unit: string }>>;
+  };
+  // Public SP-API image roles, retained for fallback decisions; not part of the registration export.
+  amazonImages?: { variant: string; link: string }[];
   enrichmentSource?: string;
   provenance?: Record<string, string>;
   provider?: string;
@@ -99,6 +106,7 @@ export interface RegistrationDraft {
   // Imagens
   mainImageUrl?: string;
   additionalImageUrls: string[];
+  imageSelectionManual?: boolean; // Editing state only; never exported in a registration snapshot.
 
   // Configurações Fiscais e Avançadas
   ncm: string;

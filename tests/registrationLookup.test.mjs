@@ -6,6 +6,7 @@ async function compile(entry) {
   const output = await build({ entryPoints: [entry], bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic',
     plugins: [{ name: 'isolated-readonly-view', setup(builder) {
       const mocks = [[/^react$/, 'module.exports=deps.react'], [/^react\/jsx-runtime$/, 'exports.jsx=exports.jsxs=(type,props)=>({type,props})'],
+        [/\/lib\/supabase$/, 'exports.supabase=deps.supabase||{};exports.supabaseUrl="https://jcxdkrpmrfbrhzwbzhph.supabase.co"'],
         [/\/contexts\/UserContext$/, 'exports.useUser=()=>deps.user']];
       builder.onResolve({ filter: /.*/ }, args => {
         const mock = mocks.find(([pattern]) => pattern.test(args.path));
@@ -198,26 +199,51 @@ test('Losing access while the fiche is open releases the page scroll lock', () =
   assert.equal(view.nodes().length, 0);
 });
 
-function mountImage(url, label = 'Imagem principal') {
-  const slots = []; let cursor = 0, tree;
+function mountImage(url, label = 'Imagem principal', options = {}) {
+  const slots = [], cleanups = []; let cursor = 0, tree, effects = [];
   const dialog = { open: false, showModal() { this.open = true; }, close() { this.open = false; } };
-  const component = imageFactory({ react: {
+  const component = imageFactory({ ...options, react: {
     useState(initial) {
       const index = cursor++; if (!(index in slots)) slots[index] = initial;
       return [slots[index], next => { slots[index] = next; render(); }];
     },
     useRef(initial) { const index = cursor++; return slots[index] ??= { current: initial }; },
+    useEffect(effect, dependencies) {
+      const index = cursor++;
+      if (!slots[index] || dependencies.some((value, i) => !Object.is(value, slots[index][i]))) {
+        slots[index] = dependencies; effects.push(() => { const cleanup = effect(); if (cleanup) cleanups.push(cleanup); });
+      }
+    },
   } }).default;
   const nodes = (node = tree) => node == null || typeof node !== 'object' ? [] : Array.isArray(node)
     ? node.flatMap(child => nodes(child ?? null)) : [node, ...nodes(node.props?.children ?? null)];
   function render() {
-    cursor = 0; tree = component({ url, label });
+    cursor = 0; effects = []; tree = component({ url, label });
     const preview = nodes().find(n => n.type === 'dialog');
     if (preview) preview.props.ref.current = dialog;
+    effects.forEach(effect => effect());
   }
   render();
-  return { nodes, dialog, find: predicate => nodes().find(predicate) };
+  return { nodes, dialog, unmount: () => cleanups.forEach(cleanup => cleanup()), find: predicate => nodes().find(predicate) };
 }
+
+test('private snapshot images are downloaded through the authenticated client and ephemeral blobs are revoked', async t => {
+  const reference = `https://jcxdkrpmrfbrhzwbzhph.supabase.co/storage/v1/object/authenticated/isbn-registration-images/${storeId}/${userId}/${'a'.repeat(64)}.png`;
+  const calls = [], revoked = [];
+  t.mock.method(URL, 'revokeObjectURL', url => revoked.push(url));
+  const view = mountImage(reference, 'Imagem principal', { supabase: { storage: { from(bucket) {
+    assert.equal(bucket, 'isbn-registration-images'); return { async download(path, _, options) {
+      calls.push(path); assert.ok(options.signal instanceof AbortSignal); return { data: new Blob(['fixture']), error: null };
+    } };
+  } } } });
+  assert.equal(view.find(n => n.type === 'img'), undefined);
+  await new Promise(resolve => setImmediate(resolve));
+  const image = view.find(n => n.type === 'img'); assert.match(image.props.src, /^blob:/);
+  assert.equal(view.find(n => n.type === 'a'), undefined, 'no public or signed Storage URL is exposed');
+  image.props.onLoad(); view.find(n => n.props['aria-haspopup'] === 'dialog').props.onClick();
+  assert.equal(view.nodes().filter(n => n.type === 'img').length, 2); assert.equal(calls.length, 1);
+  view.unmount(); assert.ok(revoked.includes(image.props.src));
+});
 
 test('HTTPS main and additional thumbnails open only after loading and close independently of the fiche', () => {
   for (const label of ['Imagem principal', 'Imagem adicional 1']) {

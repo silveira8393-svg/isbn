@@ -84,6 +84,7 @@ export default function BibliographicSection({
           <input
             type="text"
             value={draft.title}
+            data-registration-field="title"
             onChange={(e) => onChange({ title: e.target.value })}
             placeholder="Título do livro"
             className={`w-full px-3.5 py-2.5 rounded-lg border text-sm font-semibold transition-colors focus:outline-none focus:ring-2 ${
@@ -130,6 +131,7 @@ export default function BibliographicSection({
               <input
                 type="text"
                 value={author}
+                data-registration-field="authors"
                 onChange={(e) => handleAuthorEdit(idx, e.target.value)}
                 className="bg-transparent border-none focus:outline-none focus:ring-0 text-blue-900 font-semibold text-xs min-w-[120px]"
               />
@@ -153,6 +155,7 @@ export default function BibliographicSection({
           <input
             type="text"
             value={newAuthorInput}
+            data-registration-field="authors"
             onChange={(e) => setNewAuthorInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -174,6 +177,8 @@ export default function BibliographicSection({
         </div>
       </div>
 
+      {errors.authors && <p className="text-xs font-medium text-red-600">{errors.authors}</p>}
+
       {/* Grid de Metadados: Ano, Edição, Idioma, Formato, Páginas */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1">
         {/* Ano */}
@@ -182,10 +187,12 @@ export default function BibliographicSection({
           <input
             type="text"
             value={draft.year || ''}
+            data-registration-field="year"
             onChange={(e) => onChange({ year: e.target.value })}
             placeholder="Ex: 2021"
             className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-600"
           />
+          {errors.year && <p className="mt-1 text-xs font-medium text-red-600">{errors.year}</p>}
         </div>
 
         {/* Edição */}
@@ -194,10 +201,12 @@ export default function BibliographicSection({
           <input
             type="text"
             value={draft.edition || ''}
+            data-registration-field="edition"
             onChange={(e) => onChange({ edition: e.target.value })}
             placeholder="Ex: 2ª edição"
             className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-600"
           />
+          {errors.edition && <p className="mt-1 text-xs font-medium text-red-600">{errors.edition}</p>}
         </div>
 
         {/* Idioma */}
@@ -205,11 +214,13 @@ export default function BibliographicSection({
           <label className="block text-xs font-bold text-slate-700 mb-1">Idioma</label>
           <input
             type="text"
-            value={draft.language || 'Português'}
+            value={draft.language || ''}
+            data-registration-field="language"
             onChange={(e) => onChange({ language: e.target.value })}
             placeholder="Ex: Português"
             className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-600"
           />
+          {errors.language && <p className="mt-1 text-xs font-medium text-red-600">{errors.language}</p>}
         </div>
 
         {/* Formato */}
@@ -219,6 +230,7 @@ export default function BibliographicSection({
             type="text"
             list="formats-list"
             value={draft.format || ''}
+            data-registration-field="format"
             onChange={(e) => onChange({ format: e.target.value })}
             placeholder="Brochura"
             className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-600"
@@ -228,6 +240,7 @@ export default function BibliographicSection({
               <option key={fmt} value={fmt} />
             ))}
           </datalist>
+          {errors.format && <p className="mt-1 text-xs font-medium text-red-600">{errors.format}</p>}
         </div>
 
         {/* Páginas */}
@@ -236,14 +249,16 @@ export default function BibliographicSection({
           <input
             type="number"
             min={1}
-            value={draft.pageCount ?? ''}
+            value={Number.isFinite(draft.pageCount) ? draft.pageCount : ''}
+            data-registration-field="pageCount"
             onChange={(e) => {
-              const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+              const val = e.target.value ? Number(e.target.value) : undefined;
               onChange({ pageCount: val });
             }}
             placeholder="Ex: 240"
             className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-600"
           />
+          {errors.pageCount && <p className="mt-1 text-xs font-medium text-red-600">{errors.pageCount}</p>}
         </div>
       </div>
     </div>

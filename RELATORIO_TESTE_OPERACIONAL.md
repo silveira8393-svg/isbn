@@ -175,3 +175,420 @@ NOVOS eventos. Esses ensaios não foram executados pelo agente nesta etapa.
 Após homologação, commit/push/deploy permanecem dependentes de autorização específica.
 Nenhuma limpeza deve ocorrer antes de sua autorização própria; os novos eventos não usam
 demo_batch_id e ficam fora do recibo de IDs do lote demonstrativo.
+
+## Etapa 1 — gerenciamento de imagens (2026-11-02)
+
+Implementação sobre `32b856c`, na branch `feat/amazon-spapi-official`, para homologação
+em Preview. Amazon SP-API, Laboratório, BrasilAPI, Curitiba e regras comerciais foram
+preservados. Não foram criadas rotas, módulos de aplicação, credenciais ou tabelas.
+
+### Experiência do operador e persistência
+
+- A galeria existente mantém a seleção automática inicial e permite trocar a capa,
+  remover qualquer imagem (inclusive indisponível) e cadastrar sem imagens. A decisão
+  manual de capa prevalece sobre carregamentos posteriores. Redimensionamentos Amazon
+  continuam deduplicados pelo identificador do arquivo, preservando imagens distintas.
+- As escolhas e a ordem sobrevivem ao retorno à pesquisa e à reabertura do cadastro do
+  mesmo livro e condição. Na Etapa 2, abrir outro cadastro após concluir o anterior ou
+  mudar a condição pela consulta reinicia a seleção a partir das fontes, evitando
+  reaproveitar fotos de outro exemplar. O seletor de condição dentro da mesma ficha
+  mantém as escolhas dessa edição em andamento. Uma nova pesquisa inicia outra ficha. A
+  recuperação geral do rascunho após recarregar a página pertence à etapa seguinte.
+- Fotografias locais são selecionadas em lote, verificadas e pré-visualizadas antes da
+  confirmação. JPEG/PNG/WebP até 5 MiB; MIME, assinatura e decodificação precisam ser
+  válidos. O hash SHA-256 evita repetição por conteúdo, independentemente do nome.
+- A confirmação envia sequencialmente e preserva cada sucesso. Falhas mantêm a ficha,
+  as fotos já adicionadas e a prévia que falhou; nenhuma tentativa é repetida
+  automaticamente. Cadastro/navegação ficam protegidos enquanto há processamento.
+- São reutilizados `RegistrationDraft`, `mainImageUrl`, `additionalImageUrls`, o
+  snapshot e o cliente Supabase existentes. Somente referências persistentes entram no
+  snapshot; arquivos, URLs `blob:`, URLs assinadas e tokens não são persistidos nele.
+- A galeria e a ficha histórica leem fotos privadas com a sessão Supabase e exibem
+  URLs de objeto temporárias em memória, liberadas ao remover/desmontar. Fotos públicas
+  das fontes existentes conservam seu comportamento. Remover uma foto da ficha remove
+  sua referência, sem apagar o arquivo privado que pode estar em snapshots anteriores.
+
+### Storage: alteração autorizada e aplicada
+
+A inspeção somente de leitura no projeto ISBN `jcxdkrpmrfbrhzwbzhph` retornou zero
+buckets e zero políticas em `storage.objects`. A RLS está habilitada. As estruturas
+existentes `profiles` e `store_users` fornecem usuário ativo, loja, vínculo ativo e perfil.
+
+O arquivo [supabase/setup/registration_images.sql](supabase/setup/registration_images.sql)
+contém exclusivamente:
+
+1. Bucket privado `isbn-registration-images`, limite de 5 MiB e MIME JPEG/PNG/WebP.
+2. SELECT autenticado para usuários ativos vinculados à loja do caminho, nos perfis
+   `admin`, `operator` ou `developer`.
+3. INSERT autenticado no caminho `<loja>/<usuário>/<sha256>.<extensão>`, limitado ao
+   próprio usuário e à loja autorizada. Sem UPDATE, sobrescrita ou DELETE.
+
+Não há alteração de tabelas de produtos, dados comerciais ou políticas preexistentes.
+O SQL é transacional e falha se já existir recurso homônimo, evitando alterar uma
+configuração desconhecida. Em 2026-11-02, após autorização explícita do responsável,
+a inspeção confirmou novamente zero buckets/políticas. O SQL foi aplicado com sucesso
+pela alteração `registration_images_private_storage`, exclusivamente no projeto ISBN.
+Não reaplicar esse arquivo: o bucket e as políticas já existem.
+
+A verificação posterior confirmou `public: false`, `file_size_limit: 5242880`, os três
+MIME previstos, RLS habilitada e exatamente duas políticas (`SELECT`/`INSERT`, ambas
+para `authenticated`), com os predicados de loja, usuário e vínculos ativos revisados.
+O bucket permaneceu com zero objetos; não foram enviados arquivos nem modificados dados
+comerciais, credenciais, configurações Vercel ou permissões preexistentes. O aplicativo
+no Preview já pode utilizar o Storage, sem novo build ou novas variáveis.
+
+O aplicativo usa o cliente já configurado e recusa upload/download privado fora do
+projeto ISBN. Não há novas variáveis nem leitura de credenciais protegidas. O upload
+usa `upsert: false`; respostas de duplicidade 400/409 são confirmadas pela leitura e
+comparação do hash do arquivo existente. O limite de espera é 30 segundos. Se a
+transferência concluir depois do limite, o arquivo permanece privado; nova confirmação
+manual reutiliza o mesmo caminho/hash sem sobrescrever.
+
+Referências oficiais: [uploads e duplicidade](https://supabase.com/docs/guides/storage/uploads/standard-uploads),
+[controle de acesso](https://supabase.com/docs/guides/storage/security/access-control).
+
+### Limite da preparação Magazord
+
+O fluxo existente recebe uma única `mainImageUrl` e uma lista `additionalImageUrls`
+ordenada, sem duplicidades. Referências autenticadas são deliberadamente privadas;
+não são links públicos para a Magazord baixar. O futuro conector deverá obter o arquivo
+autorizado, enviar/converter o formato se exigido pelo contrato real e associar os IDs
+de mídia ao produto, com `principal` e `ordem`. Nenhuma publicação ou envio real à
+Magazord foi implementado ou executado; o simulador foi mantido.
+
+Referência oficial: [associação de mídia ao produto](https://docs-v2.api.magazord.com.br/api/put-midia-relaciona-produto-yaml/).
+
+### Validação desta etapa
+
+- `npm.cmd run typecheck`: aprovado.
+- `npm.cmd run lint`: aprovado (`tsc --noEmit`, conforme configuração existente).
+- `npm.cmd run build`: aprovado; permanece o aviso de bundle maior que 500 kB e de
+  importações estáticas/dinâmicas do mesmo cliente Supabase.
+- `npm.cmd run test:spapi`: 75/75 aprovados.
+- Galeria, upload, snapshot, navegação e Laboratório controlados:
+  `node --test tests/amazonLab.test.mjs tests/postHomologation.test.mjs tests/registrationLookup.test.mjs tests/spapiIntegrated.test.mjs`:
+  84/84 aprovados. Incluem remoção de imagens quebradas, precedência manual,
+  deduplicação, prévia sem envio, tipos/tamanhos/conteúdo inválidos, projeto/sessão,
+  envio parcial, troca manual durante envio, referências privadas, retry explícito,
+  liberação de blobs e payload compatível com o simulador.
+- Bateria completa: 602 testes, 598 aprovados, quatro falhas anteriores à etapa:
+  três em `infrastructureUi.test.mjs` (mock React sem `lazy`) e uma inicialização em
+  `magazordMode.test.mjs` (marcador textual sensível ao CRLF). Esses arquivos e seus
+  componentes de infraestrutura/modo não foram modificados. Não representam falhas
+  dos novos cenários de imagens, mas a bateria geral ainda não está totalmente verde.
+- Os testes usam arquivos e respostas sintéticos em memória, sem uploads reais,
+  consultas Amazon adicionais, publicação Magazord ou gravações no banco.
+- A criação autorizada do Storage foi validada separadamente por SELECT de configuração
+  e políticas. O verificador de segurança não apontou itens nos novos recursos; retornou
+  avisos sobre recursos anteriores, mantidos fora desta alteração: funções SECURITY
+  DEFINER executáveis por [anon](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable)
+  e [authenticated](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable),
+  [tabelas com RLS sem políticas](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)
+  e [proteção de senhas vazadas desativada](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+  Nenhuma dessas configurações foi alterada.
+
+Para concluir a homologação no Preview autenticado: confirmar uma foto local, escolher
+como capa, voltar/reabrir a ficha e conferir a referência no resultado simulado. O
+Storage já foi aplicado e conferido; o envio de um arquivo real pelo navegador e a
+aplicação da RLS durante esse envio ainda dependem desse ensaio autenticado.
+
+## Etapa 2 — validação automática e revisão obrigatória (2026-11-02)
+
+Implementada na mesma branch/PR, sobre `4734ebf`. Não há nova página, rota, módulo,
+biblioteca, tabela, bucket, migration ou conector. Não foram alterados autenticação,
+Storage, políticas, fontes operacionais, preços/estoque existentes ou produção.
+
+### Comportamento entregue
+
+1. A ficha valida automaticamente os dados carregados e as alterações. Campos com
+   observações ou erros ficam vermelhos, com texto que distingue `Observação` de
+   `Erro obrigatório`. A borda verde discreta indica consistência do campo, não
+   comprovação da informação pela fonte. Durante a digitação, o aviso daquele campo
+   fica suspenso até sair dele; não há confirmação individual ou pop-ups sucessivos.
+2. Erros bloqueantes: condição inválida, códigos obrigatórios vazios, título ausente
+   ou composto por mensagem de ausência, categoria vazia, preço inválido/não positivo,
+   quantidade não inteira/menor que um, identificadores fornecidos inválidos ou
+   divergentes e referências de imagens inseguras/inválidas. Ao revisar, o primeiro
+   campo com erro recebe foco e rolagem. Campos opcionais ausentes não bloqueiam.
+3. ISBN-10/13 reutilizam o verificador já existente, extraído sem mudança de algoritmo
+   para `utils/isbn.ts`, mantendo sua exportação anterior. ISBN-10 é comparado ao ISBN-13
+   equivalente apenas para conferir correspondência; não é inventado um identificador
+   para preencher a ficha. ISBN/EAN ausentes continuam ausentes. Código Filho manual de
+   USADO e as regras de condição/modo permanecem; coincidência com ISBN gera observação.
+4. Preços `50`, `50,00` e `1.234,56` são aceitos sem parse parcial. Revisão e conclusão
+   apresentam `R$ 50,00` / `R$ 1.234,56`. O envio ao simulador usa decimal com duas casas
+   (`1234,56`); o rascunho digitado não é modificado ao revisar ou retornar.
+5. Autor, editora, ano, edição, idioma, formato, páginas e medidas suspeitos geram
+   observações informativas. Idioma/formato ausentes não recebem mais os padrões
+   presumidos Português/Brochura. Português sugerido pelo importador BrasilAPI, sem
+   proveniência explícita, é sinalizado para conferência sem modificar a pesquisa.
+6. Peso de 10 g (caso `9781419762109`) permanece visível, com a observação vermelha
+   `ATENÇÃO — PESO POSSIVELMENTE INCORRETO`, sem bloquear ou inventar outro peso. A
+   conversão declarada kg → g é sempre multiplicação por mil, sem reinterpretar kg
+   como gramas pela magnitude. Dimensões permanecem em cm; unidade não confirmada pela
+   fonte é sinalizada. Limiares de suspeita: peso <30 g/>30 kg e dimensões <=0/>100 cm,
+   além de valores não finitos; são alertas de conferência, nunca estimativas.
+7. `Revisar cadastro` abre a etapa integrada de leitura: identificação, bibliografia,
+   condição/conservação, códigos, preço, quantidade, localização, categoria/marca,
+   medidas, dados fiscais, sinopse/descrição final e imagens selecionadas. Observações
+   continuam vermelhas. `Retornar ao cadastro` preserva integralmente os campos,
+   seleção/remoções de imagens e estado dos controles, sem gravar a operação.
+8. `Confirmar cadastro` revalida os dados atuais e executa somente o simulador existente
+   e o fluxo de registro já implementado. Cliques repetidos são protegidos por refs
+   antes da chamada assíncrona; erros essenciais surgidos após abrir a revisão retornam
+   ao campo, sem gravação. A conclusão mostra os dados efetivamente enviados.
+9. Prévias locais não enviadas impedem o avanço silencioso: há aviso vermelho e acesso
+   ao botão existente de confirmação do upload. É possível enviar as fotos ou remover
+   as prévias antes de revisar. Falhas parciais continuam preservando a ficha. A revisão
+   reaproveita `RegistrationImage` para imagens públicas e privadas; não faz sondagens de
+   disponibilidade nem novas consultas bibliográficas. A ausência temporária de imagem
+   externa não bloqueia. Cadastrar sem imagens continua permitido.
+10. Dados personalizados ficam no rascunho de cada cadastro. A pesquisa mantém apenas
+    os dados/imagens das fontes. Novo cadastro após conclusão, outra condição aberta
+    pela consulta e nova pesquisa não herdam fotografias do exemplar anterior. Não foi
+    introduzida recuperação de rascunho entre consultas ou após reload.
+
+### Arquivos principais
+
+- `ProductRegistrationForm.tsx`: validação, foco, revisão, retorno, confirmação única,
+  apresentação monetária e dados efetivamente submetidos.
+- `utils/draft.ts`, `utils/isbn.ts`, `utils/bibliographicEvaluation.ts`: validação pura,
+  valores monetários, conversão confiável de peso e reutilização do checksum ISBN.
+- Seções existentes `ProductIdentitySection`, `CategoryAndBrandSection`,
+  `CommercialSection`, `BibliographicSection`, `PhysicalAttributesSection` e
+  `ImagesSection`: mensagens e identificação dos campos; comunicação das fotos pendentes.
+- `App.tsx`: separação entre edição em andamento e próximo cadastro de exemplar.
+- Testes existentes `postHomologation`, `operations`, `history` e `spapiIntegrated`:
+  novos cenários e adaptação dos testes de envio à confirmação obrigatória.
+
+### Testes e limites da evidência
+
+- TypeScript e lint (`tsc --noEmit`): aprovados.
+- Build: aprovado; permanecem os avisos conhecidos de chunk >500 kB e importações
+  estáticas/dinâmicas do mesmo cliente Supabase.
+- `npm.cmd run test:spapi`: 76/76 aprovados.
+- `node --test tests/postHomologation.test.mjs tests/operations.test.mjs tests/history.test.mjs tests/spapiIntegrated.test.mjs tests/bibliographicContract.test.mjs tests/registrationLookup.test.mjs`:
+  175/175 aprovados. Cobrem checksum/correspondência, preços, 10 g não bloqueante,
+  foco, digitação sem avisos prematuros, ida/volta sem gravação/perda, imagens,
+  upload pendente, revalidação final, cliques repetidos, NOVO/USADO, simulador,
+  snapshot e isolamento das fotos em novas consultas/exemplares.
+- Bateria completa: 611 testes, 607 aprovados, mesmas quatro falhas anteriores:
+  três em `infrastructureUi.test.mjs` (mock React sem `lazy`) e a inicialização de
+  `magazordMode.test.mjs` (marcador textual sensível a CRLF). Fora desta etapa;
+  não foram corrigidas nem ocultadas.
+- Testes isolados, arquivos e respostas sintéticos. Não foram usadas credenciais
+  reais, executadas consultas Amazon reais nem gravados produtos/estoque/auditoria no
+  servidor. O controle de abas do navegador informou `browser access host is unavailable`;
+  a conferência visual autenticada fica para a homologação do proprietário no Preview.
+
+### Roteiro mínimo de homologação no Preview / Desenvolvimento
+
+1. **NOVO:** pesquisar um ISBN, abrir a ficha, deixar Código Pai vazio e clicar em
+   `Revisar cadastro`: conferir mensagem vermelha e foco no campo, sem operação criada.
+   Preencher código e preço `50,00`; escolher a capa/remover uma foto. Revisar, conferir
+   dados/imagens e `R$ 50,00`; retornar, verificar a preservação e revisar novamente.
+   Somente então confirmar uma vez e conferir conclusão/registro no simulador.
+2. **USADO:** abrir outra ficha, informar os códigos manuais e conservação; usar preço
+   `1.234,56` e peso `10 g`. Selecionar uma foto local e solicitar revisão antes de
+   enviá-la: conferir o aviso e confirmar o upload na galeria (ou remover a prévia).
+   Escolher a capa, revisar e verificar o aviso de peso sem bloqueio, conservação e
+   `R$ 1.234,56`. Retornar e confirmar que todos os campos/imagens foram mantidos.
+   Após a conferência, revisar e confirmar; a operação deve aparecer uma única vez.
+3. Iniciar outro exemplar USADO ou nova pesquisa do mesmo ISBN: conferir que fotografias
+   personalizadas anteriores não aparecem como dados bibliográficos nem como seleção
+   automática do novo exemplar. O primeiro upload real do Storage deve ser validado
+   nessa rodada autenticada; sua estrutura/permissões já foram aplicadas na Etapa 1.
+
+Não houve merge nem deploy de produção. O Preview é destinado à homologação; a
+integração comercial permanece simulada e a liberação em produção depende de autorização.
+
+## Correções pontuais após a homologação da Etapa 2 — 02/11/2026
+
+Base analisada: `f00f725b6faa37cd0c931ac921ff832aecc2f4b4`, branch
+`feat/amazon-spapi-official`, PR #1. A revisão visual já aprovada foi preservada.
+
+### Causas, correções e limites
+
+| Ponto | Evidência e resultado |
+| --- | --- |
+| Código Pai vermelho ao abrir | `createRegistrationDraft` inicia o Código Pai vazio e manual; `Ex: LV26579-P` em `ProductIdentitySection` é um placeholder, não geração automática. Um valor realmente preenchido passa na validação tanto para NOVO quanto para USADO. O erro obrigatório estava sendo apresentado antes da interação. Agora códigos manuais vazios mostram o erro após sair do campo ou solicitar revisão; continuam impedindo o avanço enquanto ausentes. Código Filho NOVO segue ISBN/EAN; USADO continua manual. Não foram enfraquecidas as regras. |
+| Preço durante a edição | O campo mantinha o texto livre sem formatar ao sair. Continua preservando a digitação e o cursor; somente ao perder o foco um valor completo e válido recebe duas casas decimais em pt-BR. Aceita `50`, `50,00`, `1.234,56`; valores incompletos ou inválidos permanecem disponíveis para correção e não passam pela validação. Revisão e conclusão continuam em reais. |
+| Casas decimais nas medidas | A conversão de unidades da Amazon mantinha 12 algarismos significativos, retendo ruído como `24.2999999752`. Medidas operacionais em g/cm agora usam até duas casas decimais, inclusive na inicialização e na revisão. Valores positivos muito pequenos não são zerados. Os valores e unidades originais de `amazonPhysical` continuam preservados e nenhuma fonte foi consultada novamente. |
+| Altura e espessura | O mapeamento existente é `width → largura`, `height → altura`, `length → profundidade/espessura`, usando dimensões de `item`, não `package`. Não houve inversão introduzida na Etapa 2. A Amazon não define esses eixos como orientação bibliográfica; não é seguro trocar por tamanho. Mantivemos os eixos originais, com aviso não bloqueante quando a profundidade importada excede a altura. No caso relatado, a apresentação é `3,18 cm` e `30,5 cm`; a orientação requer conferência física pelo operador. O alerta vermelho de aproximadamente `10 g` continua sem bloquear. |
+| Galeria do Batman | Não foi encontrada regressão entre o complemento SP-API/Laboratório, resultado, rascunho, seleção e revisão. A Etapa 2 não alterou esse mapeamento. Teste integrado com ISBN `9781419762109`, capa MAIN, cinco fotografias distintas e um redimensionamento duplicado preserva uma capa e cinco adicionais em todo o fluxo, sem nova consulta nem persistência personalizada. Quando o Laboratório não fornece galeria válida, a capa oficial continua sendo o resultado válido. |
+
+Referência dos eixos: [modelo oficial Catalog Items v2022-04-01](https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/models/catalog-items-api-model/catalogItems_2022-04-01.json),
+definições `Dimensions`/`ItemDimensions`. A conferência do código não substitui uma
+medição física do exemplar e não confirma que a fixture de teste reproduz o corpo
+original da consulta real.
+
+Foi feita somente leitura dos logs recentes do Preview anterior
+`dpl_9RQKztoNJd6vdddxDDo9rTDw94xa`. Há um evento `amazon_lab` em
+`2026-11-02T22:18:56.034Z`, duração `482,11 ms`, Function/HTTP `200` e código
+`amazon_unexpected`. O código atual interrompe esse caso quando não recebe HTML
+utilizável; HTTP 200 não garante uma galeria. O log não contém ISBN nem corpo da
+resposta, portanto não permite atribuir esse evento com certeza ao teste do Batman
+ou determinar o motivo exato da ausência de HTML. Não foi alterado o timeout,
+o limite de consultas, o tratamento de bloqueio ou a política de ausência de retries.
+Não foi feita nova consulta real à Amazon nem tentativa de contornar restrições.
+
+### Verificação desta correção
+
+- TypeScript (`npm.cmd run typecheck`) e lint (`npm.cmd run lint`): aprovados.
+- Build (`npm.cmd run build`): aprovado; mesmos avisos conhecidos de chunk >500 kB
+  e importação estática/dinâmica do cliente Supabase.
+- SP-API (`npm.cmd run test:spapi`): **78/78 aprovados**.
+- Fluxo relacionado (`postHomologation`, `operations`, `history`, `spapiIntegrated`,
+  `bibliographicContract`, `registrationLookup`): **180/180 aprovados**.
+- Bateria completa: **616 testes, 612 aprovados, quatro falhas anteriores**:
+  três mocks React sem `lazy` em `infrastructureUi.test.mjs` e o marcador textual
+  sensível a CRLF em `magazordMode.test.mjs`. Nenhuma nova falha identificada.
+- Novas regressões cobrem códigos NOVO/USADO sem aviso prematuro, preenchimento
+  real e bloqueio obrigatório, preço sem reformatação durante a digitação,
+  conversão sem ruído, preservação dos eixos originais e das fontes prioritárias,
+  revisão com alertas não bloqueantes, cinco fotos disponíveis até a revisão/retorno
+  e Laboratório interrompido com HTTP 200 preservando a capa.
+
+Banco, Storage, políticas, credenciais e integração real Magazord não foram alterados.
+Não houve merge ou deploy de produção. O novo Preview serve para conferir códigos,
+preço e medidas; a existência de fotos adicionais em uma resposta futura continua
+dependendo do conteúdo disponibilizado pelo Laboratório, sem garantia artificial.
+
+## Ajustes finais da Etapa 2 — 02/11/2026
+
+Base: `3599034c117389b7bf164b49b10c02862957378d`, PR #1.
+
+### Laboratório: evidência real e ponto de interrupção
+
+- A pesquisa normal de `App.tsx` chama `complementAmazonImages` após consolidar
+  BrasilAPI, Curitiba e SP-API, exclusivamente no ambiente Desenvolvimento e para
+  o mesmo usuário ativo. O complemento exige Desenvolvimento/Silveira Lab; imagens
+  somente MAIN não são consideradas galeria adicional.
+- Limites conferidos e preservados: complemento automático 10 s, cliente do
+  Laboratório 40 s, transporte Amazon 25 s, Function 45 s, corpo até 8 MiB.
+  Uma única requisição, sem redirect, retry, cookies Amazon ou contorno de bloqueios.
+- Leitura do log do Preview `dpl_6pgVJV8aNgKt1mREhAcRsdXWFgzz`: evento em
+  `2026-11-02T22:45:29.194Z`, id `3f4c87a9-84f1-4fa1-b021-93e7767af5df`,
+  duração `409 ms`, Function/HTTP `200`, código `amazon_unexpected`.
+  Confirma execução real do Laboratório nesse Preview, não timeout nessa chamada.
+  Como não há ISBN no log, o evento isolado não comprova que foi a pesquisa do Batman.
+- Nesse código, `amazon_unexpected` com HTTP 200 ocorre antes do extrator:
+  formato ausente/inválido/não HTML, corpo vazio ou limite de leitura. Portanto,
+  nessa execução não foi produzida uma galeria que o formulário pudesse descartar.
+  Os logs anteriores não registram qual dessas condições ocorreu; não é possível
+  afirmar mudança externa da Amazon nem recuperação das cinco fotografias.
+- A Function existente agora registra o motivo controlado (`content_type_missing`,
+  `content_type_invalid`, `content_type_not_html`, `body_empty`, `body_limit`,
+  `http_status` ou `blocked`). Quando a extração termina, registra somente contagens
+  de imagens principais/adicionais. Sem ISBN, URLs, HTML, cabeçalhos, credenciais ou
+  mensagens externas nos logs; nenhum endpoint, extrator ou autenticação novo.
+- A tentativa de acessar a sessão autenticada pelo controle do Chrome foi
+  interrompida pelo próprio controle: não conseguiu determinar a URL com segurança.
+  Não houve consulta Amazon disparada pelo agente nem acesso a cookies/tokens.
+  A verificação real do ISBN e das cinco fotos permanece pendente de uma única
+  pesquisa pelo proprietário no novo Preview; os logs bastam para ler o motivo e
+  as contagens, sem precisar copiar o corpo da resposta.
+
+### Medidas e preço
+
+- Removidos os dois avisos vermelhos de orientação de altura/profundidade.
+  Preservados o arredondamento, os valores/eixos originais, a edição manual e o
+  alerta não bloqueante de 10 g. Sem confirmação adicional para dimensões comuns.
+  Rótulos mantêm largura, altura e espessura/profundidade, sem prometer orientação
+  bibliográfica que a fonte não confirma; nenhuma inversão por magnitude.
+- A versão anterior formatava o preço somente ao persistir o evento de blur no
+  rascunho. A apresentação passa a distinguir foco/edição: sem foco, deriva duas
+  casas decimais do rascunho atual, inclusive em montagem, retorno e atualização
+  adiada do componente pai; com foco, preserva o texto digitado. O prefixo `R$`,
+  os três formatos aceitos e a moeda na revisão/conclusão foram preservados.
+  Não foi possível reproduzir visualmente o blur no navegador nesta execução.
+
+### Verificação
+
+- TypeScript, lint e build: aprovados; mesmos avisos conhecidos do build.
+- SP-API: 78/78 aprovados.
+- Testes relacionados de Laboratório, transporte, imagens, SP-API e cadastro:
+  141/141 aprovados. Fixtures locais não comprovam a disponibilidade real das fotos.
+- Bateria completa: 618 testes, 614 aprovados e as mesmas quatro falhas anteriores
+  de mocks `lazy`/marcador CRLF, fora do escopo desta correção.
+- Sem mudanças em Supabase, Storage, autenticação, Magazord real, NOVO/USADO ou
+  produção. Revisão/retorno, deduplicação e isolamento das imagens preservados.
+
+### Complemento: motivo real identificado no Preview
+
+Consulta dos logs de `dpl_4NSNk1LLeK1DJunmHAvefyFQm4Fo` (commit `1fccd1b`):
+em **02/11/2026 às 20:00:20 BRT**, a Function registrou:
+
+```json
+{"evento":"amazon_lab","id":"d3aad6a6-49fe-4783-a0c6-e8fec4efa091","duracao_ms":451.98,"status_function":200,"status_http":200,"codigo":"amazon_unexpected","motivo":"content_type_missing"}
+```
+
+Isso comprova uma chamada real do Laboratório nesse Preview e identifica a
+interrupção: a resposta recebida pelo transporte não continha `Content-Type`.
+Nosso código descartava essa resposta antes de ler o corpo. Não foi timeout,
+deduplicação ou perda de galeria no formulário nessa execução. O log não registra
+ISBN; a correlação exclusiva com `9781419762109` depende da pesquisa informada
+pelo operador. Não é possível concluir que o HTML ou as cinco fotos estavam no
+corpo, pois essa versão nem o examinou, nem que a fonte mudou em relação ao teste
+antigo (não há cabeçalhos/corpo históricos para comparar).
+
+**Correção mínima:** o mesmo transporte agora lê o corpo limitado quando falta o
+cabeçalho e só o entrega ao extrator existente se reconhecer um documento HTML
+iniciado por `<html>` ou `<!doctype html> ... <html>`. Cabeçalho declarado inválido
+ou não HTML continua interrompendo antes da leitura; corpo vazio, JSON/texto,
+CAPTCHA/restrição e respostas acima do limite continuam recusados. Não se deduz
+HTML de HTTP 200. Não houve nova tentativa, troca de agente/IP, proxy, cookie,
+redirect, mudança de timeout ou novo extrator.
+
+A [RFC 9110, seção 8.3](https://www.rfc-editor.org/rfc/rfc9110.html#section-8.3)
+permite determinar o tipo pelos dados quando o campo está ausente. Aqui a
+aceitação é restrita a documento HTML em memória para o extrator existente;
+nenhum HTML é executado, exposto ou persistido no navegador.
+
+Verificação após o ajuste: TypeScript/lint/build aprovados; **78/78 SP-API** e
+**142/142 testes relacionados** aprovados. A bateria completa teve **619 testes,
+615 aprovados e as mesmas quatro falhas preexistentes**. A regressão inclui HTML
+sem MIME aceito pelo transporte/Function e casos negativos de corpo vazio,
+JSON/texto, CAPTCHA e limite de 8 MiB, sempre com uma requisição.
+
+**Resultado real ainda não homologado após a correção:** as cinco imagens não
+foram comprovadamente recuperadas. Uma pesquisa única no Preview corrigido
+permitirá verificar os novos motivos/contagens pelos logs existentes, sem copiar
+credenciais, HTML ou URLs. Caso o corpo esteja vazio, não HTML ou bloqueado, a
+capa SP-API continua válida e não haverá contorno ou retry.
+
+### Consulta real após a correção de Content-Type — 02/11/2026
+
+O proprietário informou a conclusão da pesquisa de `9781419762109`, em
+Desenvolvimento/Silveira Lab, no Preview
+`isbn-fo79kb3vb-silveira8393-svgs-projects.vercel.app`, código `6409990`.
+A leitura dos logs desse deployment encontrou uma execução em **20:15:32 BRT**:
+
+```json
+{"evento":"amazon_lab","id":"fd8144ab-28ad-41f3-a4c4-0888774eae83","duracao_ms":583.21,"status_function":200,"status_http":200,"codigo":"completed","imagens_principais":1,"imagens_adicionais":5}
+```
+
+**Comprovado em consulta real:** o transporte recebeu conteúdo utilizável, o
+extrator existente foi executado e a Function produziu resposta com uma imagem
+principal e cinco adicionais (seis referências). O tempo ficou abaixo dos limites;
+não foi necessária nova tentativa. Não houve repetição da pesquisa pelo agente.
+A recuperação das cinco imagens pelo backend deixa de ser apenas uma evidência
+de fixtures. O evento anterior `content_type_missing` ocorria antes da extração;
+após a correção, esta execução chegou a `completed`.
+
+**Consolidação confirmada visualmente:** sem repetir a pesquisa, o proprietário
+confirmou **“Capa e cinco adicionais”** no resultado/galeria já aberto. Assim,
+esta homologação combina duas evidências: a resposta real da Function com uma
+principal e cinco adicionais e a confirmação humana de capa mais cinco adicionais
+na interface (seis imagens no total). A capa oficial permanece selecionada e a
+complementação voltou a disponibilizar a galeria esperada.
+
+O cliente continua exigindo correspondência exata do ISBN, descartando capas e
+redimensionamentos duplicados. Os logs do servidor não observam a seleção final
+do formulário: a contagem visual é uma confirmação expressa do proprietário,
+não uma leitura automatizada do DOM. O acesso ao navegador retornou
+`The browser access host is unavailable`; não foi feito contorno desse acesso.
+
+Nenhuma alteração de código, nova consulta Amazon, mudança em banco/Storage,
+merge ou deploy foi necessária para esta verificação. Os testes do código
+`6409990` continuam os registrados acima; não foram repetidos para documentação.

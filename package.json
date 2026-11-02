@@ -12,7 +12,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test:spapi": "node --test tests/spapiOfficial.test.mjs tests/spapiProvision.test.mjs tests/spapiIntegrated.test.mjs",
+    "spapi:provision-self": "node scripts/provision-self-authorization.mjs",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

@@ -5,6 +5,8 @@
 
 import { useEffect, useState } from 'react';
 import { BookInfo } from '../types';
+import { publicationYear } from '../../shared/publicationDate';
+import { imageReferences } from '../utils/imageUrls';
 import {
   Building2,
   Calendar,
@@ -34,13 +36,7 @@ export default function BookDetailsCard({ book }: BookDetailsCardProps) {
   }, [book.id, book.isbn13]);
 
   // Lista única e sanitizada de todas as URLs brutas de imagens
-  const rawImages = Array.from(
-    new Set(
-      [book.coverUrl, book.thumbnailUrl, ...(book.additionalImages || [])].filter(
-        (img): img is string => typeof img === 'string' && img.trim().length > 0
-      )
-    )
-  );
+  const rawImages = imageReferences([book.coverUrl, book.thumbnailUrl, ...(book.additionalImages || [])]);
 
   // Somente URLs válidas que não falharam no carregamento
   const validImages = rawImages.filter((img) => !failedImageUrls.has(img));
@@ -83,13 +79,7 @@ export default function BookDetailsCard({ book }: BookDetailsCardProps) {
   };
 
   const formatPublishedDate = (rawDate?: string, year?: number | string) => {
-    if (year) return String(year);
-    if (!rawDate) return undefined;
-    const parts = rawDate.split('-');
-    if (parts.length === 3) {
-      return `${parts[2]}/${parts[1]}/${parts[0]}`;
-    }
-    return rawDate;
+    return publicationYear(year) || publicationYear(rawDate);
   };
 
   const formatLanguage = (lang?: string) => {
@@ -309,6 +299,9 @@ export default function BookDetailsCard({ book }: BookDetailsCardProps) {
             <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight leading-snug">
               {book.title}
             </h2>
+            {Object.values(book.provenance || {}).includes('amazon_spapi_catalog_2022-04-01') && (
+              <p className="text-xs text-slate-500">Fonte complementar: Amazon SP-API.</p>
+            )}
 
             {hasValue(book.subtitle) && (
               <p className="text-base text-slate-600 font-normal mt-1 leading-normal">

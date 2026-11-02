@@ -31,6 +31,7 @@ import {
   OperationType,
 } from './types';
 import { searchBookByIsbnBrasilApi } from './services/brasilApi';
+import { searchAmazonOfficial, complementWithAmazon, complementAmazonImages } from './services/amazonOfficial';
 import {
   mergeBookWithDistribuidora,
   searchBookByIsbnDistribuidoraCuritiba,
@@ -62,8 +63,12 @@ export default function App() {
   const { saveOperation, pending: pendingAudit, saving: savingAudit, retry: retryAudit, storageUnavailable: auditStorageUnavailable, lastConfirmation: auditConfirmation } = useOperationAudit(currentUser);
   const searchInFlight = useRef(false);
   const stockLinkInFlight = useRef(false);
+  const imageUploadInFlight = useRef(false);
+  const registrationCompleted = useRef(false);
   const currentUserRef = useRef(currentUser);
   currentUserRef.current = currentUser;
+  const operationEnvironmentRef = useRef(operationEnvironment);
+  operationEnvironmentRef.current = operationEnvironment;
   const checkActionMode = useRef<MagazordSimulationMode>('auto');
 
   const captureActionMode = (): MagazordSimulationMode => currentUserRef.current.role === 'developer'
@@ -152,7 +157,7 @@ export default function App() {
 
   // Handler to carry out lookup
   const handleSearch = async (targetIsbn: string) => {
-    if (searchInFlight.current) return;
+    if (searchInFlight.current || imageUploadInFlight.current) return;
     const cleaned = cleanIsbn(targetIsbn);
     if (!cleaned) {
       setErrorText('Por favor, informe um código ISBN válido.');
@@ -166,6 +171,7 @@ export default function App() {
     setBibliographicState(null);
     setFoundBook(null);
     setRegistrationDraft(null);
+    registrationCompleted.current = false;
     setMagazordCheckResult(null);
     setMagazordCheckError(null);
     setSearchedTerm(cleaned);
@@ -173,6 +179,8 @@ export default function App() {
     setActiveTab('consultar');
 
     try {
+      const searchActor = currentUserRef.current;
+      const amazonPending = searchAmazonOfficial(cleaned, searchActor);
       const result = await searchBookByIsbnBrasilApi(cleaned).catch(() => ({
         book: null, diagnostic: { status: 'FALHA_CONEXAO' },
       }));
@@ -182,18 +190,29 @@ export default function App() {
       }));
       const identifiers = cleaned.length === 13 ? { isbn13: cleaned } : { isbn10: cleaned };
       const isbnBook: BookInfo = { id: `isbn-${cleaned}`, title: '', ...identifiers };
-      const enrichedBook = result.book || distribuidoraResult.book ? {
+      const primaryBook = result.book || distribuidoraResult.book ? {
         ...(distribuidoraResult.book ? mergeBookWithDistribuidora(result.book || isbnBook, distribuidoraResult.book) : result.book!),
         ...identifiers,
       } : null;
+      const amazonResult = await amazonPending;
+      // Never carry an account/store's supplementary data into a newer identity.
+      const sameActor = () => currentUserRef.current.id === searchActor.id && currentUserRef.current.storeId === searchActor.storeId
+        && currentUserRef.current.role === searchActor.role && currentUserRef.current.active && operationEnvironmentRef.current === operationEnvironment;
+      const amazonBook = sameActor() ? amazonResult.book : null;
+      const bibliographicBook = complementWithAmazon(primaryBook, amazonBook);
+      const imageBook = sameActor() && operationEnvironment === 'development'
+        ? await complementAmazonImages(bibliographicBook, cleaned, searchActor) : bibliographicBook;
+      const enrichedBook = sameActor() ? imageBook : primaryBook;
       const failedStatus = (status: number | string) => status !== 404 && !(typeof status === 'number' && status >= 200 && status < 300);
       const brasilFailure = failedStatus(result.diagnostic.status);
       const curitibaFailure = distribuidoraResult.diagnostic.state === 'unavailable' || failedStatus(distribuidoraResult.diagnostic.status);
-      const technicalFailure = brasilFailure || curitibaFailure;
+      const amazonFailure = amazonResult.status === 'unavailable';
+      const technicalFailure = brasilFailure || curitibaFailure || amazonFailure;
       setBibliographicState(enrichedBook ? 'found' : technicalFailure ? 'error' : 'not_found');
       if (technicalFailure) {
         const sources = [brasilFailure ? `BrasilAPI (${typeof result.diagnostic.status === 'number' ? 'HTTP ' : ''}${result.diagnostic.status})` : null,
-          curitibaFailure ? `Distribuidora Curitiba (${typeof distribuidoraResult.diagnostic.status === 'number' ? 'HTTP ' : ''}${distribuidoraResult.diagnostic.status})` : null].filter(Boolean).join('; ');
+          curitibaFailure ? `Distribuidora Curitiba (${typeof distribuidoraResult.diagnostic.status === 'number' ? 'HTTP ' : ''}${distribuidoraResult.diagnostic.status})` : null,
+          amazonFailure ? 'Amazon SP-API (indisponível)' : null].filter(Boolean).join('; ');
         setErrorText(`Falha na consulta bibliográfica: ${sources}. Isso não confirma que a obra inexiste. ${enrichedBook
           ? 'Os dados disponíveis foram preservados; complete os campos ausentes no cadastro.'
           : 'Você pode continuar com cadastro manual após a verificação do simulador abaixo.'}`);
@@ -249,6 +268,7 @@ export default function App() {
           isbn: cleaned, title: enrichedBook.title, operationType: 'isbn_search', status: 'success',
           completedAt: new Date(newItem.timestamp).toISOString(),
           metadata: { resultFound: true, sources: {
+            amazonSpapi: { status: amazonResult.status, resultFound: Boolean(amazonBook) },
             brasilApi: { status: result.diagnostic.status, resultFound: Boolean(result.book), partialFailure: brasilFailure },
             distribuidoraCuritiba: { status: distribuidoraResult.diagnostic.status, resultFound: Boolean(distribuidoraResult.book),
               partialFailure: curitibaFailure },
@@ -282,6 +302,7 @@ export default function App() {
             errorMessage: normalCompletion ? undefined : 'Falha do serviço na consulta bibliográfica.',
             completedAt: new Date(newItem.timestamp).toISOString(),
             metadata: { flow: 'isbn_search', resultFound: false, sources: {
+              amazonSpapi: { status: amazonResult.status, resultFound: false },
               brasilApi: { status, resultFound: false },
               distribuidoraCuritiba: { consulted: true, status: distribuidoraResult.diagnostic.status, resultFound: false, partialFailure: curitibaFailure },
             } },
@@ -322,15 +343,22 @@ export default function App() {
 
   // Abre a tela única de cadastro garantindo a condição desejada (Novo ou Usado)
   const handleOpenRegistration = (condition?: BookCondition) => {
-    if (!foundBook) return;
+    if (!foundBook || imageUploadInFlight.current) return;
     const targetCondition =
       condition ||
       visibleMagazordCheck?.existingCondition ||
       'novo';
     const draft = createRegistrationDraft(foundBook, targetCondition);
+    // Preserve image decisions during ordinary navigation; general draft recovery is a later stage.
+    if (registrationDraft && registrationDraft.condition === targetCondition && !registrationCompleted.current) {
+      draft.mainImageUrl = registrationDraft.mainImageUrl;
+      draft.additionalImageUrls = [...registrationDraft.additionalImageUrls];
+      draft.imageSelectionManual = registrationDraft.imageSelectionManual;
+    }
     draft.language = foundBook.language || '';
     draft.format = foundBook.format || '';
     setRegistrationDraft(draft);
+    registrationCompleted.current = false;
     setActiveTab('cadastro');
   };
 
@@ -428,6 +456,7 @@ export default function App() {
     actionMode: MagazordSimulationMode = captureActionMode()
   ) => {
     // Registra evento de auditoria operacional do cadastro concluído
+    registrationCompleted.current = result.success;
     const currentIsbn = searchedTerm || savedDraft.isbn13 || savedDraft.ean;
     const opType: OperationType =
       savedDraft.condition === 'usado'
@@ -486,8 +515,10 @@ export default function App() {
 
   // Prepara interface para o próximo livro
   const handleProcessNextBook = () => {
+    if (imageUploadInFlight.current) return;
     setFoundBook(null);
     setRegistrationDraft(null);
+    registrationCompleted.current = false;
     setMagazordCheckResult(null);
     setMagazordCheckError(null);
     setIsbnValue('');
@@ -608,10 +639,10 @@ export default function App() {
       {/* 1. Header azul profissional com navegação Consultar | Cadastro | Histórico */}
       <Header
         activeTab={activeTab}
-        onTabChange={(tab) => setActiveTab(
+        onTabChange={(tab) => { if (imageUploadInFlight.current) return; setActiveTab(
           (tab === 'dashboard' && !canViewProduction) || (tab === 'configuracoes' && !canViewSettings)
             ? 'consultar' : tab
-        )}
+        ); }}
         historyCount={visibleHistory.length}
         hasActiveDraft={Boolean(registrationDraft)}
       />
@@ -745,6 +776,8 @@ export default function App() {
                 draft={registrationDraft}
                 captureActionMode={captureActionMode}
                 originalBook={foundBook}
+                imageUser={currentUser}
+                onImageUploadBusyChange={busy => { imageUploadInFlight.current = busy; }}
                 onUpdateDraft={(updates) =>
                   setRegistrationDraft((prev) => (prev ? { ...prev, ...updates } : null))
                 }

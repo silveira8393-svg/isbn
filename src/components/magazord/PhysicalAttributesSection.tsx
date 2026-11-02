@@ -9,11 +9,13 @@ import { Ruler, Scale, Info } from 'lucide-react';
 interface PhysicalAttributesSectionProps {
   draft: RegistrationDraft;
   onChange: (updates: Partial<RegistrationDraft>) => void;
+  errors?: Record<string, string>;
 }
 
 export default function PhysicalAttributesSection({
   draft,
   onChange,
+  errors = {},
 }: PhysicalAttributesSectionProps) {
   const handleDimensionChange = (
     field: 'width' | 'height' | 'depth' | 'weight',
@@ -38,10 +40,10 @@ export default function PhysicalAttributesSection({
           </div>
           <div>
             <h3 className="text-sm sm:text-base font-bold text-slate-900">
-              Peso & Dimensões do Pacote
+              Peso & Dimensões do Exemplar
             </h3>
             <p className="text-xs text-slate-500">
-              Medidas físicas para cálculo de frete no Magazord (usando valores exatos da fonte)
+              Peso e medidas editáveis para este exemplar, nas unidades indicadas.
             </p>
           </div>
         </div>
@@ -58,11 +60,12 @@ export default function PhysicalAttributesSection({
           <label className="block text-xs font-bold text-slate-800 mb-1.5">
             <span className="flex items-center gap-1">
               <Scale className="w-3.5 h-3.5 text-blue-600" />
-              <span>Peso (g)</span>
+              <span>Peso ({draft.weightUnit || 'g'})</span>
             </span>
           </label>
           <div className="relative">
             <input
+              data-registration-field="weight"
               type="number"
               min={0}
               step={1}
@@ -72,10 +75,10 @@ export default function PhysicalAttributesSection({
               className="w-full px-3 py-2 pr-8 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-600 font-mono"
             />
             <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
-              g
+              {draft.weightUnit || 'g'}
             </span>
           </div>
-          <span className="text-[10px] text-slate-400 block mt-0.5">Peso líquido ou estimado</span>
+          {errors.weight ? <p className="mt-1 text-xs font-medium text-red-600">{errors.weight}</p> : <span className="text-[10px] text-slate-400 block mt-0.5">Peso informado, sem estimativas automáticas</span>}
         </div>
 
         {/* Largura (cm) */}
@@ -88,6 +91,7 @@ export default function PhysicalAttributesSection({
           </label>
           <div className="relative">
             <input
+              data-registration-field="width"
               type="number"
               min={0}
               step={0.1}
@@ -100,7 +104,8 @@ export default function PhysicalAttributesSection({
               cm
             </span>
           </div>
-          <span className="text-[10px] text-slate-400 block mt-0.5">Largura da capa</span>
+          <span className="text-[10px] text-slate-400 block mt-0.5">Largura informada pela fonte</span>
+          {errors.width && <p className="mt-1 text-xs font-medium text-red-600">{errors.width}</p>}
         </div>
 
         {/* Altura (cm) */}
@@ -113,6 +118,7 @@ export default function PhysicalAttributesSection({
           </label>
           <div className="relative">
             <input
+              data-registration-field="height"
               type="number"
               min={0}
               step={0.1}
@@ -125,7 +131,8 @@ export default function PhysicalAttributesSection({
               cm
             </span>
           </div>
-          <span className="text-[10px] text-slate-400 block mt-0.5">Altura vertical</span>
+          <span className="text-[10px] text-slate-400 block mt-0.5">Altura informada pela fonte</span>
+          {errors.height && <p className="mt-1 text-xs font-medium text-red-600">{errors.height}</p>}
         </div>
 
         {/* Espessura / Comprimento / Profundidade (cm) */}
@@ -133,11 +140,12 @@ export default function PhysicalAttributesSection({
           <label className="block text-xs font-bold text-slate-800 mb-1.5">
             <span className="flex items-center gap-1">
               <Ruler className="w-3.5 h-3.5 text-blue-600" />
-              <span>Espessura (cm)</span>
+              <span>Espessura / profundidade (cm)</span>
             </span>
           </label>
           <div className="relative">
             <input
+              data-registration-field="depth"
               type="number"
               min={0}
               step={0.1}
@@ -150,7 +158,8 @@ export default function PhysicalAttributesSection({
               cm
             </span>
           </div>
-          <span className="text-[10px] text-slate-400 block mt-0.5">Lombada / espessura</span>
+          <span className="text-[10px] text-slate-400 block mt-0.5">Profundidade informada pela fonte</span>
+          {errors.depth && <p className="mt-1 text-xs font-medium text-red-600">{errors.depth}</p>}
         </div>
       </div>
     </div>
