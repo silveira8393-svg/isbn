@@ -1,7 +1,9 @@
 import type { BookInfo, User } from '../types';
 import { cleanIsbn } from '../utils/isbn';
 import { normalizePublicationDate, publicationYear } from '../../shared/publicationDate';
-import { imageReferences, isImageReference } from '../utils/imageUrls';
+import { imageIdentity, imageReferences, isImageReference } from '../utils/imageUrls';
+import { canonicalBookIsbn } from '../utils/bibliographicEvaluation';
+import { searchAmazonLab } from './amazonLabClient';
 
 const LAB_STORE = '492af2ad-905c-42f8-90f4-aa6c1dc142f3';
 export const canUseAmazonOfficial = (user: Pick<User, 'active' | 'role' | 'storeId'>) =>
@@ -64,20 +66,49 @@ type CatalogItem = { isbn: string; asin: string; title?: string; authors?: strin
   publicationDate?: string; language?: string; binding?: string; edition?: string; pageCount?: number; marketplaceId: string;
   isbn10?: string; isbn13?: string; identifiers?: { type: string; identifier: string }[]; physical?: AmazonPhysical;
   images?: { variant: string; link: string; width?: number; height?: number }[] };
+function publicAmazonImage(value: unknown): value is string {
+  if (!isImageReference(value)) return false;
+  const url = new URL(value);
+  return url.protocol === 'https:' && !url.port && !url.search && !url.hash && !/[\x00-\x20\x7f]/.test(value);
+}
 function catalogImages(images: CatalogItem['images']) {
   const pixels = (n: unknown) => typeof n === 'number' && Number.isSafeInteger(n) && n > 0 ? n : 0;
-  const best = new Map<string, { link: string; area: number; width: number }>();
+  const best = new Map<string, { variant: string; link: string; area: number; width: number }>();
   for (const image of Array.isArray(images) ? images : []) {
-    if (!image || !/^(MAIN|PT\d{2}|SWCH)$/.test(image.variant) || !isImageReference(image.link)) continue;
+    if (!image || !/^(MAIN|PT\d{2}|SWCH)$/.test(image.variant) || !publicAmazonImage(image.link)) continue;
     const url = new URL(image.link);
-    if (url.protocol !== 'https:' || url.port || url.search || url.hash || /[\x00-\x20\x7f]/.test(image.link)) continue;
-    const width = pixels(image.width), area = width * pixels(image.height), prior = best.get(image.variant);
-    if (!prior || area > prior.area || (area === prior.area && width > prior.width)) best.set(image.variant, { link: url.href, area, width });
+    const identity = imageIdentity(url.href), width = pixels(image.width), area = width * pixels(image.height), prior = best.get(identity);
+    const variant = image.variant === 'MAIN' || prior?.variant === 'MAIN' ? 'MAIN' : prior?.variant || image.variant;
+    if (!prior || area > prior.area || (area === prior.area && width > prior.width)) best.set(identity, { variant, link: url.href, area, width });
+    else prior.variant = variant;
   }
-  const cover = best.get('MAIN')?.link;
-  const additional = imageReferences([...best.entries()].filter(([variant]) => variant !== 'MAIN')
-    .sort(([a], [b]) => a.localeCompare(b)).map(([, image]) => image.link)).filter(url => url !== cover);
+  const ranked = [...best.values()].sort((a, b) => a.variant.localeCompare(b.variant) || b.area - a.area || b.width - a.width);
+  const cover = ranked.find(image => image.variant === 'MAIN')?.link;
+  const additional = imageReferences(ranked.map(image => image.link)).filter(url => url !== cover);
   return { coverUrl: cover, additionalImages: additional };
+}
+
+/** Reuse the existing, bounded laboratory lookup only if the consolidated book lacks a gallery. */
+export async function complementAmazonImages(book: BookInfo | null, isbn: string, user: User, signal?: AbortSignal): Promise<BookInfo | null> {
+  const existing = imageReferences([book?.coverUrl, book?.thumbnailUrl, ...(book?.additionalImages || [])]);
+  const canonical = canonicalBookIsbn(isbn);
+  if (!canUseAmazonOfficial(user) || !canonical?.startsWith('978') || existing.length > 1) return book;
+  try {
+    const timeout = AbortSignal.timeout(10000);
+    const result = await searchAmazonLab(cleanIsbn(isbn), 'http', signal ? AbortSignal.any([signal, timeout]) : timeout, user.id);
+    const identifiers = Object.values(result.isbn_encontrado || {}).filter(id => id?.valido === true);
+    if (result.status !== 'concluida' || result.modo !== 'http' || result.correspondencia !== 'corresponde'
+      || canonicalBookIsbn(result.isbn_pesquisado) !== canonical
+      || !identifiers.length || identifiers.some(id => typeof id.valor !== 'string' || canonicalBookIsbn(id.valor) !== canonical)) return book;
+    // Bibliography, synopsis and raw HTML from the laboratory never enter the registration flow.
+    const candidates = (Array.isArray(result.imagens?.itens) ? result.imagens.itens : [])
+      .filter(image => image && ['principal', 'adicional'].includes(image.papel) && publicAmazonImage(image.referencia))
+      .sort((a, b) => Number(b.papel === 'principal') - Number(a.papel === 'principal'));
+    const images = imageReferences([...existing, ...candidates.map(image => image.referencia)]);
+    if (images.length === existing.length) return book;
+    const base = book || { id: `isbn-${cleanIsbn(isbn)}`, title: '', ...(cleanIsbn(isbn).length === 13 ? { isbn13: cleanIsbn(isbn) } : { isbn10: cleanIsbn(isbn) }) };
+    return { ...base, coverUrl: existing[0] || images[0], additionalImages: images.slice(1) };
+  } catch { return book; } // No retries or bypass when the existing extractor is unavailable or blocked.
 }
 export type AmazonOfficialResult = { book: BookInfo | null; status: 'success' | 'not_found' | 'ambiguous' | 'unavailable' | 'skipped' };
 export async function searchAmazonOfficial(isbn: string, user: User, signal?: AbortSignal): Promise<AmazonOfficialResult> {
@@ -164,7 +195,7 @@ export function complementWithAmazon(base: BookInfo | null, amazon: BookInfo | n
     const existingCover = isImageReference(merged.coverUrl) ? merged.coverUrl : isImageReference(merged.thumbnailUrl) ? merged.thumbnailUrl : undefined;
     const cover = existingCover || (isImageReference(amazon.coverUrl) ? amazon.coverUrl : undefined) || existing[0] || amazonImages[0];
     if (!existingCover && isImageReference(amazon.coverUrl)) filled('coverUrl', amazon.coverUrl);
-    const additional = imageReferences([...existing, ...amazonImages]).filter(url => url !== cover);
+    const additional = imageReferences([cover, ...existing, ...amazonImages]).slice(1);
     if (additional.length || merged.additionalImages) {
       merged.additionalImages = additional;
       if (additional.some(url => !existing.includes(url))) merged.provenance!.additionalImages = 'amazon_spapi_catalog_2022-04-01';

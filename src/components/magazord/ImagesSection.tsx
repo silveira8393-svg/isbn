@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { isImageReference } from '../../utils/imageUrls';
+import { imageIdentity, imageReferences, isImageReference } from '../../utils/imageUrls';
 import { RegistrationDraft } from '../../types';
 import {
   ImageIcon,
@@ -46,10 +46,7 @@ export default function ImagesSection({
 
   const handleSetMain = (url: string) => {
     const currentMain = draft.mainImageUrl;
-    const newAdditionals = [...new Set(draft.additionalImageUrls.filter((u) => u !== url && u !== currentMain))];
-    if (currentMain && currentMain !== url) {
-      newAdditionals.unshift(currentMain);
-    }
+    const newAdditionals = imageReferences([url, currentMain, ...draft.additionalImageUrls]).slice(1);
     onChange({
       mainImageUrl: url,
       additionalImageUrls: newAdditionals,
@@ -79,8 +76,8 @@ export default function ImagesSection({
     setUrlError('');
     if (!draft.mainImageUrl) {
       onChange({ mainImageUrl: trimmed });
-    } else if (trimmed !== draft.mainImageUrl && !draft.additionalImageUrls.includes(trimmed)) {
-      onChange({ additionalImageUrls: [...draft.additionalImageUrls, trimmed] });
+    } else if (!imageReferences([draft.mainImageUrl, ...draft.additionalImageUrls]).some(url => imageIdentity(url) === imageIdentity(trimmed))) {
+      onChange({ additionalImageUrls: imageReferences([...draft.additionalImageUrls, trimmed]) });
     }
     setNewImageUrl('');
     setShowAddInput(false);

@@ -31,7 +31,7 @@ import {
   OperationType,
 } from './types';
 import { searchBookByIsbnBrasilApi } from './services/brasilApi';
-import { searchAmazonOfficial, complementWithAmazon } from './services/amazonOfficial';
+import { searchAmazonOfficial, complementWithAmazon, complementAmazonImages } from './services/amazonOfficial';
 import {
   mergeBookWithDistribuidora,
   searchBookByIsbnDistribuidoraCuritiba,
@@ -65,6 +65,8 @@ export default function App() {
   const stockLinkInFlight = useRef(false);
   const currentUserRef = useRef(currentUser);
   currentUserRef.current = currentUser;
+  const operationEnvironmentRef = useRef(operationEnvironment);
+  operationEnvironmentRef.current = operationEnvironment;
   const checkActionMode = useRef<MagazordSimulationMode>('auto');
 
   const captureActionMode = (): MagazordSimulationMode => currentUserRef.current.role === 'developer'
@@ -191,10 +193,13 @@ export default function App() {
       } : null;
       const amazonResult = await amazonPending;
       // Never carry an account/store's supplementary data into a newer identity.
-      const sameActor = currentUserRef.current.id === searchActor.id && currentUserRef.current.storeId === searchActor.storeId
-        && currentUserRef.current.role === searchActor.role && currentUserRef.current.active;
-      const amazonBook = sameActor ? amazonResult.book : null;
-      const enrichedBook = complementWithAmazon(primaryBook, amazonBook);
+      const sameActor = () => currentUserRef.current.id === searchActor.id && currentUserRef.current.storeId === searchActor.storeId
+        && currentUserRef.current.role === searchActor.role && currentUserRef.current.active && operationEnvironmentRef.current === operationEnvironment;
+      const amazonBook = sameActor() ? amazonResult.book : null;
+      const bibliographicBook = complementWithAmazon(primaryBook, amazonBook);
+      const imageBook = sameActor() && operationEnvironment === 'development'
+        ? await complementAmazonImages(bibliographicBook, cleaned, searchActor) : bibliographicBook;
+      const enrichedBook = sameActor() ? imageBook : primaryBook;
       const failedStatus = (status: number | string) => status !== 404 && !(typeof status === 'number' && status >= 200 && status < 300);
       const brasilFailure = failedStatus(result.diagnostic.status);
       const curitibaFailure = distribuidoraResult.diagnostic.state === 'unavailable' || failedStatus(distribuidoraResult.diagnostic.status);

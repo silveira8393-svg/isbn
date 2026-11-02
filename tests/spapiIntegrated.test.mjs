@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
-const serverBuild = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts', contents: `export * from './server/spapi/core'; export * from './server/spapi/handler'; export * from './shared/publicationDate'; export {createRegistrationDraft} from './src/utils/draft';` },
+const serverBuild = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts', contents: `export * from './server/spapi/core'; export * from './server/spapi/handler'; export * from './shared/publicationDate'; export {createRegistrationDraft} from './src/utils/draft'; export * from './src/utils/imageUrls';` },
   bundle: true, write: false, platform: 'node', format: 'esm' });
 const api = await import('data:text/javascript;base64,' + Buffer.from(serverBuild.outputFiles[0].text).toString('base64'));
 const uid = '11111111-1111-4111-8111-111111111111', sid = api.PRIVATE_STORE_ID, isbn = '9788535914849';
@@ -71,9 +71,9 @@ test('catalog rejects mismatched marketplace/ISBN rather than assigning the requ
   assert.deepEqual((await (await h.handler(h.request())).json()).items, []);
 });
 
-const clientBuild = await build({ entryPoints: ['src/services/amazonOfficial.ts'], bundle: true, write: false, platform: 'node', format: 'esm',
+const clientBuild = await build({ entryPoints: ['src/services/amazonOfficial.ts'], bundle: true, write: false, platform: 'node', format: 'esm', define: { 'import.meta.env.DEV': 'false' },
   plugins: [{ name: 'mock-session', setup(b) {
-    b.onResolve({ filter: /lib\/supabase$/ }, () => ({ path: 'session', namespace: 'mock' }));
+    b.onResolve({ filter: /lib\/supabase(?:\.js)?$/ }, () => ({ path: 'session', namespace: 'mock' }));
     b.onLoad({ filter: /.*/, namespace: 'mock' }, () => ({ contents: 'export const supabase={auth:{getSession:async()=>globalThis.__spapiSession}}' }));
   } }] });
 const client = await import('data:text/javascript;base64,' + Buffer.from(clientBuild.outputFiles[0].text).toString('base64'));
@@ -117,7 +117,8 @@ const appMocks = [
   [/\/hooks\/useLocalHistory$/, 'exports.useLocalHistory=()=>({history:[],setHistory:()=>{},clearHistory:()=>{}})'],
   [/\/services\/brasilApi$/, 'exports.searchBookByIsbnBrasilApi=async()=>deps.brasil'],
   [/\/services\/distribuidoraCuritiba$/, 'exports.searchBookByIsbnDistribuidoraCuritiba=async()=>deps.curitiba;exports.mergeBookWithDistribuidora=(a,b)=>({...a,...b})'],
-  [/\/lib\/supabase$/, 'exports.supabase={auth:{getSession:async()=>({data:{session:{user:{id:deps.user.currentUser.id},access_token:"synthetic-session"}}})}}'],
+  [/\/lib\/supabase(?:\.js)?$/, 'exports.supabase={auth:{getSession:async()=>({data:{session:{user:{id:deps.user.currentUser.id},access_token:"synthetic-session"}}})}}'],
+  [/(?:^|\/)amazonLabClient$/, 'exports.searchAmazonLab=(...args)=>deps.lab(...args)'],
   [/\/services\/magazordMockService$/, 'exports.magazordMockService={getSimulationConfig:()=>({mode:"auto"}),checkProductByEan:async()=>({matches:[]})}'],
 ];
 for (const name of ['Header', 'SearchForm', 'BookDetailsCard', 'SearchHistoryGroup', 'CameraScannerModal', 'MagazordStatusCard', 'ProductRegistrationForm', 'OwnerDashboard', 'SettingsView'])
@@ -130,7 +131,7 @@ const appBundle = await build({ entryPoints: ['src/App.tsx'], bundle: true, writ
 function mountApp(options = {}) {
   const deps = { user: { currentUser: { ...user, name: 'Synthetic Developer' }, operationEnvironment: 'development' },
     brasil: { book: { id: 'base', title: 'Existing title', isbn13: isbn, authors: ['Existing author'] }, diagnostic: { status: 200 } },
-    curitiba: { book: null, diagnostic: { status: 404 } }, audit() {}, ...options };
+    curitiba: { book: null, diagnostic: { status: 404 } }, lab: async () => ({ status: 'interrompida' }), audit() {}, ...options };
   const slots = []; let cursor = 0, effects = [], tree;
   deps.react = {
     useState(initial) { const i = cursor++; if (!(i in slots)) slots[i] = typeof initial === 'function' ? initial() : initial; return [slots[i], next => { slots[i] = typeof next === 'function' ? next(slots[i]) : next; }]; },
@@ -334,10 +335,10 @@ test('package-only, invalid and unsupported measurements never masquerade as ite
 for (const [reportedIsbn, width, height] of [['9780515154559', 1400, 1900], ['9780593984215', 1435, 2560]]) {
   test(`MAIN ${width}x${height} for ${reportedIsbn} reaches the existing ISBN form without an extra Amazon request`, async t => {
     // Real reported dimensions, synthetic public references; no credentials or downloaded image files.
-    const cover = `https://images.example.invalid/${reportedIsbn}-main.jpg`, back = `https://images.example.invalid/${reportedIsbn}-back.jpg`;
-    const raw = [{ variant: 'MAIN', link: cover.replace('-main', '-small'), width: 42, height: 75 },
-      { variant: 'MAIN', link: cover, width, height }, { variant: 'MAIN', link: cover.replace('-main', '-medium'), width: 280, height: 500 },
-      { variant: 'PT01', link: back.replace('-back', '-small-back'), width: 100, height: 200 },
+    const cover = `https://m.media-amazon.com/images/I/SYNTH${reportedIsbn}.jpg`, back = `https://m.media-amazon.com/images/I/SYNTH${reportedIsbn}BACK.jpg`;
+    const raw = [{ variant: 'MAIN', link: cover.replace('.jpg', '._SX42_.jpg'), width: 42, height: 75 },
+      { variant: 'MAIN', link: cover, width, height }, { variant: 'MAIN', link: cover.replace('.jpg', '._SY500_.jpg'), width: 280, height: 500 },
+      { variant: 'PT01', link: back.replace('.jpg', '._SX100_.jpg'), width: 100, height: 200 },
       { variant: 'PT01', link: back, width: 600, height: 800 }, { variant: 'PT02', link: cover, width, height }];
     const h = server({ item: { ...item, identifiers: [{ marketplaceId: api.MARKETPLACE, identifiers: [{ identifierType: 'ISBN', identifier: reportedIsbn }] }],
       images: [{ marketplaceId: api.MARKETPLACE, images: raw }] } });
@@ -390,6 +391,148 @@ test('Amazon joins other source images without replacing the existing cover, rep
   assert.deepEqual(api.createRegistrationDraft(noCover).additionalImageUrls, [extra, back]);
 });
 
+const cdn = asset => `https://m.media-amazon.com/images/I/SYNTH${asset}.jpg`;
+const labImages = (images = [cdn('MAIN'), cdn('BACK'), cdn('INSIDE')]) => ({
+  status: 'concluida', modo: 'http', isbn_pesquisado: isbn, correspondencia: 'corresponde',
+  isbn_encontrado: { isbn10: { valor: '8535914846', valido: true }, isbn13: { valor: isbn, valido: true } },
+  book_info: { title: 'Must not replace bibliography', publisher: 'Must not enter registration', synopsis: 'Must not import' },
+  imagens: { itens: images.map((referencia, i) => ({ referencia, papel: i ? 'adicional' : 'principal' })), download_realizado: false },
+});
+
+test('image identity collapses known CDN resizes and normalized URLs, retaining distinct assets, variants and unknown URL transformations', () => {
+  const cover = cdn('MAIN'), back = cdn('BACK');
+  assert.deepEqual(api.imageReferences([cover, cover.replace('.jpg', '._AC_SL1500_.jpg'),
+    cover.replace('m.media-amazon.com', 'images-na.ssl-images-amazon.com').replace('.jpg', '._SX75_.jpg'),
+    back, 'HTTPS://EXAMPLE.INVALID:443/cover.jpg', 'https://example.invalid/cover.jpg',
+    'https://example.invalid/cover.jpg?size=100', 'https://example.invalid/cover.jpg?size=500']),
+  [cover, back, 'https://example.invalid/cover.jpg', 'https://example.invalid/cover.jpg?size=100', 'https://example.invalid/cover.jpg?size=500']);
+  const draft = api.createRegistrationDraft({ id: 'fixture', title: 'Fixture', coverUrl: cover,
+    thumbnailUrl: cover.replace('.jpg', '._SX75_.jpg'), additionalImages: [back, back.replace('.jpg', '._SX50_.jpg')] });
+  assert.equal(draft.mainImageUrl, cover); assert.deepEqual(draft.additionalImageUrls, [back]);
+});
+
+test('official selection retains different images sharing MAIN or PT01 while choosing the largest resolution per identity', async t => {
+  globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
+  t.after(() => { delete globalThis.__spapiSession; });
+  const images = [
+    { variant: 'MAIN', link: cdn('MAIN').replace('.jpg', '._SX75_.jpg'), width: 50, height: 75 },
+    { variant: 'MAIN', link: cdn('MAIN'), width: 1400, height: 1900 },
+    { variant: 'MAIN', link: cdn('ALTERNATE'), width: 500, height: 700 },
+    { variant: 'PT01', link: cdn('BACK'), width: 1000, height: 1500 },
+    { variant: 'PT01', link: cdn('INSIDE'), width: 800, height: 900 },
+    { variant: 'PT02', link: cdn('BACK').replace('.jpg', '._SX50_.jpg'), width: 50, height: 75 },
+    { variant: 'PT02', link: cdn('SIDE'), width: 600, height: 800 },
+  ];
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => { calls++; return Response.json({ isbn,
+    items: [{ isbn, asin: 'SYNTHETIC1', marketplaceId: api.MARKETPLACE, title: 'Fixture', images }] }); });
+  const { book } = await client.searchAmazonOfficial(isbn, user);
+  assert.equal(book.coverUrl, cdn('MAIN'));
+  assert.deepEqual(book.additionalImages, [cdn('ALTERNATE'), cdn('BACK'), cdn('INSIDE'), cdn('SIDE')]);
+  assert.equal(calls, 1);
+});
+
+test('automatic fallback reuses one authenticated laboratory request, imports only matched images and preserves SP-API cover', async t => {
+  globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
+  t.after(() => { delete globalThis.__spapiSession; });
+  const base = { id: 'base', title: 'Priority title', publisher: 'Priority publisher', coverUrl: cdn('MAIN') };
+  const before = structuredClone(base), calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    calls.push(url); assert.equal(url, '/api/amazon?acao=search'); assert.equal(init.method, 'POST');
+    assert.equal(init.headers.Authorization, 'Bearer synthetic-session'); assert.equal(init.credentials, 'same-origin');
+    assert.equal(init.redirect, 'error'); assert.equal(init.cache, 'no-store'); assert.ok(init.signal instanceof AbortSignal);
+    assert.deepEqual(JSON.parse(init.body), { isbn, modo: 'http' });
+    return Response.json(labImages([cdn('MAIN').replace('.jpg', '._SX75_.jpg'), cdn('BACK'), cdn('BACK').replace('.jpg', '._SX50_.jpg'), cdn('INSIDE')]));
+  });
+  const merged = await client.complementAmazonImages(base, isbn, user);
+  assert.equal(merged.coverUrl, base.coverUrl); assert.deepEqual(merged.additionalImages, [cdn('BACK'), cdn('INSIDE')]);
+  assert.equal(merged.title, base.title); assert.equal(merged.publisher, base.publisher); assert.equal(merged.synopsis, undefined);
+  assert.deepEqual(base, before); assert.equal(calls.length, 1);
+  const draft = api.createRegistrationDraft(merged);
+  assert.equal(draft.mainImageUrl, base.coverUrl); assert.deepEqual(draft.additionalImageUrls, [cdn('BACK'), cdn('INSIDE')]);
+  await client.complementAmazonImages(merged, isbn, user); assert.equal(calls.length, 1, 'an available gallery needs no laboratory lookup');
+});
+
+test('fallback skips restricted actors, invalid ISBNs, existing galleries and changed sessions', async t => {
+  t.mock.method(globalThis, 'fetch', () => assert.fail('must not request Amazon'));
+  const base = { id: 'base', title: 'Priority', coverUrl: cdn('MAIN') };
+  for (const actor of [{ ...user, role: 'operator' }, { ...user, storeId: uid }, { ...user, active: false }])
+    assert.equal(await client.complementAmazonImages(base, isbn, actor), base);
+  for (const query of ['invalid', '9788535914848', '9791090636071']) assert.equal(await client.complementAmazonImages(base, query, user), base);
+  const gallery = { ...base, additionalImages: [cdn('BACK')] };
+  assert.equal(await client.complementAmazonImages(gallery, isbn, user), gallery);
+  globalThis.__spapiSession = { data: { session: { user: { id: 'other-user' }, access_token: 'synthetic-session' } } };
+  t.after(() => { delete globalThis.__spapiSession; });
+  assert.equal(await client.complementAmazonImages(base, isbn, user), base);
+});
+
+test('blocked, empty, mismatched, malformed and failing laboratory responses preserve SP-API or allow registration without images, without retries', async t => {
+  globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
+  t.after(() => { delete globalThis.__spapiSession; });
+  const base = { id: 'base', title: 'Priority', coverUrl: cdn('MAIN') };
+  const bad = [
+    () => Response.json({ status: 'interrompida', diagnostico: { codigo: 'amazon_captcha' } }),
+    () => Response.json(labImages([])), () => Response.json(labImages([cdn('MAIN').replace('.jpg', '._SX50_.jpg')])),
+    () => Response.json({ ...labImages(), correspondencia: 'divergente' }),
+    () => Response.json({ ...labImages(), isbn_pesquisado: '9780515154559' }),
+    () => Response.json({ ...labImages(), isbn_encontrado: {} }),
+    () => Response.json({ ...labImages(), isbn_encontrado: { id: { valor: '9780515154559', valido: true } } }),
+    () => Response.json({ ...labImages(), isbn_encontrado: { id: { valor: isbn, valido: true }, other: { valor: '9780515154559', valido: true } } }),
+    () => Response.json(labImages(['javascript:alert(1)', 'https://example.invalid/a.jpg?token=secret', 'https://user:pass@example.invalid/a.jpg'])),
+    () => new Response('blocked', { status: 403 }), () => new Response('unavailable', { status: 503 }),
+    () => new Response('{', { headers: { 'Content-Type': 'application/json' } }),
+    () => { throw new DOMException('Timeout', 'TimeoutError'); },
+  ];
+  let calls = 0, response;
+  t.mock.method(globalThis, 'fetch', async () => { calls++; return response(); });
+  for (response of bad) {
+    const initial = calls; assert.equal(await client.complementAmazonImages(base, isbn, user), base);
+    assert.equal(calls, initial + 1, 'one bounded request and no retry');
+  }
+  response = () => Response.json(labImages([]));
+  assert.equal(await client.complementAmazonImages(null, isbn, user), null);
+  const draft = api.createRegistrationDraft({ id: 'manual', title: '', isbn13: isbn });
+  assert.equal(draft.mainImageUrl, undefined); assert.deepEqual(draft.additionalImageUrls, []);
+  response = () => Response.json(labImages());
+  const onlyImages = await client.complementAmazonImages(null, isbn, user);
+  assert.equal(onlyImages.title, ''); assert.equal(onlyImages.coverUrl, cdn('MAIN'));
+});
+
+test('normal ISBN lookup automatically consolidates fallback gallery once and forwards it to the existing registration draft', async t => {
+  let official = 0, laboratory = 0;
+  t.mock.method(globalThis, 'fetch', async () => { official++; return Response.json({ isbn, items: [{ isbn, asin: 'SYNTHETIC1', marketplaceId: api.MARKETPLACE,
+    title: 'Amazon title', images: [{ variant: 'MAIN', link: cdn('MAIN'), width: 1400, height: 1900 }] }] }); });
+  const view = mountApp({ lab: async () => { laboratory++; return labImages(); } });
+  const pending = view.search(); await view.search(); await pending; view.render();
+  assert.equal(official, 1); assert.equal(laboratory, 1);
+  assert.equal(view.find('BookDetailsCard').props.book.title, 'Existing title');
+  view.find('Header').props.onTabChange('cadastro'); view.render();
+  const draft = view.find('ProductRegistrationForm').props.draft;
+  assert.equal(draft.mainImageUrl, cdn('MAIN')); assert.deepEqual(draft.additionalImageUrls, [cdn('BACK'), cdn('INSIDE')]);
+});
+
+test('late laboratory images are discarded if the actor changes and production mode never invokes the fallback', async t => {
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ isbn, items: [] }));
+  let release, started;
+  const ready = new Promise(resolve => { started = resolve; });
+  const view = mountApp({ lab: () => { started(); return new Promise(resolve => { release = resolve; }); } });
+  const pending = view.search(); await ready;
+  view.deps.user.currentUser = { ...user, storeId: uid }; view.render(); release(labImages()); await pending; view.render();
+  assert.equal(view.find('BookDetailsCard').props.book.coverUrl, undefined);
+  const production = mountApp({ user: { currentUser: user, operationEnvironment: 'production' }, lab: () => assert.fail('no fallback in production') });
+  await production.search(); production.render(); assert.equal(production.find('BookDetailsCard').props.book.coverUrl, undefined);
+});
+
+test('switching environments while laboratory images are pending discards the development result', async t => {
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ isbn, items: [] }));
+  let release, started;
+  const ready = new Promise(resolve => { started = resolve; });
+  const view = mountApp({ lab: () => { started(); return new Promise(resolve => { release = resolve; }); } });
+  const pending = view.search(); await ready;
+  view.deps.user.operationEnvironment = 'production'; view.render(); release(labImages()); await pending; view.render();
+  assert.equal(view.find('BookDetailsCard').props.book.coverUrl, undefined);
+});
+
 const registrationBuild = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts', contents: `
   export { default as Form } from './src/components/magazord/ProductRegistrationForm';
   export { default as Images } from './src/components/magazord/ImagesSection';` },
@@ -419,8 +562,9 @@ function mountRegistration(component, initialProps, service) {
 test('existing image gallery renders automatic cover, permits manual replacement without duplicates and submits current URLs to Magazord', async () => {
   const cover = 'https://images.example.invalid/main.jpg', back = 'https://images.example.invalid/back.jpg', manual = 'https://example.invalid/operator.jpg';
   const book = { id: 'amazon', title: 'Fixture', isbn13: isbn, coverUrl: cover, additionalImages: [back] };
-  for (const mode of ['automatic', 'manual', 'without-images']) {
-    let draft = { ...api.createRegistrationDraft(mode === 'without-images' ? { ...book, coverUrl: undefined, additionalImages: [] } : book), parentCode: 'IMG-P', price: '10' };
+  for (const mode of ['automatic', 'fallback-gallery', 'manual', 'without-images']) {
+    const selected = mode === 'fallback-gallery' ? { ...book, additionalImages: [back, cdn('INSIDE')] } : book;
+    let draft = { ...api.createRegistrationDraft(mode === 'without-images' ? { ...book, coverUrl: undefined, additionalImages: [] } : selected), parentCode: 'IMG-P', price: '10' };
     let gallery;
     const onChange = updates => { draft = { ...draft, ...updates }; gallery.render({ draft }); };
     gallery = mountRegistration('Images', { draft, onChange });
@@ -447,4 +591,17 @@ test('existing image gallery renders automatic cover, permits manual replacement
     assert.equal(calls.length, 1); assert.equal(calls[0].payload.mainImageUrl, draft.mainImageUrl);
     assert.deepEqual(calls[0].payload.additionalImageUrls, draft.additionalImageUrls); assert.equal(calls[0].actionMode, 'auto');
   }
+});
+
+test('manual image management preserves the chosen cover and rejects another resolution of the same Amazon asset', () => {
+  const cover = cdn('MAIN'), back = cdn('BACK');
+  let draft = api.createRegistrationDraft({ id: 'fixture', title: 'Fixture', coverUrl: cover, additionalImages: [back] });
+  let gallery;
+  gallery = mountRegistration('Images', { draft, onChange: updates => { draft = { ...draft, ...updates }; gallery.render({ draft }); } });
+  gallery.find(n => n.props.title === 'Tornar capa principal').props.onClick();
+  assert.equal(draft.mainImageUrl, back); assert.deepEqual(draft.additionalImageUrls, [cover]);
+  gallery.find(n => n.type === 'button' && imageText(n) === 'Adicionar URL').props.onClick(); gallery.render();
+  gallery.find(n => n.type === 'input' && n.props.type === 'url').props.onChange({ target: { value: back.replace('.jpg', '._SX75_.jpg') } }); gallery.render();
+  gallery.find(n => n.type === 'input' && n.props.type === 'url').props.onKeyDown({ key: 'Enter', preventDefault() {} }); gallery.render();
+  assert.equal(draft.mainImageUrl, back); assert.deepEqual(draft.additionalImageUrls, [cover]);
 });

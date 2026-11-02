@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import { BookInfo } from '../types';
 import { publicationYear } from '../../shared/publicationDate';
+import { imageReferences } from '../utils/imageUrls';
 import {
   Building2,
   Calendar,
@@ -35,13 +36,7 @@ export default function BookDetailsCard({ book }: BookDetailsCardProps) {
   }, [book.id, book.isbn13]);
 
   // Lista única e sanitizada de todas as URLs brutas de imagens
-  const rawImages = Array.from(
-    new Set(
-      [book.coverUrl, book.thumbnailUrl, ...(book.additionalImages || [])].filter(
-        (img): img is string => typeof img === 'string' && img.trim().length > 0
-      )
-    )
-  );
+  const rawImages = imageReferences([book.coverUrl, book.thumbnailUrl, ...(book.additionalImages || [])]);
 
   // Somente URLs válidas que não falharam no carregamento
   const validImages = rawImages.filter((img) => !failedImageUrls.has(img));
