@@ -556,3 +556,36 @@ foram comprovadamente recuperadas. Uma pesquisa única no Preview corrigido
 permitirá verificar os novos motivos/contagens pelos logs existentes, sem copiar
 credenciais, HTML ou URLs. Caso o corpo esteja vazio, não HTML ou bloqueado, a
 capa SP-API continua válida e não haverá contorno ou retry.
+
+### Consulta real após a correção de Content-Type — 02/11/2026
+
+O proprietário informou a conclusão da pesquisa de `9781419762109`, em
+Desenvolvimento/Silveira Lab, no Preview
+`isbn-fo79kb3vb-silveira8393-svgs-projects.vercel.app`, código `6409990`.
+A leitura dos logs desse deployment encontrou uma execução em **20:15:32 BRT**:
+
+```json
+{"evento":"amazon_lab","id":"fd8144ab-28ad-41f3-a4c4-0888774eae83","duracao_ms":583.21,"status_function":200,"status_http":200,"codigo":"completed","imagens_principais":1,"imagens_adicionais":5}
+```
+
+**Comprovado em consulta real:** o transporte recebeu conteúdo utilizável, o
+extrator existente foi executado e a Function produziu resposta com uma imagem
+principal e cinco adicionais (seis referências). O tempo ficou abaixo dos limites;
+não foi necessária nova tentativa. Não houve repetição da pesquisa pelo agente.
+A recuperação das cinco imagens pelo backend deixa de ser apenas uma evidência
+de fixtures. O evento anterior `content_type_missing` ocorria antes da extração;
+após a correção, esta execução chegou a `completed`.
+
+**Limite da evidência:** as contagens são da resposta do Laboratório antes da
+consolidação no navegador. O cliente continua exigindo correspondência exata do
+ISBN, descartando capas/redimensionamentos duplicados e preservando a capa oficial.
+Os logs do servidor não observam a seleção final do formulário. O acesso ao
+navegador retornou `The browser access host is unavailable`, e a mensagem do
+proprietário não preencheu o resultado visual. Portanto, a quantidade efetivamente
+exibida no resultado/cadastro ainda não foi confirmada nesta análise; não é correto
+equiparar automaticamente seis referências no Laboratório a seis imagens no
+cadastro.
+
+Nenhuma alteração de código, nova consulta Amazon, mudança em banco/Storage,
+merge ou deploy foi necessária para esta verificação. Os testes do código
+`6409990` continuam os registrados acima; não foram repetidos para documentação.
