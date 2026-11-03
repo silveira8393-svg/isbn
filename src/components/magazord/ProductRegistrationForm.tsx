@@ -255,7 +255,7 @@ export default function ProductRegistrationForm({
     ['Quantidade', draft.quantity], ['Localização', draft.location], ['Categoria', draft.category], ['Marca', draft.brand],
     ['Peso', draft.weight == null ? undefined : `${formatPhysicalMeasurement(draft.weight * (draft.weightUnit === 'kg' ? 1000 : 1))} g`],
     ['Largura', draft.width == null ? undefined : `${formatPhysicalMeasurement(draft.width)} cm`], ['Altura', draft.height == null ? undefined : `${formatPhysicalMeasurement(draft.height)} cm`], ['Espessura / profundidade', draft.depth == null ? undefined : `${formatPhysicalMeasurement(draft.depth)} cm`],
-    ['NCM', draft.ncm], ['Origem fiscal', draft.fiscalOrigin], ['Unidade', draft.unit],
+    ['NCM', draft.ncm], ['Origem fiscal', draft.fiscalOrigin], ['Benefício Fiscal (cBenef)', draft.fiscalBenefitCode], ['Unidade', draft.unit],
   ];
 
   return (

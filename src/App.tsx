@@ -355,6 +355,7 @@ export default function App() {
       draft.additionalImageUrls = [...registrationDraft.additionalImageUrls];
       draft.imageSelectionManual = registrationDraft.imageSelectionManual;
       draft.language = registrationDraft.language;
+      draft.fiscalBenefitCode = registrationDraft.fiscalBenefitCode;
     }
     draft.format = foundBook.format || '';
     setRegistrationDraft(draft);

@@ -143,6 +143,7 @@ export function createRegistrationDraft(
 
     ncm: '4901.99.00', // Padrão fiscal para livros no Brasil
     fiscalOrigin: '0 - Nacional',
+    fiscalBenefitCode: 'SC800001',
     unit: 'UN',
   };
   draft.metaDescription = generateMetaDescription(draft);

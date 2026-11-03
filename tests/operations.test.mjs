@@ -86,6 +86,7 @@ async function component(entry, realDraft = false) {
 const app = await component('src/App.tsx');
 const actualDraftApp = await component('src/App.tsx', true);
 const commercial = await component('src/components/magazord/CommercialSection.tsx', true);
+const fiscal = await component('src/components/magazord/AdvancedFiscalSection.tsx', true);
 const form = await component('src/components/magazord/ProductRegistrationForm.tsx');
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 
@@ -129,6 +130,36 @@ function dependencies(overrides = {}) {
 }
 async function search(view) { await view.find(n => n.type === 'SearchForm').props.onSearch(input.isbn); await flush(); }
 
+test('cBenef stays exact through fiscal editing, mandatory review, return, simulated submission and audit', async () => {
+  for (const condition of ['novo', 'usado']) for (const code of ['SC800001', 'SC999999', '']) {
+    const deps = dependencies(), payloads = [];
+    deps.magazord.createProduct = async payload => { payloads.push(payload); return { success: true, parentCode: 'P', childCode: 'C', registeredAt: 1 }; };
+    const appView = mount(actualDraftApp, deps); await search(appView);
+    appView.find(n => n.type === 'MagazordStatusCard').props.onOpenRegistration(condition); await flush();
+    let props = appView.find(n => n.type === 'ProductRegistrationForm').props;
+    assert.equal(props.draft.fiscalBenefitCode, 'SC800001');
+    props.onUpdateDraft({ parentCode: 'P', childCode: 'C', price: '50,00' }); await flush();
+    props = appView.find(n => n.type === 'ProductRegistrationForm').props;
+    const fiscalView = mount(fiscal, deps, { draft: props.draft, onChange: props.onUpdateDraft });
+    fiscalView.find(n => n.type === 'button').props.onClick(); await flush();
+    fiscalView.find(n => n.props?.id === 'fiscal-benefit-code').props.onChange({ target: { value: code } }); await flush();
+    props = appView.find(n => n.type === 'ProductRegistrationForm').props;
+    const before = structuredClone(props.draft), formView = mount(form, deps, props);
+    formView.find(n => n.props?.id === 'btn-submit-magazord-registration').props.onClick(); await flush();
+    const review = formView.find(n => n.props?.['aria-label'] === 'Revisão do cadastro');
+    assert.ok(review); assert.ok(JSON.stringify(review).includes('Benefício Fiscal (cBenef)'));
+    assert.ok(JSON.stringify(review).includes(code || 'Não informado'));
+    formView.find(n => n.props?.id === 'btn-return-to-registration').props.onClick(); await flush();
+    assert.deepEqual(props.draft, before);
+    formView.find(n => n.props?.id === 'btn-submit-magazord-registration').props.onClick(); await flush();
+    await formView.find(n => n.props?.id === 'btn-confirm-magazord-registration').props.onClick(); await flush();
+    assert.equal(payloads[0].fiscalBenefitCode, code);
+    assert.equal(payloads[0].ncm, before.ncm); assert.equal(payloads[0].fiscalOrigin, before.fiscalOrigin); assert.equal(payloads[0].unit, before.unit);
+    const completed = deps.records.find(row => row.operationType === (condition === 'novo' ? 'new_product_created' : 'used_copy_created'));
+    assert.equal(completed.metadata.registrationSnapshot.fields.fiscalBenefitCode, code);
+  }
+});
+
 test('Real App search and registration opening retain normalized language instead of overwriting it with provider codes', async () => {
   for (const [language, expected] of [['pt', 'Português'], ['por', 'Português'], ['en', 'Inglês'], ['eng', 'Inglês'], ['es', 'Espanhol'], ['spa', 'Espanhol'], ['fr', 'Francês'], ['fra', 'Francês'], ['xyz', 'xyz']]) {
     const source = { id: 'brasilapi-fixture', title: 'Livro', isbn13: input.isbn, language };
@@ -142,10 +173,11 @@ test('Real App search and registration opening retain normalized language instea
       view.find(n => n.type === 'MagazordStatusCard').props.onOpenRegistration(condition); await flush();
       const formProps = view.find(n => n.type === 'ProductRegistrationForm').props;
       assert.equal(formProps.draft.language, expected, 'explicit registration opening');
-      formProps.onUpdateDraft({ language: 'Idioma manual', price: '50,50', parentCode: 'P', childCode: 'C' }); await flush();
+      formProps.onUpdateDraft({ language: 'Idioma manual', fiscalBenefitCode: '', price: '50,50', parentCode: 'P', childCode: 'C' }); await flush();
       view.find(n => n.type === 'Header').props.onTabChange('consultar'); await flush();
       view.find(n => n.type === 'MagazordStatusCard').props.onOpenRegistration(condition); await flush();
       assert.equal(view.find(n => n.type === 'ProductRegistrationForm').props.draft.language, 'Idioma manual', 'same-condition draft reopening');
+      assert.equal(view.find(n => n.type === 'ProductRegistrationForm').props.draft.fiscalBenefitCode, '', 'cleared cBenef stays cleared on same-condition reopening');
     }
     assert.deepEqual(source, before);
   }

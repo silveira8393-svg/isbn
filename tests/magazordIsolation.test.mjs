@@ -46,6 +46,18 @@ const seedOperational = () => new Map([
   [legacyKey, JSON.stringify({ [isbn]: [operationalRecord] })],
 ]);
 
+test('Simulated catalog persists the exact optional cBenef for NEW/USED, including clearing and old records', async t => {
+  const app = setup(t, seedOperational());
+  assert.equal(app.service.getRecordsForEan(isbn)[0].fiscalBenefitCode, undefined);
+  for (const condition of ['novo', 'usado']) for (const code of ['SC800001', 'SC999999', '', '  manual  ']) {
+    const payload = draft(condition, { fiscalBenefitCode: code });
+    await app.service.createProduct(payload, 'auto');
+    const records = app.reload().getRecordsForEan(isbn);
+    const record = condition === 'novo' ? records.find(item => item.condition === 'novo') : records.at(-1);
+    assert.equal(record.fiscalBenefitCode, code);
+  }
+});
+
 test('Required reproduction: Auto missing -> forced Novo 3 -> sandbox stock 5 -> Auto still missing', async t => {
   const app = setup(t), service = app.service;
   assert.equal((await service.checkProductByEan(isbn)).status, 'NOT_FOUND');

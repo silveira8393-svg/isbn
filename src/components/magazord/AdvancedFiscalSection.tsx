@@ -38,7 +38,7 @@ export default function AdvancedFiscalSection({
               </span>
             </h4>
             <p className="text-[11px] text-slate-500">
-              NCM de livros, origem e unidade tributária (pré-configurados para a loja)
+              NCM de livros, origem, benefício fiscal e unidade tributária (padrões da loja)
             </p>
           </div>
         </div>
@@ -81,6 +81,23 @@ export default function AdvancedFiscalSection({
                 <option value="1 - Estrangeira (Importação direta)">1 - Estrangeira (Importação direta)</option>
                 <option value="2 - Estrangeira (Adquirida no mercado interno)">2 - Estrangeira (Mercado interno)</option>
               </select>
+            </div>
+
+            <div>
+              <label htmlFor="fiscal-benefit-code" className="block text-xs font-bold text-slate-700 mb-1">
+                Benefício Fiscal (cBenef)
+              </label>
+              <input
+                id="fiscal-benefit-code"
+                type="text"
+                value={draft.fiscalBenefitCode ?? ''}
+                onChange={(e) => onChange({ fiscalBenefitCode: e.target.value })}
+                aria-describedby="fiscal-benefit-code-help"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-600"
+              />
+              <p id="fiscal-benefit-code-help" className="text-[10px] text-slate-500 mt-0.5">
+                Padrão sugerido: SC800001. Altere quando necessário, conforme orientação fiscal da loja.
+              </p>
             </div>
 
             <div>

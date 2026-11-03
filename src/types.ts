@@ -114,6 +114,7 @@ export interface RegistrationDraft {
   // Configurações Fiscais e Avançadas
   ncm: string;
   fiscalOrigin: string;
+  fiscalBenefitCode?: string; // Provisional store suggestion; not a universal tax rule or API parameter.
   unit: string;
 }
 

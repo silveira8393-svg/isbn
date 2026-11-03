@@ -10,7 +10,7 @@ export const registrationFields = {
   usedConditionTemplateId: 'Modelo de conservação selecionado (ID)', metaDescription: 'Meta Description',
   description: 'Descrição final', price: 'Preço informado (R$)', quantity: 'Quantidade informada', location: 'Localização',
   mainImageUrl: 'URL da imagem principal', additionalImageUrls: 'URLs das imagens adicionais', ncm: 'NCM',
-  fiscalOrigin: 'Origem fiscal', unit: 'Unidade',
+  fiscalOrigin: 'Origem fiscal', fiscalBenefitCode: 'Benefício Fiscal (cBenef)', unit: 'Unidade',
 } as const;
 type SnapshotValue = string | number | string[];
 export interface RegistrationSnapshot {

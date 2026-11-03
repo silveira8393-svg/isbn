@@ -48,6 +48,7 @@ export interface SimulatedRecord {
   price?: string;
   stock: number;
   description?: string;
+  fiscalBenefitCode?: string;
   sku?: string;
   registeredAt: number;
 }
@@ -562,6 +563,7 @@ class MagazordMockService {
       price: draft.price ? draft.price.trim() : undefined,
       stock: draft.quantity || 1,
       description: draft.description,
+      fiscalBenefitCode: draft.fiscalBenefitCode,
       registeredAt: Date.now(),
     };
 

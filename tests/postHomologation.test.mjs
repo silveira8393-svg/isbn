@@ -18,6 +18,7 @@ const bundle = await build({
     export { default as IdentitySection } from './src/components/magazord/ProductIdentitySection';
     export { default as CommercialSection } from './src/components/magazord/CommercialSection';
     export { default as PhysicalSection } from './src/components/magazord/PhysicalAttributesSection';
+    export { default as FiscalSection } from './src/components/magazord/AdvancedFiscalSection';
   ` }, bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic',
   plugins: [{ name: 'offline-only', setup(builder) {
     const mocks = [[/^react$/, 'module.exports=deps.react'],
@@ -43,6 +44,30 @@ const cover = `${directory}lv491848_1.jpg`;
 const extra = `${directory}lv491848_2.jpg`;
 const book = { isbn13: '9786555113655', title: 'O Atlas da Terra Média', authors: ['Autor'], coverUrl: cover, additionalImages: [extra] };
 const at = '2026-10-15T14:21:31.110Z';
+
+test('cBenef defaults only on new drafts, remains optional/editable and round-trips exactly without changing other fiscal values', () => {
+  for (const condition of ['novo', 'usado']) {
+    const initial = utils.createRegistrationDraft(book, condition);
+    assert.equal(initial.fiscalBenefitCode, 'SC800001');
+    const view = mount('FiscalSection', initial);
+    view.click('Configurações Fiscais & Avançadas');
+    const field = () => view.find(node => node.props.id === 'fiscal-benefit-code');
+    assert.equal(field().props.value, 'SC800001'); assert.equal(field().props.required, undefined);
+    for (const code of ['SC999999', '', '  código manual  ']) {
+      field().props.onChange({ target: { value: code } }); view.render();
+      assert.equal(view.draft().fiscalBenefitCode, code);
+      assert.equal(field().props.value, code);
+      assert.deepEqual({ ...view.draft(), fiscalBenefitCode: initial.fiscalBenefitCode }, initial);
+      assert.equal(utils.validateRegistrationDraft(view.draft()).errors.fiscalBenefitCode, undefined);
+      assert.equal(utils.readRegistrationSnapshot(utils.createRegistrationSnapshot(view.draft(), at)).fields.fiscalBenefitCode, code);
+    }
+    assert.equal(utils.createRegistrationDraft(book, condition).fiscalBenefitCode, 'SC800001');
+    const old = { ...initial }; delete old.fiscalBenefitCode;
+    const oldView = mount('FiscalSection', old); oldView.click('Configurações Fiscais & Avançadas');
+    assert.equal(oldView.find(node => node.props.id === 'fiscal-benefit-code').props.value, '');
+    assert.equal(utils.readRegistrationSnapshot(utils.createRegistrationSnapshot(old, at)).fields.fiscalBenefitCode, undefined);
+  }
+});
 const photoUser = { id: '11111111-1111-4111-8111-111111111111', storeId: '492af2ad-905c-42f8-90f4-aa6c1dc142f3', active: true, role: 'developer' };
 const pngBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
 const photoFile = (name = 'foto.png', tail = '') => new File([pngBytes, tail], name, { type: 'image/png' });
