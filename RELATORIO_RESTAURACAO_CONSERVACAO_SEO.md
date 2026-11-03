@@ -60,3 +60,29 @@ Os testes de interface executam componentes/handlers reais com dependências con
 6. Concluir um cadastro simulado e conferir na auditoria o snapshot final, incluindo Meta Description e conservação do USADO.
 
 Merge e publicação em produção dependem de homologação e não foram executados.
+
+## Correções da homologação da PR #2 — 03/11/2026
+
+### Causas verificadas
+
+1. Idioma: `createRegistrationDraft` copiava `book.language.trim()` diretamente. A normalização existente só era aplicada posteriormente na revisão/confirmação. A criação do rascunho agora usa `normalizeLanguage`, sem modificar a fonte nem sua proveniência. Códigos conhecidos aparecem por extenso, valores desconhecidos permanecem e a edição manual continua livre. A indicação de Português presumido pela BrasilAPI segue sem confirmação explícita.
+2. Modelos: o Preview usa corretamente `https://jcxdkrpmrfbrhzwbzhph.supabase.co`. A conta técnica tem vínculos ativos com duas lojas. `UserContext` escolhe `memberships[0]` após ordenar `store_id`, selecionando `492af2ad-905c-42f8-90f4-aa6c1dc142f3` (Silveira Lab - Homologacao Amazon), sem configuração de modelos. Os 17 modelos pertencem a `6058abd1-96e5-465b-a1df-292e5cf76de3` (Sebo Livraria Sul). Não havia erro no JSONB nem necessidade de alterar RLS.
+
+### Correção restrita à origem dos modelos
+
+Apenas nesta branch de Preview foi configurada `VITE_CONDITION_TEMPLATES_STORE_ID=6058abd1-96e5-465b-a1df-292e5cf76de3`. O serviço lê e grava os modelos nessa origem explícita, validando sessão e vínculo ativo com a mesma role; a interface mostra o nome real da loja consultada. A opção está documentada em `.env.example`. Sem a variável, permanece o comportamento de consultar a loja operacional do usuário.
+
+Não se altera o contexto de autenticação, a loja operacional da conta técnica, auditoria operacional ou configuração Amazon. Não existe busca automática em outras lojas, fallback local ou cópia dos textos para a loja técnica. Configuração inválida ou sem autorização é recusada, sem fallback. Leitura sem linha de configuração, lista vazia confirmada, divergência de identidade da loja e erro de leitura têm apresentações distintas.
+
+Arquivos corrigidos: `src/utils/draft.ts`, `src/services/conditionTemplatesService.ts`, `src/hooks/useConditionTemplates.ts`, `src/components/ConditionTemplateManager.tsx`, `src/components/magazord/UsedConditionTemplatePicker.tsx`, `.env.example` e os testes `conditionTemplates.test.mjs` e `postHomologation.test.mjs`.
+
+### Validação desta correção
+
+- **98 testes relacionados aprovados**: `conditionTemplates`, `conditionTemplateImport`, `postHomologation`, `metaDescription` e `operations`.
+- TypeScript, lint e build aprovados; permanece o aviso de tamanho do bundle.
+- Fonte Supabase: 17 modelos, todos ativos; nenhuma gravação de modelos foi realizada nesta correção.
+- Leitura real sob RLS verificada em transação com `SET LOCAL ROLE authenticated` e claims da conta técnica: loja Sebo Livraria Sul, vínculo developer ativo e 17 modelos ativos retornados. Transação encerrada com rollback. Esse teste não substitui um login real do navegador.
+- Teste de componente com os 17 textos: 18 opções (placeholder + 17), seletor habilitado, seleção de cada texto e ID corretos, identidade operacional preservada e gravações restritas à origem autorizada.
+- Meta Description e cadastros NOVO/USADO preservados pelos testes existentes. As cinco falhas preexistentes não foram objeto de correção; a suíte completa não foi repetida nesta etapa.
+
+Homologação: na PR #2, abrir USADO com a conta técnica e conferir “Loja de origem dos modelos: Sebo Livraria Sul” e “17 modelos ativos disponíveis”. Selecionar um modelo, editar as observações, revisar e retornar. Conferir também idioma por extenso em NOVO/USADO e manutenção do aviso de origem não confirmada quando aplicável.

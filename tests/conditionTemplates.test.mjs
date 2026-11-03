@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
+import { originals } from '../scripts/import-marcos-condition-templates.mjs';
 
 const bundle = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts', contents: `
   export * from './src/services/conditionTemplatesService';
@@ -10,6 +11,7 @@ const bundle = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts', c
   export { default as Picker } from './src/components/magazord/UsedConditionTemplatePicker';
   export { default as Synopsis } from './src/components/magazord/SynopsisSection';
 ` }, bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic',
+  define: { 'import.meta.env': 'deps.env' },
   plugins: [{ name: 'offline', setup(builder) {
     const mocks = [[/^react$/, 'exports.useState=(...args)=>deps.react.useState(...args);exports.useRef=(...args)=>deps.react.useRef(...args);exports.useEffect=(...args)=>deps.react.useEffect(...args)'],
       [/^react\/jsx-runtime$/, 'exports.jsx=exports.jsxs=(type,props,key)=>({type,props,key})'],
@@ -40,13 +42,13 @@ function setup(initial = settings(), options = {}) {
   const rows = new Map(initial === null ? [] : [[storeId, structuredClone(initial)]]);
   rows.set(otherStore, { other: 'foreign config' });
   const calls = [], releases = [];
-  const deps = { user: { currentUser: { ...actor } }, supabase: {
+  const deps = { env: { VITE_CONDITION_TEMPLATES_STORE_ID: options.sourceStoreId }, user: { currentUser: { ...actor } }, supabase: {
     auth: {
       getUser: async () => ({ data: { user: options.noSession ? null : { id: options.actorId ?? actor.id } }, error: null }),
       getSession: async () => ({ data: { session: { user: { id: options.lateActorId ?? actor.id } } }, error: null }),
     },
     from(table) {
-      assert.ok(['store_users', 'store_settings'].includes(table));
+      assert.ok(['stores', 'store_users', 'store_settings'].includes(table));
       const call = { table, action: 'read', filters: [] }; calls.push(call);
       const query = {
         select(columns) { call.columns = columns; return this; },
@@ -58,6 +60,10 @@ function setup(initial = settings(), options = {}) {
           if (options.deferRead && table === 'store_settings' && call.action === 'read') await new Promise(resolve => releases.push(resolve));
           if (call.signal?.aborted) return { data: null, error: { message: 'aborted' } };
           const target = call.filters.find(([f]) => f === 'store_id')?.[1] ?? call.payload?.store_id;
+          if (table === 'stores') {
+            const id = call.filters.find(([field]) => field === 'id')?.[1];
+            return { data: options.missingStore ? null : { id: options.leakedStore ? otherStore : id, name: 'Loja autorizada' }, error: null };
+          }
           if (table === 'store_users') {
             const userId = call.filters.find(([f]) => f === 'user_id')?.[1];
             return { data: target === storeId && userId === actor.id && !options.noMembership
@@ -136,7 +142,7 @@ test('Reads and saves are scoped to the actor store and reject foreign snapshots
   const base = await app.api.loadConditionTemplates(actor);
   await assert.rejects(app.api.saveConditionTemplates(actor, { ...base, storeId: otherStore }, []), { code: 'invalid' });
   const leaked = setup(settings(), { leak: true });
-  await assert.rejects(leaked.api.loadConditionTemplates(actor), { code: 'invalid' });
+  await assert.rejects(leaked.api.loadConditionTemplates(actor), { code: 'configuration' });
   assert.equal(app.writes().length, 0);
 });
 
@@ -325,4 +331,46 @@ test('Store/account changes hide loaded models immediately and discard late requ
   app.releases.shift()(); await view.settle();
   assert.doesNotMatch(view.text(), /Modelo aprovado de teste/);
   assert.equal(view.find(node => node.type === 'select').props.disabled, true);
+});
+
+test('Explicit source loads 17 active models through the authorized membership without changing operational identity', async () => {
+  const models = originals.map((item, index) => ({ ...item, id: `model-${index}`, active: true }));
+  const app = setup(settings(models), { sourceStoreId: storeId });
+  app.deps.user.currentUser.storeId = otherStore;
+  app.deps.user.currentUser.role = 'developer';
+  const before = structuredClone(app.deps.user.currentUser), selected = [];
+  const view = mount(app, app.api.Picker, { onSelect: (...args) => selected.push(args) });
+  assert.match(view.text(), /Carregando modelos/);
+  await view.settle();
+  assert.match(view.text(), /Loja de origem dos modelos: Loja autorizada/);
+  assert.match(view.text(), /17 modelos ativos disponíveis/);
+  assert.equal(view.nodes().filter(node => node.type === 'option').length, 18);
+  assert.equal(view.find(node => node.type === 'select').props.disabled, false);
+  assert.deepEqual(selected, []);
+  for (const model of models) view.change('used-condition-template', model.id);
+  assert.deepEqual(selected, models.map(model => [model.text, model.id]));
+  assert.deepEqual(app.deps.user.currentUser, before);
+  const base = await app.api.loadConditionTemplates(app.deps.user.currentUser);
+  const saved = await app.api.saveConditionTemplates(app.deps.user.currentUser, base, models);
+  assert.equal(saved.storeId, storeId);
+  assert.equal(app.writes()[0].filters.find(([field]) => field === 'store_id')[1], storeId);
+  assert.deepEqual(app.rows.get(otherStore), { other: 'foreign config' });
+});
+
+test('Empty, missing, divergent, unreadable and unauthorized configurations are distinct and never fall back', async () => {
+  for (const [initial, options, expected] of [
+    [{}, {}, /Nenhum modelo ativo/],
+    [null, {}, /Configuração dos modelos não encontrada/],
+    [settings(), { missingStore: true }, /Loja ou configuração dos modelos divergente/],
+    [settings(), { leakedStore: true }, /Loja ou configuração dos modelos divergente/],
+    [settings(), { readError: true }, /Não foi possível carregar/],
+    [settings(), { sourceStoreId: otherStore }, /não tem autorização/],
+    [settings(), { sourceStoreId: 'invalid' }, /Loja ou configuração dos modelos divergente/],
+  ]) {
+    const app = setup(initial, options), view = mount(app, app.api.Picker, { onSelect() { assert.fail('No automatic selection'); } });
+    await view.settle(); assert.match(view.text(), expected);
+    assert.equal(view.find(node => node.type === 'select').props.disabled, true);
+    if (String(expected) !== '/Nenhum modelo ativo/') assert.doesNotMatch(view.text(), /Nenhum modelo ativo/);
+    assert.equal(app.writes().length, 0);
+  }
 });

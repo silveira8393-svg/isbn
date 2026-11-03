@@ -18,7 +18,7 @@ export function useConditionTemplates(actor: TemplateActor) {
   return {
     ...(state.key === key ? state : { key, status: 'loading' as const }),
     reload: () => setRevision(value => value + 1),
-    acceptSaved: (data: ConditionTemplateSnapshot) => setState(previous => previous.key === key && data.storeId === actor.storeId
+    acceptSaved: (data: ConditionTemplateSnapshot) => setState(previous => previous.key === key && data.storeId === previous.data?.storeId
       ? { key, status: 'ready', data } : previous),
   };
 }

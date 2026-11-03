@@ -5,6 +5,7 @@ export const CONDITION_TEMPLATES_KEY = 'used_book_condition_templates';
 export interface ConditionTemplate { id: string; name: string; text: string; active: boolean }
 export interface ConditionTemplateSnapshot {
   storeId: string;
+  storeName?: string;
   exists: boolean;
   settings: Record<string, unknown>;
   templates: ConditionTemplate[];
@@ -12,6 +13,7 @@ export interface ConditionTemplateSnapshot {
 export type TemplateActor = Pick<User, 'id' | 'storeId' | 'role' | 'active'>;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const messages = {
+  configuration: 'Loja ou configuração dos modelos divergente. Confira a loja de origem e seu vínculo autorizado.',
   permission: 'Sua conta não tem autorização para esta ação na loja atual.',
   load: 'Não foi possível carregar os modelos da loja. Você pode continuar com observações manuais.',
   invalid: 'A configuração dos modelos está em formato inválido ou não suportado. Nenhuma configuração foi substituída.',
@@ -24,6 +26,15 @@ export class ConditionTemplateError extends Error {
 export const canManageConditionTemplates = (actor: TemplateActor) => actor.active && ['admin', 'developer'].includes(actor.role);
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 
+/** Explicit template source for a Preview using a technical account linked to several stores.
+ * Never changes the operational identity or falls back to another store on failure.
+ */
+export function conditionTemplateActor(actor: TemplateActor, sourceStoreId = import.meta.env?.VITE_CONDITION_TEMPLATES_STORE_ID): TemplateActor {
+  if (!sourceStoreId) return actor;
+  if (!uuid.test(sourceStoreId)) throw new ConditionTemplateError('configuration');
+  return { ...actor, storeId: sourceStoreId };
+}
+
 function validTemplates(value: unknown): value is ConditionTemplate[] {
   return Array.isArray(value) && value.every(item => object(item)
     && typeof item.id === 'string' && !!item.id.trim() && typeof item.name === 'string' && !!item.name.trim()
@@ -33,7 +44,8 @@ function validTemplates(value: unknown): value is ConditionTemplate[] {
 
 function snapshot(storeId: string, row: unknown): ConditionTemplateSnapshot {
   if (row === null) return { storeId, exists: false, settings: {}, templates: [] };
-  if (!object(row) || row.store_id !== storeId || !object(row.settings)) throw new ConditionTemplateError('invalid');
+  if (!object(row) || row.store_id !== storeId) throw new ConditionTemplateError('configuration');
+  if (!object(row.settings)) throw new ConditionTemplateError('invalid');
   const settings = structuredClone(row.settings);
   if (!Object.prototype.hasOwnProperty.call(settings, CONDITION_TEMPLATES_KEY)) return { storeId, exists: true, settings, templates: [] };
   const config = settings[CONDITION_TEMPLATES_KEY];
@@ -55,12 +67,18 @@ async function authorize(actor: TemplateActor, write: boolean, signal?: AbortSig
 
 export async function loadConditionTemplates(actor: TemplateActor, signal?: AbortSignal): Promise<ConditionTemplateSnapshot> {
   try {
+    actor = conditionTemplateActor(actor);
     await authorize(actor, false, signal);
+    let storeQuery = supabase.from('stores').select('id,name').eq('id', actor.storeId!);
+    if (signal) storeQuery = storeQuery.abortSignal(signal);
+    const { data: store, error: storeError } = await storeQuery.maybeSingle();
+    if (storeError) throw new ConditionTemplateError('load');
+    if (!store || store.id !== actor.storeId || !store.name?.trim()) throw new ConditionTemplateError('configuration');
     let query = supabase.from('store_settings').select('store_id,settings').eq('store_id', actor.storeId!);
     if (signal) query = query.abortSignal(signal);
     const { data, error } = await query.maybeSingle();
     if (error || signal?.aborted) throw new ConditionTemplateError('load');
-    return snapshot(actor.storeId!, data);
+    return { ...snapshot(actor.storeId!, data), storeName: store.name };
   } catch (error) { throw error instanceof ConditionTemplateError ? error : new ConditionTemplateError('load'); }
 }
 
@@ -77,6 +95,7 @@ function canonical(value: unknown): string {
 export async function saveConditionTemplates(actor: TemplateActor, base: ConditionTemplateSnapshot,
   templates: ConditionTemplate[], signal?: AbortSignal): Promise<ConditionTemplateSnapshot> {
   try {
+    actor = conditionTemplateActor(actor);
     if (base.storeId !== actor.storeId || !object(base.settings) || !validTemplates(templates)) throw new ConditionTemplateError('invalid');
     await authorize(actor, true, signal);
     const settings = { ...structuredClone(base.settings), [CONDITION_TEMPLATES_KEY]: { version: 1, items: structuredClone(templates) } };
@@ -93,6 +112,6 @@ export async function saveConditionTemplates(actor: TemplateActor, base: Conditi
     if (error || signal?.aborted) throw new ConditionTemplateError('save');
     const saved = snapshot(actor.storeId!, data);
     if (canonical(saved.settings) !== canonical(settings)) throw new ConditionTemplateError('save');
-    return saved;
+    return { ...saved, storeName: base.storeName };
   } catch (error) { throw error instanceof ConditionTemplateError ? error : new ConditionTemplateError('save'); }
 }

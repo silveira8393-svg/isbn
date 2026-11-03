@@ -40,6 +40,7 @@ function TemplateEditor({ actor }: { actor: TemplateActor }) {
 
   return <section aria-label="Modelos de conservação" className="space-y-3 border-t border-slate-200 pt-4">
     <h3 className="text-sm font-bold text-slate-900">Modelos de conservação de livros usados</h3>
+    {list.status === 'ready' && <p className="text-xs text-slate-500">Loja de origem dos modelos: {list.data?.storeName}</p>}
     <p className="text-xs text-slate-500">Cadastre aqui os textos aprovados pela livraria. A seleção copia o texto para as observações do exemplar; alterações nos modelos não modificam cadastros anteriores.</p>
     <button type="button" disabled={busy} onClick={() => { setEditor(null); setDeleting(null); setNotice(null); list.reload(); }}
       className="rounded border px-3 py-2 text-xs text-blue-700 disabled:opacity-50">Recarregar modelos (descarta a edição)</button>

@@ -120,7 +120,7 @@ export function createRegistrationDraft(
     authors: Array.isArray(book.authors) ? book.authors.map((a) => a.trim()).filter(Boolean) : [],
     year,
     edition: book.edition ? book.edition.trim() : undefined,
-    language: book.language ? book.language.trim() : '',
+    language: normalizeLanguage(book.language),
     pageCount: typeof book.pageCount === 'number' && book.pageCount > 0 ? book.pageCount : undefined,
     format: book.format ? book.format.trim() : '',
 

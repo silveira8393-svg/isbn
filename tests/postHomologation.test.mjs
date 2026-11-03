@@ -217,6 +217,22 @@ test('optional metadata and unconfirmed units produce observations, while essent
   assert.deepEqual(utils.validateRegistrationDraft({ ...draft, title: 'Livro', parentCode: 'P', childCode: 'EXEMPLAR', price: '50', quantity: 1, condition: 'usado' }).errors, {});
 });
 
+test('Draft preparation expands known language codes, preserves unknown/manual values and does not confirm provenance', () => {
+  for (const condition of ['novo', 'usado']) {
+    for (const [language, expected] of [['pt', 'Português'], ['por', 'Português'], ['en', 'Inglês'], ['eng', 'Inglês'],
+      ['es', 'Espanhol'], ['spa', 'Espanhol'], ['fr-CA', 'Francês'], ['deu', 'Alemão'], ['jpn', 'Japonês'], ['xyz', 'xyz'], ['Idioma próprio', 'Idioma próprio']]) {
+      const source = { id: 'source', title: 'Livro', language }, before = structuredClone(source);
+      const draft = utils.createRegistrationDraft(source, condition);
+      assert.equal(draft.language, expected); assert.deepEqual(source, before);
+      draft.language = 'Idioma editado livremente';
+      assert.equal(utils.createRegistrationSnapshot(draft, '2026-11-03T12:00:00Z').fields.language, 'Idioma editado livremente');
+    }
+  }
+  const presumed = { id: 'brasilapi-fixture', title: 'Livro', language: 'pt' };
+  assert.equal(utils.createRegistrationDraft(presumed).language, 'Português');
+  assert.match(utils.validateRegistrationDraft(utils.createRegistrationDraft(presumed), presumed).warnings.language, /sem confirmação explícita/);
+});
+
 test('image references are validated without availability probes, and placeholder titles cannot be confirmed', t => {
   t.mock.method(globalThis, 'fetch', () => assert.fail('validation must not probe image URLs or call providers'));
   const valid = { ...utils.createRegistrationDraft(book), parentCode: 'P', price: '50', mainImageUrl: 'https://example.invalid/temporarily-offline.jpg' };
