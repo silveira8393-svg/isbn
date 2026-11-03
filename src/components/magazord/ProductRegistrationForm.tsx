@@ -10,7 +10,7 @@ import {
   BookInfo,
   User,
 } from '../../types';
-import { magazordMockService, type MagazordSimulationMode } from '../../services/magazordMockService';
+import { magazordMockService as sharedMagazordService, type MagazordSimulationMode } from '../../services/magazordMockService';
 import { buildFinalDescription, formatRegistrationPrice, parseRegistrationPrice, registrationModeForCondition, validateRegistrationDraft } from '../../utils/draft';
 import { cleanIsbn } from '../../utils/isbn';
 import { formatPhysicalMeasurement, normalizeLanguage, roundPhysicalMeasurement } from '../../utils/bibliographicNormalization';
@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 
 interface ProductRegistrationFormProps {
+  simulationService?: typeof sharedMagazordService;
   draft: RegistrationDraft;
   originalBook: BookInfo;
   captureActionMode?: () => MagazordSimulationMode;
@@ -50,6 +51,7 @@ interface ProductRegistrationFormProps {
 }
 
 export default function ProductRegistrationForm({
+  simulationService = sharedMagazordService,
   draft,
   originalBook,
   captureActionMode,
@@ -61,6 +63,7 @@ export default function ProductRegistrationForm({
   imageUser,
   onImageUploadBusyChange,
 }: ProductRegistrationFormProps) {
+  const magazordMockService = simulationService;
   const [reviewing, setReviewing] = useState(false);
   const [reviewRequested, setReviewRequested] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);

@@ -91,7 +91,7 @@ export async function loadStoreUsers(storeId: string, signal?: AbortSignal): Pro
       if (signal?.aborted) throw failure();
       const ids = enabledIds.slice(index, index + 100);
       const { data, error } = await supabase.functions.invoke('manage-store-users', {
-        method: 'POST', body: { action: 'get_invitation_status', userIds: ids }, signal,
+        method: 'POST', headers: { 'X-ISBN-Store-Id': storeId }, body: { action: 'get_invitation_status', userIds: ids }, signal,
       });
       if (error || signal?.aborted || data?.success !== true || !Array.isArray(data.users)
         || data.users.length !== ids.length) throw failure();
@@ -150,7 +150,7 @@ const uncertainInvite = () => new InviteStoreUserError(
 
 /** Uses only the signed-in user's JWT; the backend validates identity and derives the store. */
 export async function inviteStoreUser(input: InviteStoreUserInput, context: {
-  expectedUserId: string; isCurrent: () => boolean;
+  expectedUserId: string; storeId?: string; isCurrent: () => boolean;
 }): Promise<{ email: string }> {
   const payload = validateInviteStoreUserInput(input);
   try {
@@ -159,7 +159,7 @@ export async function inviteStoreUser(input: InviteStoreUserInput, context: {
       throw new InviteStoreUserError('Sua sessão mudou ou expirou. Entre novamente para enviar o convite.');
     }
     const { data, error, response } = await supabase.functions.invoke('manage-store-users', {
-      method: 'POST', headers: { Authorization: `Bearer ${session.access_token}` },
+      method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, ...(context.storeId ? { 'X-ISBN-Store-Id': context.storeId } : {}) },
       body: { action: 'invite_user', displayName: payload.displayName, email: payload.email, role: payload.role },
     });
     // FunctionsHttpError keeps the JSON body on its Response, even when data is null.
@@ -229,7 +229,7 @@ const uncertainUpdate = () => new UpdateStoreUserError(
 );
 
 export async function updateStoreUser(input: UpdateStoreUserInput, context: {
-  expectedUserId: string; isCurrent: () => boolean;
+  expectedUserId: string; storeId?: string; isCurrent: () => boolean;
 }): Promise<{ id: string; role: 'admin' | 'operator'; active: boolean }> {
   const payload = validateUpdateStoreUserInput(input);
   try {
@@ -238,7 +238,7 @@ export async function updateStoreUser(input: UpdateStoreUserInput, context: {
       throw new UpdateStoreUserError('Sua sessão mudou ou expirou. Entre novamente para salvar.');
     }
     const { data, error, response } = await supabase.functions.invoke('manage-store-users', {
-      method: 'POST', headers: { Authorization: `Bearer ${session.access_token}` },
+      method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, ...(context.storeId ? { 'X-ISBN-Store-Id': context.storeId } : {}) },
       body: { action: 'update_user', ...payload },
     });
     const httpResponse = response ?? (error?.context instanceof Response ? error.context : undefined);

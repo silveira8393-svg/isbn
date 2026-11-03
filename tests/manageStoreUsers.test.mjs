@@ -88,7 +88,7 @@ function setup(options = {}) {
             return { data: options.profileMissing ? null : { id, active: options.profileActive !== false }, error: null };
           }
           if (table === 'store_users') {
-            if (call.filters.some(([field]) => field === 'store_id')) {
+            if (call.filters.some(([field]) => field === 'store_id') && (call.filters.find(([field]) => field === 'user_id')?.[1] !== callerId || call.limit === undefined)) {
               const id = call.filters.find(([field]) => field === 'user_id')[1];
               const target = { store_id: options.targetStore ?? storeId, user_id: id,
                 role: options.targetRole ?? 'operator', active: options.targetActive !== false };
@@ -102,6 +102,7 @@ function setup(options = {}) {
             let rows = options.memberships ?? [{ store_id: storeId, user_id: callerId, role: options.callerRole ?? 'admin', active: options.membershipActive !== false }];
             rows = rows.filter(row => call.filters.every(([field, value]) => row[field] === value))
               .sort((a, b) => a.store_id.localeCompare(b.store_id));
+            if (rows.length > 1 && !call.filters.some(([field]) => field === 'store_id')) return { data: null, error: { code: 'PGRST116' } };
             const row = rows[0];
             const revoked = options.revokeAt && authorizationReads >= options.revokeAt;
             return { data: options.membershipMissing || revoked ? null : row ?? null, error: null };
@@ -148,8 +149,8 @@ for (const callerRole of ['admin', 'developer']) for (const role of ['admin', 'o
     assert.deepEqual(fake.calls[0], { action: 'getUser', token: 'caller-jwt' });
     const membershipRead = fake.calls.find(call => call.table === 'store_users');
     assert.deepEqual(membershipRead.filters, [['user_id', callerId], ['active', true]]);
-    assert.deepEqual(membershipRead.order, ['store_id', { ascending: true }]);
-    assert.equal(membershipRead.limit, 1);
+    assert.equal(membershipRead.order, undefined);
+    assert.equal(membershipRead.limit, 2);
     assert.equal(response.headers.get('Access-Control-Allow-Origin'), origin);
     assert.equal(response.headers.get('Cache-Control'), 'no-store');
     assert.doesNotMatch(JSON.stringify(json), /caller-jwt|service_role|email|user_metadata|store_id/);
@@ -167,13 +168,27 @@ for (const options of [
   });
 }
 
-test('Another admin membership cannot replace the first operator store selected by UserContext', async () => {
+test('Ambiguous administrative membership requires explicit store selection', async () => {
   const fake = setup({ memberships: [
     { store_id: otherStore, user_id: callerId, active: true, role: 'admin' },
     { store_id: storeId, user_id: callerId, active: true, role: 'operator' },
   ] });
-  assert.equal((await fake.request()).response.status, 403);
+  assert.equal((await fake.request()).response.status, 503);
   assert.equal(fake.invites.length, 0);
+});
+
+test('Explicit store header is checked against the caller membership, rejects operator/foreign stores and scopes all revalidations', async () => {
+  const memberships = [{ store_id: otherStore, user_id: callerId, active: true, role: 'admin' },
+    { store_id: storeId, user_id: callerId, active: true, role: 'operator' }];
+  for (const [selected, status] of [[otherStore, 201], [storeId, 403], ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 403], ['invalid', 403]]) {
+    const fake = setup({ memberships });
+    const { response } = await fake.request(payload, { headers: { 'X-ISBN-Store-Id': selected } });
+    assert.equal(response.status, status);
+    if (status === 201) {
+      assert.equal(fake.inserts[0].store_id, selected);
+      assert.ok(fake.calls.filter(call => call.table === 'store_users' && call.limit === 2).every(call => call.filters.some(([key, value]) => key === 'store_id' && value === selected)));
+    } else assert.equal(fake.inserts.length, 0);
+  }
 });
 
 for (const body of [

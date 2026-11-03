@@ -10,7 +10,7 @@ import { supabase } from '../lib/supabase';
 import Login from '../components/Login';
 import ResetPassword from '../components/ResetPassword';
 
-type AuthState = 'initializing' | 'unauthenticated' | 'authenticated' | 'recovery';
+type AuthState = 'initializing' | 'unauthenticated' | 'authenticated' | 'selecting_store' | 'recovery';
 
 function hasRecoveryIntent() {
   const url = new URL(window.location.href);
@@ -54,6 +54,28 @@ export const isDeveloper = (user?: User | null) => user?.role === 'developer';
 export const getOperationEnvironment = (user?: User | null): OperationEnvironment => user?.role === 'developer' ? 'development' : 'production';
 
 
+/** All identities come from active memberships and visible stores, never UUID order or user metadata. */
+export async function loadAuthorizedStores(userId: string): Promise<User[]> {
+  const { data: profile, error: profileError } = await supabase.from('profiles').select('id, display_name, active').eq('id', userId).maybeSingle();
+  if (profileError || !profile || profile.id !== userId || !profile.active) throw new Error('Seu perfil não está disponível ou ativo. Contate o administrador.');
+  const { data: memberships, error } = await supabase.from('store_users').select('store_id, role, active').eq('user_id', userId).eq('active', true);
+  if (error || !memberships?.length) throw new Error('Seu usuário não possui vínculo ativo com uma loja. Contate o administrador.');
+  if (new Set(memberships.map(item => item.store_id)).size !== memberships.length) throw new Error('Os vínculos de loja estão inconsistentes.');
+  const choices = await Promise.all(memberships.map(async member => {
+    if (!member.active || !['admin', 'operator', 'developer'].includes(member.role)) throw new Error('Seu vínculo de loja não é reconhecido.');
+    const { data: store, error: storeError } = await supabase.from('stores').select('id, name, slug, active').eq('id', member.store_id).maybeSingle();
+    if (storeError || !store || store.id !== member.store_id) throw new Error('Não foi possível identificar sua loja autorizada.');
+    if (!store.active) return null;
+    const displayName = profile.display_name?.trim() || 'Usuário';
+    return { id: profile.id, name: displayName, displayName, role: member.role, active: true,
+      storeId: store.id, storeName: store.name, storeSlug: store.slug,
+      environment: member.role === 'developer' ? 'development' : 'production' } as User;
+  }));
+  const active = choices.filter((choice): choice is User => choice !== null);
+  if (!active.length) throw new Error('Nenhuma loja autorizada está ativa. Contate o administrador.');
+  return active;
+}
+
 export interface UserContextType {
   currentUser: User;
   users: User[];
@@ -72,6 +94,9 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 export function UserProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [storeChoices, setStoreChoices] = useState<User[]>([]);
+  const [selectionRevision, setSelectionRevision] = useState(0);
+  const selectedStore = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -101,7 +126,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       const sameIdentity = next && latestSession.current?.user.id === next.user.id;
       latestSession.current = next;
       generation.current += 1;
-      if (!sameIdentity) setCurrentUser(null);
+      if (!sameIdentity) { setCurrentUser(null); setStoreChoices([]); selectedStore.current = null; }
       setLoading(previous => next ? (previous || !sameIdentity) : false);
       setSession(next ? { ...next } : null);
       if (!next) setAuthState('unauthenticated');
@@ -147,34 +172,18 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const loadIdentity = async () => {
       let message = 'Não foi possível consultar seus dados. Verifique sua conexão e entre novamente.';
       try {
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles').select('id, display_name, active').eq('id', session.user.id).maybeSingle();
+        const choices = await loadAuthorizedStores(session.user.id);
         if (!isCurrent()) return;
-        if (profileError) throw profileError;
-        if (!profile) { message = 'Seu usuário não possui um perfil. Entre em contato com o administrador.'; throw new Error(); }
-        if (profile.active !== true) { message = 'Seu usuário está inativo. Entre em contato com o administrador.'; throw new Error(); }
-        const { data: memberships, error: membershipError } = await supabase
-          .from('store_users').select('store_id, role, active')
-          .eq('user_id', session.user.id).eq('active', true).order('store_id');
-        if (!isCurrent()) return;
-        if (membershipError) throw membershipError;
-        if (!memberships?.length) { message = 'Seu usuário não possui vínculo ativo com uma loja. Contate o administrador.'; throw new Error(); }
-        // A list allows a future store selector to choose the active membership.
-        const membership = memberships[0];
-        if (!['admin', 'operator', 'developer'].includes(membership.role)) {
-          message = 'Seu perfil de acesso não é reconhecido. Contate o administrador.'; throw new Error();
+        setStoreChoices(choices);
+        const chosen = selectedStore.current
+          ? choices.find(choice => choice.storeId === selectedStore.current)
+          : choices.length === 1 ? choices[0] : undefined;
+        if (!chosen) {
+          setCurrentUser(null); selectedStore.current = null;
+          setLoading(false); setAuthState('selecting_store'); return;
         }
-        const { data: store, error: storeError } = await supabase
-          .from('stores').select('id, name, slug').eq('id', membership.store_id).maybeSingle();
-        if (storeError) throw storeError;
-        if (!store) { message = 'A loja vinculada não está disponível. Contate o administrador.'; throw new Error(); }
-        if (!isCurrent()) return;
-        const displayName = profile.display_name?.trim() || 'Usuário';
-        setCurrentUser({
-          id: profile.id, name: displayName, displayName, role: membership.role,
-          active: true, storeId: store.id, storeName: store.name, storeSlug: store.slug,
-          environment: membership.role === 'developer' ? 'development' : 'production',
-        });
+        selectedStore.current = chosen.storeId!;
+        setCurrentUser(chosen);
         setLoading(false);
         setAuthState('authenticated');
       } catch {
@@ -195,7 +204,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     };
     void loadIdentity();
     return () => { cancelled = true; };
-  }, [session, authState === 'recovery']);
+  }, [session, authState === 'recovery', selectionRevision]);
 
   const leaveRecovery = async (completed: boolean) => {
     intentionalLogout.current = true;
@@ -241,6 +250,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   if (authState === 'recovery') return <ResetPassword sessionValid={Boolean(session)} onComplete={() => leaveRecovery(true)} onCancel={() => leaveRecovery(false)} />;
   if (loading || authState === 'initializing') return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-600" role="status">Carregando Projeto ISBN...</div>;
+  if (!currentUser && authState === 'selecting_store') return <main className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+    <section aria-label="Selecionar loja operacional" className="w-full max-w-lg space-y-4 rounded-xl border bg-white p-6">
+      <h1 className="text-xl font-bold">Selecione a loja operacional</h1>
+      <p className="text-sm text-slate-600">Operações, modelos, configurações e auditoria usarão a loja escolhida. Para mudar de loja, saia e entre novamente.</p>
+      {storeChoices.map(choice => <button key={choice.storeId} type="button" className="block w-full rounded-lg border p-3 text-left hover:bg-blue-50"
+        onClick={() => { selectedStore.current = choice.storeId!; setLoading(true); setSelectionRevision(value => value + 1); }}>
+        <span className="font-semibold">{choice.storeName}</span><span className="block text-xs text-slate-500">{choice.role === 'developer' ? 'Desenvolvimento e laboratório disponíveis' : choice.role === 'admin' ? 'Administrador' : 'Operador'}</span>
+      </button>)}
+      <button type="button" onClick={() => void signOut()} className="text-sm text-blue-700">Sair</button>
+    </section>
+  </main>;
   if (!currentUser || authState !== 'authenticated') return <Login message={error} notice={notice} />;
   const value: UserContextType = {
     currentUser, users: [currentUser], signOut,
@@ -249,7 +269,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     isOperator: isOperator(currentUser), isAdmin: isAdmin(currentUser), isDeveloper: isDeveloper(currentUser),
     operationEnvironment: getOperationEnvironment(currentUser),
   };
-  return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
+  return <UserContext.Provider key={currentUser.id + ":" + currentUser.storeId} value={value}>{children}</UserContext.Provider>;
 }
 export function useUser(): UserContextType {
   const context = useContext(UserContext);

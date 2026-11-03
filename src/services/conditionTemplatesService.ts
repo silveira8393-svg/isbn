@@ -26,15 +26,6 @@ export class ConditionTemplateError extends Error {
 export const canManageConditionTemplates = (actor: TemplateActor) => actor.active && ['admin', 'developer'].includes(actor.role);
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 
-/** Explicit template source for a Preview using a technical account linked to several stores.
- * Never changes the operational identity or falls back to another store on failure.
- */
-export function conditionTemplateActor(actor: TemplateActor, sourceStoreId = import.meta.env?.VITE_CONDITION_TEMPLATES_STORE_ID): TemplateActor {
-  if (!sourceStoreId) return actor;
-  if (!uuid.test(sourceStoreId)) throw new ConditionTemplateError('configuration');
-  return { ...actor, storeId: sourceStoreId };
-}
-
 function validTemplates(value: unknown): value is ConditionTemplate[] {
   return Array.isArray(value) && value.every(item => object(item)
     && typeof item.id === 'string' && !!item.id.trim() && typeof item.name === 'string' && !!item.name.trim()
@@ -67,7 +58,6 @@ async function authorize(actor: TemplateActor, write: boolean, signal?: AbortSig
 
 export async function loadConditionTemplates(actor: TemplateActor, signal?: AbortSignal): Promise<ConditionTemplateSnapshot> {
   try {
-    actor = conditionTemplateActor(actor);
     await authorize(actor, false, signal);
     let storeQuery = supabase.from('stores').select('id,name').eq('id', actor.storeId!);
     if (signal) storeQuery = storeQuery.abortSignal(signal);
@@ -95,7 +85,6 @@ function canonical(value: unknown): string {
 export async function saveConditionTemplates(actor: TemplateActor, base: ConditionTemplateSnapshot,
   templates: ConditionTemplate[], signal?: AbortSignal): Promise<ConditionTemplateSnapshot> {
   try {
-    actor = conditionTemplateActor(actor);
     if (base.storeId !== actor.storeId || !object(base.settings) || !validTemplates(templates)) throw new ConditionTemplateError('invalid');
     await authorize(actor, true, signal);
     const settings = { ...structuredClone(base.settings), [CONDITION_TEMPLATES_KEY]: { version: 1, items: structuredClone(templates) } };

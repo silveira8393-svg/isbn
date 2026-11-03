@@ -333,10 +333,10 @@ test('Store/account changes hide loaded models immediately and discard late requ
   assert.equal(view.find(node => node.type === 'select').props.disabled, true);
 });
 
-test('Explicit source loads 17 active models through the authorized membership without changing operational identity', async () => {
+test('Selected operational store loads its own 17 active models without a Preview override', async () => {
   const models = originals.map((item, index) => ({ ...item, id: `model-${index}`, active: true }));
   const app = setup(settings(models), { sourceStoreId: storeId });
-  app.deps.user.currentUser.storeId = otherStore;
+  app.deps.user.currentUser.storeId = storeId;
   app.deps.user.currentUser.role = 'developer';
   const before = structuredClone(app.deps.user.currentUser), selected = [];
   const view = mount(app, app.api.Picker, { onSelect: (...args) => selected.push(args) });
@@ -364,8 +364,8 @@ test('Empty, missing, divergent, unreadable and unauthorized configurations are 
     [settings(), { missingStore: true }, /Loja ou configuração dos modelos divergente/],
     [settings(), { leakedStore: true }, /Loja ou configuração dos modelos divergente/],
     [settings(), { readError: true }, /Não foi possível carregar/],
-    [settings(), { sourceStoreId: otherStore }, /não tem autorização/],
-    [settings(), { sourceStoreId: 'invalid' }, /Loja ou configuração dos modelos divergente/],
+
+
   ]) {
     const app = setup(initial, options), view = mount(app, app.api.Picker, { onSelect() { assert.fail('No automatic selection'); } });
     await view.settle(); assert.match(view.text(), expected);

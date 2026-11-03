@@ -51,7 +51,7 @@ async function updateCommercialUser(client: SupabaseClient, callerId: string, st
   }
   if (target.role === 'developer') throw new RequestError(403, 'Usuários Desenvolvedores não podem ser editados por esta interface.', 'developer_not_editable');
   if (!['admin', 'operator'].includes(target.role) || typeof target.active !== 'boolean') throw unavailable();
-  if (await authorizedStore(client, callerId) !== storeId) throw forbidden();
+  if (await authorizedStore(client, callerId, storeId) !== storeId) throw forbidden();
   const role = payload.role ?? target.role;
   const active = payload.active ?? target.active;
   if (target.role === 'admin' && target.active && (role !== 'admin' || !active)) {
@@ -118,19 +118,21 @@ export function validateInvitePayload(value: unknown): InvitePayload {
   return { action: 'invite_user', displayName, email, role: payload.role };
 }
 
-async function authorizedStore(client: SupabaseClient, callerId: string): Promise<string> {
+async function authorizedStore(client: SupabaseClient, callerId: string, selectedStoreId?: string): Promise<string> {
   const { data: profile, error: profileError } = await client.from('profiles')
     .select('id,active').eq('id', callerId).maybeSingle();
   if (profileError) throw new RequestError(503, 'Não foi possível verificar sua permissão.', 'authorization_unavailable');
   if (!profile || profile.id !== callerId || profile.active !== true) throw forbidden();
 
-  // Match UserContext: first active membership by store_id, without selecting a different admin store.
-  const { data: membership, error: membershipError } = await client.from('store_users')
-    .select('store_id,user_id,role,active').eq('user_id', callerId).eq('active', true)
-    .order('store_id', { ascending: true }).limit(1).maybeSingle();
+  if (selectedStoreId && !uuidPattern.test(selectedStoreId)) throw forbidden();
+  let query = client.from('store_users').select('store_id,user_id,role,active').eq('user_id', callerId).eq('active', true);
+  // Without an explicit selection only an unambiguous single membership is accepted.
+  if (selectedStoreId) query = query.eq('store_id', selectedStoreId);
+  const { data: membership, error: membershipError } = await query.limit(2).maybeSingle();
   if (membershipError) throw new RequestError(503, 'Não foi possível verificar sua permissão.', 'authorization_unavailable');
   if (!membership || membership.user_id !== callerId || membership.active !== true
-    || !['admin', 'developer'].includes(membership.role) || !uuidPattern.test(membership.store_id)) throw forbidden();
+    || !['admin', 'developer'].includes(membership.role) || !uuidPattern.test(membership.store_id)
+    || (selectedStoreId && membership.store_id !== selectedStoreId)) throw forbidden();
 
   const { data: store, error: storeError } = await client.from('stores')
     .select('id,active').eq('id', membership.store_id).maybeSingle();
@@ -158,7 +160,7 @@ export function createManageStoreUsersHandler(options: HandlerOptions) {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Vary': 'Origin',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+      'Access-Control-Allow-Headers': 'authorization, x-isbn-store-id, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
     };
     if (origin && originAllowed) headers['Access-Control-Allow-Origin'] = origin;
     const json = (body: unknown, status: number) => new Response(JSON.stringify(body), { status, headers });
@@ -178,7 +180,7 @@ export function createManageStoreUsersHandler(options: HandlerOptions) {
       if (identityError || !identity.user || !uuidPattern.test(identity.user.id)) {
         throw new RequestError(401, 'Entre novamente para continuar.', 'unauthenticated');
       }
-      const storeId = await authorizedStore(client, identity.user.id);
+      const storeId = await authorizedStore(client, identity.user.id, request.headers.get('x-isbn-store-id') || undefined);
       if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get('Content-Type') ?? '')) {
         throw new RequestError(400, 'Envie o payload como JSON.', 'invalid_payload');
       }
@@ -209,7 +211,7 @@ export function createManageStoreUsersHandler(options: HandlerOptions) {
           }));
           users.push(...batch);
         }
-        if (await authorizedStore(client, identity.user.id) !== storeId) throw forbidden();
+        if (await authorizedStore(client, identity.user.id, storeId) !== storeId) throw forbidden();
         await assertStoreUsers(client, storeId, ids);
         return json({ success: true, users }, 200);
       }
@@ -223,7 +225,7 @@ export function createManageStoreUsersHandler(options: HandlerOptions) {
 
       await rejectExistingAccount(client, payload.email);
       // Revalidate immediately before side effects; this does not make Auth/PostgREST atomic.
-      if (await authorizedStore(client, identity.user.id) !== storeId) throw forbidden();
+      if (await authorizedStore(client, identity.user.id, storeId) !== storeId) throw forbidden();
       const invitationRequestId = crypto.randomUUID();
       const { data: invitation, error: invitationError } = await client.auth.admin.inviteUserByEmail(payload.email, {
         data: { display_name: payload.displayName, isbn_invitation_request_id: invitationRequestId },
@@ -243,7 +245,7 @@ export function createManageStoreUsersHandler(options: HandlerOptions) {
         .select('id,active').eq('id', user.id).maybeSingle();
       if (newProfileError || !newProfile || newProfile.id !== user.id || newProfile.active !== true) throw new Error('Profile unavailable');
       // No manual profiles INSERT: handle_new_auth_user is responsible for creation.
-      if (await authorizedStore(client, identity.user.id) !== storeId) throw new Error('Caller permission changed');
+      if (await authorizedStore(client, identity.user.id, storeId) !== storeId) throw new Error('Caller permission changed');
       const { error: membershipError } = await client.from('store_users').insert({
         store_id: storeId, user_id: user.id, role: payload.role, active: true,
       });

@@ -71,11 +71,13 @@ export async function authorizeAmazonDeveloper(request: Request, env: NodeJS.Pro
     if (!user || !uuid.test(user.id) || user.is_anonymous === true) throw denied();
     const profiles = await get('/rest/v1/profiles', { select: 'id,active', id: `eq.${user.id}`, limit: '1' });
     if (!Array.isArray(profiles) || profiles.length !== 1 || profiles[0].id !== user.id || profiles[0].active !== true) throw denied();
-    // Mesma loja inicial escolhida pelo UserContext existente.
+    // Development access is tied to an active developer membership, not UUID ordering.
+    const selectedStore = request.headers.get('x-isbn-store-id');
+    if (selectedStore && !uuid.test(selectedStore)) throw denied();
     const memberships = await get('/rest/v1/store_users', { select: 'user_id,store_id,role,active', user_id: `eq.${user.id}`,
-      active: 'eq.true', order: 'store_id.asc', limit: '1' });
+      active: 'eq.true', role: 'eq.developer', ...(selectedStore ? { store_id: `eq.${selectedStore}` } : {}), limit: '1' });
     const member = Array.isArray(memberships) && memberships.length === 1 ? memberships[0] : null;
-    if (!member || member.user_id !== user.id || member.active !== true || member.role !== 'developer' || !uuid.test(member.store_id)) throw denied();
+    if (!member || member.user_id !== user.id || member.active !== true || member.role !== 'developer' || !uuid.test(member.store_id) || (selectedStore && member.store_id !== selectedStore)) throw denied();
     const stores = await get('/rest/v1/stores', { select: 'id', id: `eq.${member.store_id}`, limit: '1' });
     if (!Array.isArray(stores) || stores.length !== 1 || stores[0].id !== member.store_id) throw denied();
   } catch (error) {

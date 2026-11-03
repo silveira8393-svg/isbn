@@ -26,7 +26,7 @@ export default function EditUserForm({ user, onCancel, onSuccess }: {
       ...(role !== user.role ? { role } : {}), ...(active !== user.membershipActive ? { active } : {}) };
     pending.current = true; setSaving(true); setError(null);
     try {
-      const result = await updateStoreUser(payload, { expectedUserId: currentUser.id, isCurrent });
+      const result = await updateStoreUser(payload, { expectedUserId: currentUser.id, storeId: currentUser.storeId, isCurrent });
       completed.current = true;
       if (isCurrent()) onSuccess(result);
     } catch (failure) {

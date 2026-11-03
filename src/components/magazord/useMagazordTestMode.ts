@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useUser } from '../../contexts/UserContext';
-import { magazordMockService, type MagazordSimulationMode } from '../../services/magazordMockService';
+import { magazordMockService as sharedMagazordService, type MagazordSimulationMode } from '../../services/magazordMockService';
 
 export const magazordModeOptions: { mode: MagazordSimulationMode; label: string }[] = [
   { mode: 'auto', label: 'Padrão (Auto)' },
@@ -22,7 +22,8 @@ export function getMagazordModeLabel(mode: MagazordSimulationMode): string {
 }
 
 export function useMagazordTestMode(onApplied?: () => void, syncKey?: unknown) {
-  const { isDeveloper } = useUser();
+  const { isDeveloper, currentUser } = useUser();
+  const magazordMockService = sharedMagazordService.forStore?.(currentUser?.storeId) ?? sharedMagazordService;
   const [showConfig, setShowConfig] = useState(false);
   const [currentMode, setCurrentMode] = useState(() => magazordMockService.getSimulationConfig().mode);
   const [selectedMode, setSelectedMode] = useState(() => normalizeMode(currentMode));

@@ -130,6 +130,19 @@ function dependencies(overrides = {}) {
 }
 async function search(view) { await view.find(n => n.type === 'SearchForm').props.onSearch(input.isbn); await flush(); }
 
+test('Permanent Phase 1 contract: actual NEW/USED registration keeps every homologated section and fiscal/SEO defaults', async () => {
+  for (const condition of ['novo', 'usado']) {
+    const deps = dependencies(), appView = mount(actualDraftApp, deps); await search(appView);
+    appView.find(n => n.type === 'MagazordStatusCard').props.onOpenRegistration(condition); await flush();
+    const props = appView.find(n => n.type === 'ProductRegistrationForm').props, view = mount(form, deps, props);
+    assert.equal(props.draft.fiscalBenefitCode, 'SC800001'); assert.equal(props.draft.quantity, 1); assert.equal(props.draft.price, '');
+    assert.equal(typeof props.draft.metaDescription, 'string');
+    for (const section of ['ProductIdentitySection', 'CategoryAndBrandSection', 'CommercialSection', 'BibliographicSection', 'PhysicalAttributesSection', 'ImagesSection', 'SynopsisSection', 'SeoSection', 'AdvancedFiscalSection']) {
+      assert.ok(view.find(n => n.type === section), `${condition} must retain ${section}`);
+    }
+  }
+});
+
 test('cBenef stays exact through fiscal editing, mandatory review, return, simulated submission and audit', async () => {
   for (const condition of ['novo', 'usado']) for (const code of ['SC800001', 'SC999999', '']) {
     const deps = dependencies(), payloads = [];

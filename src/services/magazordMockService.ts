@@ -59,9 +59,21 @@ type SandboxCatalogs = Partial<Record<MagazordSimulationMode, SimulatedCatalog>>
 class MagazordMockService {
   private config: MagazordSimulationConfig = DEFAULT_CONFIG;
 
-  constructor() {
+  private scoped = new Map<string, MagazordMockService>();
+  public forStore(storeId?: string): MagazordMockService {
+    if (!storeId || !/^[0-9a-f-]{36}$/i.test(storeId)) throw new Error('Loja do simulador não identificada.');
+    if (this.storeId === storeId) return this;
+    if (!this.scoped.has(storeId)) this.scoped.set(storeId, new MagazordMockService(storeId));
+    return this.scoped.get(storeId)!;
+  }
+  private storageKey(key: string) { return this.storeId ? key + ':store:' + this.storeId : key; }
+  public hasUnscopedLegacyCatalog() {
+    try { return !!this.storeId && !!(localStorage.getItem(SIMULATED_MAGAZORD_STORAGE_KEY_V3) || localStorage.getItem(SIMULATED_MAGAZORD_STORAGE_KEY_LEGACY)); }
+    catch { return false; }
+  }
+  constructor(private storeId?: string) {
     try {
-      const savedConfig = localStorage.getItem(SIMULATION_CONFIG_KEY);
+      const savedConfig = localStorage.getItem(this.storageKey(SIMULATION_CONFIG_KEY));
       if (savedConfig) {
         this.config = JSON.parse(savedConfig);
       }
@@ -77,7 +89,7 @@ class MagazordMockService {
   public setSimulationConfig(config: Partial<MagazordSimulationConfig>) {
     this.config = { ...this.config, ...config };
     try {
-      localStorage.setItem(SIMULATION_CONFIG_KEY, JSON.stringify(this.config));
+      localStorage.setItem(this.storageKey(SIMULATION_CONFIG_KEY), JSON.stringify(this.config));
     } catch (e) {
       console.warn('Não foi possível persistir a configuração de simulação Magazord', e);
     }
@@ -95,7 +107,7 @@ class MagazordMockService {
 
   private getSandboxCatalogs(): SandboxCatalogs {
     try {
-      const raw = localStorage.getItem(SANDBOX_MAGAZORD_STORAGE_KEY);
+      const raw = localStorage.getItem(this.storageKey(SANDBOX_MAGAZORD_STORAGE_KEY));
       const parsed = raw ? JSON.parse(raw) : null;
       return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
     } catch {
@@ -112,14 +124,14 @@ class MagazordMockService {
       return this.getSandboxCatalogs()[this.normalizeMode(actionMode)] || {};
     }
     try {
-      const rawV3 = localStorage.getItem(SIMULATED_MAGAZORD_STORAGE_KEY_V3);
+      const rawV3 = localStorage.getItem(this.storageKey(SIMULATED_MAGAZORD_STORAGE_KEY_V3));
       if (rawV3) {
         const parsed = JSON.parse(rawV3);
         if (parsed && typeof parsed === 'object') return parsed;
       }
 
       // Migração de V2 legado se existir
-      const rawV2 = localStorage.getItem(SIMULATED_MAGAZORD_STORAGE_KEY_LEGACY);
+      const rawV2 = localStorage.getItem(this.storageKey(SIMULATED_MAGAZORD_STORAGE_KEY_LEGACY));
       if (rawV2) {
         const parsedV2 = JSON.parse(rawV2);
         const migrated: Record<string, SimulatedRecord[]> = {};
@@ -156,11 +168,11 @@ class MagazordMockService {
       if (actionMode !== 'auto') {
         const catalogs = this.getSandboxCatalogs();
         catalogs[this.normalizeMode(actionMode)] = db;
-        localStorage.setItem(SANDBOX_MAGAZORD_STORAGE_KEY, JSON.stringify(catalogs));
+        localStorage.setItem(this.storageKey(SANDBOX_MAGAZORD_STORAGE_KEY), JSON.stringify(catalogs));
         return;
       }
-      localStorage.setItem(SIMULATED_MAGAZORD_STORAGE_KEY_V3, JSON.stringify(db));
-      localStorage.setItem(SIMULATED_MAGAZORD_STORAGE_KEY_LEGACY, JSON.stringify(db));
+      localStorage.setItem(this.storageKey(SIMULATED_MAGAZORD_STORAGE_KEY_V3), JSON.stringify(db));
+      localStorage.setItem(this.storageKey(SIMULATED_MAGAZORD_STORAGE_KEY_LEGACY), JSON.stringify(db));
     } catch (e) {
       console.warn('Erro ao salvar no banco simulado Magazord', e);
     }

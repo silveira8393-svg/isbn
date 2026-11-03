@@ -39,7 +39,7 @@ import {
 } from './services/distribuidoraCuritiba';
 import { cleanIsbn, isValidIsbnFormat } from './utils/isbn';
 import { createRegistrationDraft } from './utils/draft';
-import { magazordMockService, type MagazordSimulationMode } from './services/magazordMockService';
+import { magazordMockService as sharedMagazordService, type MagazordSimulationMode } from './services/magazordMockService';
 import {
   BookOpen,
   AlertCircle,
@@ -58,6 +58,7 @@ export default function App() {
   const manualEntry = bibliographicState === 'not_found' || bibliographicState === 'error';
   const [searchedTerm, setSearchedTerm] = useState<string>('');
   const [rawSearchedTerm, setRawSearchedTerm] = useState<string>('');
+  const magazordMockService = sharedMagazordService.forStore?.(currentUser.storeId) ?? sharedMagazordService;
   const { history, setHistory, clearHistory, storageWarning: historyStorageWarning } = useLocalHistory(currentUser);
   const [activeTab, setActiveTab] = useState<NavigationTab>(currentUser.role === 'admin' && canViewProduction ? 'dashboard' : 'consultar');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -638,6 +639,9 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col selection:bg-blue-100 selection:text-blue-800">
       {/* 1. Header azul profissional com navegação Consultar | Cadastro | Histórico */}
+      <div className="border-b bg-white px-4 py-2 text-xs text-slate-600">Loja operacional: <strong>{currentUser.storeName}</strong>
+        {magazordMockService.hasUnscopedLegacyCatalog?.() && <p>O catálogo simulado agora é separado por loja. Registros locais antigos sem identificação de loja estão preservados, sem atribuição automática.</p>}
+      </div>
       <Header
         activeTab={activeTab}
         onTabChange={(tab) => { if (imageUploadInFlight.current) return; setActiveTab(
@@ -776,6 +780,7 @@ export default function App() {
               <ProductRegistrationForm
                 draft={registrationDraft}
                 captureActionMode={captureActionMode}
+                simulationService={magazordMockService}
                 originalBook={foundBook}
                 imageUser={currentUser}
                 onImageUploadBusyChange={busy => { imageUploadInFlight.current = busy; }}
