@@ -33,7 +33,14 @@ export async function readLimitedJson(stream: ReadableStream<Uint8Array> | null,
 }
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export async function authorizeAmazonDeveloper(request: Request, env: NodeJS.ProcessEnv, fetcher: typeof fetch = fetch) {
+export const authorizeAmazonDeveloper = (request: Request, env: NodeJS.ProcessEnv, fetcher: typeof fetch = fetch) =>
+  authorizeAmazon(request, env, fetcher, false);
+
+// A selected-store search is available to commercial roles; diagnostic access stays developer-only.
+export const authorizeAmazonSearch = (request: Request, env: NodeJS.ProcessEnv, fetcher: typeof fetch = fetch) =>
+  authorizeAmazon(request, env, fetcher, !!request.headers.get('x-isbn-store-id'));
+
+async function authorizeAmazon(request: Request, env: NodeJS.ProcessEnv, fetcher: typeof fetch, operational: boolean) {
   const authorization = request.headers.get('authorization');
   if (!authorization || !/^Bearer [A-Za-z0-9._~-]{16,8192}$/.test(authorization)) {
     throw new AmazonAccessError(401, 'unauthenticated', 'Entre novamente para acessar o Laboratório Amazon.');
@@ -64,22 +71,23 @@ export async function authorizeAmazonDeveloper(request: Request, env: NodeJS.Pro
     }
     return readLimitedJson(response.body, 64 * 1024, signal);
   }
-  const denied = () => new AmazonAccessError(403, 'developer_required', 'Acesso exclusivo ao perfil Desenvolvimento ativo.');
+  const denied = () => new AmazonAccessError(403, operational ? 'store_access_required' : 'developer_required',
+    operational ? 'Vínculo ativo com a loja selecionada necessário.' : 'Acesso exclusivo ao perfil Desenvolvimento ativo.');
   try {
     // O Auth verifica o token; claims enviados pelo cliente e user_metadata não concedem acesso.
     const user = await get('/auth/v1/user');
     if (!user || !uuid.test(user.id) || user.is_anonymous === true) throw denied();
     const profiles = await get('/rest/v1/profiles', { select: 'id,active', id: `eq.${user.id}`, limit: '1' });
     if (!Array.isArray(profiles) || profiles.length !== 1 || profiles[0].id !== user.id || profiles[0].active !== true) throw denied();
-    // Development access is tied to an active developer membership, not UUID ordering.
+    // Validate the selected membership under the caller token, never client role claims.
     const selectedStore = request.headers.get('x-isbn-store-id');
     if (selectedStore && !uuid.test(selectedStore)) throw denied();
     const memberships = await get('/rest/v1/store_users', { select: 'user_id,store_id,role,active', user_id: `eq.${user.id}`,
-      active: 'eq.true', role: 'eq.developer', ...(selectedStore ? { store_id: `eq.${selectedStore}` } : {}), limit: '1' });
+      active: 'eq.true', role: operational ? 'in.(developer,admin,operator)' : 'eq.developer', ...(selectedStore ? { store_id: `eq.${selectedStore}` } : {}), limit: '1' });
     const member = Array.isArray(memberships) && memberships.length === 1 ? memberships[0] : null;
-    if (!member || member.user_id !== user.id || member.active !== true || member.role !== 'developer' || !uuid.test(member.store_id) || (selectedStore && member.store_id !== selectedStore)) throw denied();
-    const stores = await get('/rest/v1/stores', { select: 'id', id: `eq.${member.store_id}`, limit: '1' });
-    if (!Array.isArray(stores) || stores.length !== 1 || stores[0].id !== member.store_id) throw denied();
+    if (!member || member.user_id !== user.id || member.active !== true || !(operational ? ['developer', 'admin', 'operator'] : ['developer']).includes(member.role) || !uuid.test(member.store_id) || (selectedStore && member.store_id !== selectedStore)) throw denied();
+    const stores = await get('/rest/v1/stores', { select: 'id,active', id: `eq.${member.store_id}`, active: 'eq.true', limit: '1' });
+    if (!Array.isArray(stores) || stores.length !== 1 || stores[0].id !== member.store_id || stores[0].active !== true) throw denied();
   } catch (error) {
     if (error instanceof AmazonAccessError) throw error;
     throw new AmazonAccessError(503, signal.aborted ? 'auth_timeout' : 'auth_unavailable', 'Não foi possível validar o acesso ao laboratório.');

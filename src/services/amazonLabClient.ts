@@ -59,7 +59,7 @@ export interface LabHealth { http_habilitado: boolean; fixtures: string[]; persi
 
 export const isAmazonLabAvailable = (role: string, active: boolean) => role === 'developer' && active;
 
-async function request<T>(path: string, signal: AbortSignal, body?: object, expectedUserId?: string): Promise<T> {
+async function request<T>(path: string, signal: AbortSignal, body?: object, expectedUserId?: string, storeId?: string): Promise<T> {
   const local = import.meta.env.DEV;
   const headers: Record<string, string> = body ? { 'Content-Type': 'application/json' } : {};
   if (local) headers['X-ISBN-Lab'] = 'local-development';
@@ -69,6 +69,7 @@ async function request<T>(path: string, signal: AbortSignal, body?: object, expe
     if (error || !data.session?.access_token || (expectedUserId && data.session.user.id !== expectedUserId)) throw new Error('Entre novamente para acessar o Laboratório Amazon.');
     headers.Authorization = `Bearer ${data.session.access_token}`;
   }
+  if (storeId) headers['X-ISBN-Store-Id'] = storeId;
   const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(40000)]);
   let response: Response;
   try {
@@ -93,5 +94,5 @@ async function request<T>(path: string, signal: AbortSignal, body?: object, expe
 }
 
 export const getAmazonLabHealth = (signal: AbortSignal) => request<LabHealth>('health', signal);
-export const searchAmazonLab = (isbn: string, modo: LabMode, signal: AbortSignal, expectedUserId?: string) =>
-  request<LabResult>('search', signal, { isbn, modo }, expectedUserId);
+export const searchAmazonLab = (isbn: string, modo: LabMode, signal: AbortSignal, expectedUserId?: string, storeId?: string) =>
+  request<LabResult>('search', signal, { isbn, modo }, expectedUserId, storeId);

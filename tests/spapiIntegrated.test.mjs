@@ -77,12 +77,12 @@ const clientBuild = await build({ stdin: { resolveDir: process.cwd(), loader: 't
     b.onLoad({ filter: /.*/, namespace: 'mock' }, () => ({ contents: 'export const supabase={auth:{getSession:async()=>globalThis.__spapiSession}}' }));
   } }] });
 const client = await import('data:text/javascript;base64,' + Buffer.from(clientBuild.outputFiles[0].text).toString('base64'));
-const user = { id: uid, storeId: sid, role: 'developer', active: true };
-test('automatic client uses same-origin session only for authorized Lab developer, without extra actions', async t => {
+const user = { id: uid, storeId: '6058abd1-96e5-465b-a1df-292e5cf76de3', role: 'developer', active: true };
+test('automatic client uses same-origin session only for developer in the operational store, without extra actions', async t => {
   const calls = []; globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
   t.after(() => { delete globalThis.__spapiSession; });
   t.mock.method(globalThis, 'fetch', async (url, init) => { calls.push({ url, init }); return Response.json({ isbn, items: [{ isbn, asin: 'SYNTHETIC1', marketplaceId: api.MARKETPLACE, title: 'Title', publisher: 'Publisher', images: ['forbidden'], synopsis: 'forbidden' }] }); });
-  for (const other of [{ ...user, role: 'operator' }, { ...user, storeId: uid }, { ...user, active: false }]) assert.equal((await client.searchAmazonOfficial(isbn, other)).status, 'skipped');
+  for (const other of [{ ...user, role: 'operator' }, { ...user, storeId: undefined }, { ...user, active: false }]) assert.equal((await client.searchAmazonOfficial(isbn, other)).status, 'skipped');
   assert.equal(calls.length, 0);
   const result = await client.searchAmazonOfficial(isbn, user); assert.equal(result.status, 'success'); assert.equal(result.book.publisher, 'Publisher');
   assert.equal(result.book.synopsis, undefined); assert.equal(result.book.coverUrl, undefined);
@@ -537,7 +537,7 @@ test('automatic fallback reuses one authenticated laboratory request, imports on
 test('fallback skips restricted actors, invalid ISBNs, existing galleries and changed sessions', async t => {
   t.mock.method(globalThis, 'fetch', () => assert.fail('must not request Amazon'));
   const base = { id: 'base', title: 'Priority', coverUrl: cdn('MAIN') };
-  for (const actor of [{ ...user, role: 'operator' }, { ...user, storeId: uid }, { ...user, active: false }])
+  for (const actor of [{ ...user, role: 'unknown' }, { ...user, storeId: undefined }, { ...user, active: false }])
     assert.equal(await client.complementAmazonImages(base, isbn, actor), base);
   for (const query of ['invalid', '9788535914848', '9791090636071']) assert.equal(await client.complementAmazonImages(base, query, user), base);
   const gallery = { ...base, additionalImages: [cdn('BACK')] };
@@ -592,7 +592,7 @@ test('normal ISBN lookup automatically consolidates fallback gallery once and fo
   assert.equal(draft.mainImageUrl, cdn('MAIN')); assert.deepEqual(draft.additionalImageUrls, [cdn('BACK'), cdn('INSIDE')]);
 });
 
-test('late laboratory images are discarded if the actor changes and production mode never invokes the fallback', async t => {
+test('late laboratory images are discarded if the actor changes', async t => {
   t.mock.method(globalThis, 'fetch', async () => Response.json({ isbn, items: [] }));
   let release, started;
   const ready = new Promise(resolve => { started = resolve; });
@@ -600,8 +600,6 @@ test('late laboratory images are discarded if the actor changes and production m
   const pending = view.search(); await ready;
   view.deps.user.currentUser = { ...user, storeId: uid }; view.render(); release(labImages()); await pending; view.render();
   assert.equal(view.find('BookDetailsCard').props.book.coverUrl, undefined);
-  const production = mountApp({ user: { currentUser: user, operationEnvironment: 'production' }, lab: () => assert.fail('no fallback in production') });
-  await production.search(); production.render(); assert.equal(production.find('BookDetailsCard').props.book.coverUrl, undefined);
 });
 
 test('switching environments while laboratory images are pending discards the development result', async t => {
@@ -791,12 +789,14 @@ test('9781419762109: SP-API physical axes stay named as returned, conversions lo
   assert.doesNotMatch(imageText(review), /299999|179999|499999/);
 });
 
-test('9781419762109: one SP-API cover plus five available Lab photographs reach search, gallery, review and return without loss or extra queries', async t => {
+for (const role of ['developer', 'admin', 'operator']) test(`Sebo Livraria Sul ${role}: one cover plus five Lab photographs reach search, gallery, review and return`, async t => {
   const query = '9781419762109', cover = cdn('BATMANCOVER'), additions = Array.from({ length: 5 }, (_, i) => cdn(`BATMANINSIDE${i}`));
   let official = 0, laboratory = 0;
   t.mock.method(globalThis, 'fetch', async () => { official++; return Response.json({ isbn: query, items: [{ isbn: query, asin: '1419762109', marketplaceId: api.MARKETPLACE,
     title: 'The Art of the Batman', images: [{ variant: 'MAIN', link: cover, width: 1400, height: 1900 }] }] }); });
-  const view = mountApp({ brasil: { book: null, diagnostic: { status: 404 } }, lab: async () => {
+  const view = mountApp({ user: { currentUser: { ...user, role }, operationEnvironment: role === 'developer' ? 'development' : 'production' },
+    brasil: { book: { id: 'brasil', title: 'Existing title', isbn13: query, coverUrl: cover }, diagnostic: { status: 200 } }, lab: async (...args) => {
+    assert.equal(args[3], user.id); assert.equal(args[4], user.storeId);
     laboratory++; return { ...labImages([cover, ...additions, additions[0].replace('.jpg', '._SX75_.jpg')]),
       isbn_pesquisado: query, isbn_encontrado: { isbn13: { valor: query, valido: true } } };
   } });
@@ -813,5 +813,5 @@ test('9781419762109: one SP-API cover plus five available Lab photographs reach 
   assert.deepEqual(form.all(n => typeof n.type === 'function' && n.type.name === 'RegistrationImage').map(n => n.props.url), [cover, ...additions]);
   form.find(n => n.props.id === 'btn-return-to-registration').props.onClick(); form.render();
   assert.deepEqual(form.find(n => typeof n.type === 'function' && n.type.name === 'ImagesSection').props.draft.additionalImageUrls, additions);
-  assert.equal(official, 1); assert.equal(laboratory, 1, 'no probes, retry or new lookup on entering/reviewing the form');
+  assert.equal(official, role === 'developer' ? 1 : 0); assert.equal(laboratory, 1, 'no probes, retry or new lookup on entering/reviewing the form');
 });

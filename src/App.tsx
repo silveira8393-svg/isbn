@@ -202,7 +202,7 @@ export default function App() {
         && currentUserRef.current.role === searchActor.role && currentUserRef.current.active && operationEnvironmentRef.current === operationEnvironment;
       const amazonBook = sameActor() ? amazonResult.book : null;
       const bibliographicBook = complementWithAmazon(primaryBook, amazonBook);
-      const imageBook = sameActor() && operationEnvironment === 'development'
+      const imageBook = sameActor()
         ? await complementAmazonImages(bibliographicBook, cleaned, searchActor) : bibliographicBook;
       const enrichedBook = sameActor() ? imageBook : primaryBook;
       const failedStatus = (status: number | string) => status !== 404 && !(typeof status === 'number' && status >= 200 && status < 300);

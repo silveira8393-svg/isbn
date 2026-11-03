@@ -6,9 +6,12 @@ import { canonicalBookIsbn } from '../utils/bibliographicEvaluation';
 import { searchAmazonLab } from './amazonLabClient';
 import { roundPhysicalMeasurement } from '../utils/bibliographicNormalization';
 
-const LAB_STORE = '492af2ad-905c-42f8-90f4-aa6c1dc142f3';
 export const canUseAmazonOfficial = (user: Pick<User, 'active' | 'role' | 'storeId'>) =>
-  user.active === true && user.role === 'developer' && user.storeId === LAB_STORE;
+  user.active === true && user.role === 'developer' && !!user.storeId;
+// Image research belongs to the selected operational store, independently of SP-API credentials.
+export const canUseAmazonImageSource = (user: Pick<User, 'active' | 'role' | 'storeId'>) =>
+  user.active === true && !!user.storeId && ['developer', 'admin', 'operator'].includes(user.role);
+
 type AmazonPhysical = NonNullable<BookInfo['amazonPhysical']>;
 function amazonLanguage(value: unknown): string | undefined {
   if (typeof value !== 'string' || !value.trim()) return undefined;
@@ -96,10 +99,10 @@ export async function complementAmazonImages(book: BookInfo | null, isbn: string
     ...(book?.amazonImages || []).filter(image => image.variant === 'MAIN').map(image => image.link)]).map(imageIdentity));
   const hasGallery = imageReferences(book?.additionalImages || []).some(url => !coverIdentities.has(imageIdentity(url)));
   const canonical = canonicalBookIsbn(isbn);
-  if (!canUseAmazonOfficial(user) || !canonical?.startsWith('978') || hasGallery) return book;
+  if (!canUseAmazonImageSource(user) || !canonical?.startsWith('978') || hasGallery) return book;
   try {
     const timeout = AbortSignal.timeout(10000);
-    const result = await searchAmazonLab(cleanIsbn(isbn), 'http', signal ? AbortSignal.any([signal, timeout]) : timeout, user.id);
+    const result = await searchAmazonLab(cleanIsbn(isbn), 'http', signal ? AbortSignal.any([signal, timeout]) : timeout, user.id, user.storeId);
     const identifiers = Object.values(result.isbn_encontrado || {}).filter(id => id?.valido === true);
     if (result.status !== 'concluida' || result.modo !== 'http' || result.correspondencia !== 'corresponde'
       || canonicalBookIsbn(result.isbn_pesquisado) !== canonical
