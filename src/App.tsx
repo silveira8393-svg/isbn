@@ -4,6 +4,7 @@
  */
 
 
+import { updateDraftWithMetaDescription } from './utils/metaDescription';
 import { useState, useEffect, useRef } from 'react';
 import Header, { NavigationTab } from './components/Header';
 import SearchForm from './components/SearchForm';
@@ -779,7 +780,7 @@ export default function App() {
                 imageUser={currentUser}
                 onImageUploadBusyChange={busy => { imageUploadInFlight.current = busy; }}
                 onUpdateDraft={(updates) =>
-                  setRegistrationDraft((prev) => (prev ? { ...prev, ...updates } : null))
+                  setRegistrationDraft((prev) => (prev ? updateDraftWithMetaDescription(prev, updates) : null))
                 }
                 onBackToSearch={() => setActiveTab('consultar')}
                 onSuccessRegistration={handleSuccessRegistration}

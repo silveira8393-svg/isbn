@@ -94,6 +94,9 @@ export interface RegistrationDraft {
   depth?: number; // em cm (espessura)
 
   // Conteúdo
+  metaDescription?: string;
+  metaDescriptionEdited?: boolean;
+  usedConditionTemplateId?: string;
   synopsis: string;
   usedBookConditionNotes?: string; // Observações físicas do exemplar quando Usado
   description?: string; // Descrição final composta (para envio à Magazord)

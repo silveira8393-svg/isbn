@@ -79,7 +79,7 @@ async function component(entry) {
   // Preserve each component name so assertions can find the public event props.
   const mocks = componentMocks.filter(([pattern]) => !entry.includes('ProductRegistrationForm') || !pattern.test('/utils/draft'));
   const paths = ['Header', 'SearchForm', 'BookDetailsCard', 'SearchHistoryGroup', 'CameraScannerModal', 'MagazordStatusCard', 'ProductRegistrationForm', 'OwnerDashboard', 'SettingsView',
-    'ProductIdentitySection', 'CategoryAndBrandSection', 'CommercialSection', 'BibliographicSection', 'PhysicalAttributesSection', 'ImagesSection', 'SynopsisSection', 'AdvancedFiscalSection', 'RegistrationImage'];
+    'ProductIdentitySection', 'CategoryAndBrandSection', 'CommercialSection', 'BibliographicSection', 'PhysicalAttributesSection', 'ImagesSection', 'SynopsisSection', 'SeoSection', 'AdvancedFiscalSection', 'RegistrationImage'];
   for (const name of paths) mocks.push([new RegExp(`(?:^|/)${name}$`), `module.exports=${JSON.stringify(name)}`]);
   return compile(entry, mocks);
 }
@@ -254,6 +254,7 @@ test('mandatory review and return preserve all new/used fields and chosen images
       ean: input.isbn, isbn13: input.isbn, isbn10: '8535914846', category: 'Livros', authors: ['Autor'], publisher: 'Editora',
       language: 'Inglês', format: 'Capa dura', year: '2022', edition: '1ª', pageCount: 224, weight: 10, weightUnit: 'g', width: 20, height: 30, depth: 2,
       price: '1.234,56', quantity: 1, location: 'Sebo Livraria Sul', usedBookConditionNotes: 'Assinatura na primeira página', synopsis: 'Sinopse do livro',
+      usedConditionTemplateId: condition === 'usado' ? 'selected-model' : undefined, metaDescription: 'Meta Description editada manualmente.', metaDescriptionEdited: true,
       mainImageUrl: 'https://example.invalid/manual.jpg', additionalImageUrls: ['https://example.invalid/inside.jpg'], imageSelectionManual: true };
     const before = structuredClone(draft), props = { draft, originalBook: {}, onUpdateDraft() {}, onSuccessRegistration: (_, sent) => completions.push(sent) };
     const view = mount(form, deps, props);
@@ -261,6 +262,7 @@ test('mandatory review and return preserve all new/used fields and chosen images
     view.find(n => n.props?.id === 'btn-submit-magazord-registration').props.onClick(); await flush();
     const review = view.find(n => n.props?.['aria-label'] === 'Revisão do cadastro');
     assert.ok(review); assert.equal(calls.length, 0); assert.equal(deps.records.length, 0);
+    assert.match(JSON.stringify(review), /Meta Description editada manualmente/);
     assert.match(JSON.stringify(review), /text-red-800/); assert.match(JSON.stringify(review), /10 g/);
     assert.match(JSON.stringify(review).replace(/\s/g, ' '), /R\$ 1\.234,56/);
     assert.equal(view.find(n => n.type === 'RegistrationImage' && n.props.label === 'Capa principal').props.url, draft.mainImageUrl);
@@ -400,11 +402,14 @@ test('Completed registrations persist the final versioned snapshot; searches, er
   view.find(n => n.type === 'Header').props.onTabChange('cadastro'); await flush();
   const props = view.find(n => n.type === 'ProductRegistrationForm').props;
   const finalDraft = { ...props.draft, condition: 'usado', title: 'Título final editado', authors: ['Autor final'], quantity: 1,
-    parentCode: 'UP', childCode: 'UC', price: '18,00', usedBookConditionNotes: 'Marcas na capa', synopsis: 'Sinopse final', description: 'Descrição final' };
+    parentCode: 'UP', childCode: 'UC', price: '18,00', usedBookConditionNotes: 'Marcas na capa', synopsis: 'Sinopse final', description: 'Descrição final',
+    metaDescription: 'SEO final do operador.', usedConditionTemplateId: 'selected-model' };
   props.onSuccessRegistration({ success: true, registeredAt: Date.now(), parentCode: 'UP', childCode: 'UC' }, finalDraft); await flush();
   const snapshot = deps.records.at(-1).metadata.registrationSnapshot;
   assert.equal(snapshot.version, 1); assert.equal(snapshot.fields.title, 'Título final editado');
   assert.equal(snapshot.fields.usedBookConditionNotes, 'Marcas na capa'); assert.equal(snapshot.fields.price, '18,00');
+  assert.equal(snapshot.fields.metaDescription, 'SEO final do operador.');
+  assert.equal(snapshot.fields.usedConditionTemplateId, 'selected-model');
   finalDraft.authors.push('later'); assert.deepEqual(snapshot.fields.authors, ['Autor final']);
   assert.ok(deps.records.slice(0, 2).every(row => !row.metadata.registrationSnapshot));
 });

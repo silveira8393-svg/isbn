@@ -1,0 +1,70 @@
+[
+  {
+    "name": "Livro — Excelente estado",
+    "text": "Livro em excelente estado, livre de grifos e de carimbos, capa bem conservada."
+  },
+  {
+    "name": "Livro — Ótimo estado com dedicatória",
+    "text": "Livro em ótimo estado, livre de grifos e de carimbos, capa bem conservada, Dedicatória na primeira pagina."
+  },
+  {
+    "name": "Livro — Bom estado com assinatura",
+    "text": "Livro em bom estado, Livre de grifos e de carimbos, capa boa, leve sujidade nas bordas de corte, Contém a assinatura do antigo dono(a)"
+  },
+  {
+    "name": "Mangá — Ótimo estado",
+    "text": "Manga em ótimo estado, livre de grifos e de carimbos, capa bem conservada."
+  },
+  {
+    "name": "Mangá — Bom estado",
+    "text": "Manga em bom estado, livre de grifos e de carimbos, capa conservada."
+  },
+  {
+    "name": "HQ — Excelente estado",
+    "text": "HQ em excelente estado, Capa bem conservada, livre de grifos e de carimbos."
+  },
+  {
+    "name": "Livro — Umidade e sujidade",
+    "text": "Livro em bom estado de conservação, isento de grifos e carimbos. Apresenta pontos de umidade na parte interna da capa e no miolo. A capa encontra-se em boas condições, embora haja leve sujidade nas bordas de corte, resultante de exposição à umidade."
+  },
+  {
+    "name": "Livro — Amarelamento e anotações",
+    "text": "O livro está em bom estado, sem grifos ou carimbos. A capa está boa, com leve sujeira nas bordas. As páginas estão amareladas pelo tempo e algumas têm anotações. O livro também tem a assinatura do antigo dono."
+  },
+  {
+    "name": "Livro — Desgaste e manchas",
+    "text": "O livro encontra-se em bom estado de conservação, sem grifos ou carimbos. A capa apresenta sinais de uso, com desgaste visível, leve sujeira nas bordas e algumas manchas. As páginas estão amareladas devido ao tempo."
+  },
+  {
+    "name": "Capa e conteúdo — Excelente estado",
+    "text": "A capa está em excelente estado. O conteúdo está em excelente estado."
+  },
+  {
+    "name": "Capa ótima com marcas de uso",
+    "text": "A capa está em ótimo estado, porém contém marcas de uso. O conteúdo está em excelente estado."
+  },
+  {
+    "name": "Capa ótima com sujidade e amarelamento",
+    "text": "A capa está em ótimo estado, mas contém marcas de uso e leve sujidade nas bordas de corte. O conteúdo está em ótimo estado, mas contém marcas da ação do tempo (como amarelações)."
+  },
+  {
+    "name": "Capa e conteúdo — Bom estado com marcas do tempo",
+    "text": "A capa está em bom estado, mas contém diversas marcas de uso e da ação do tempo, além da sujidade nas bordas de corte. O conteúdo está em bom estado, mas contém diversas marcas de uso e marcas da ação do tempo."
+  },
+  {
+    "name": "Capa boa e conteúdo com amassados leves",
+    "text": "A capa está em bom estado, mas contém leve sujidade nas bordas de corte. O conteúdo está em ótimo estado, apenas com leves amassados nas pontas das folhas."
+  },
+  {
+    "name": "Capa boa com amarelamento",
+    "text": "A capa está em bom estado, mas contém leve sujidade nas bordas de corte e amarelações. O conteúdo está em ótimo estado."
+  },
+  {
+    "name": "Capa boa e conteúdo com poucas amarelações",
+    "text": "A capa está em boas condições, com apenas leve sujidades, as bordas de corte estão com uma leve sujidade também. O conteúdo está em ótimo estado, apenas com pouquíssimas amarelações."
+  },
+  {
+    "name": "Capa ótima com marcas de uso",
+    "text": "A capa está em ótimo estado, mas contém marcas de uso e leve sujidade nas bordas de corte. O conteúdo está em ótimo estado."
+  }
+]

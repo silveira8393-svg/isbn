@@ -4,6 +4,7 @@
  */
 
 import { BookInfo, BookCondition, RegistrationDraft, RegistrationMode } from '../types';
+import { generateMetaDescription } from './metaDescription';
 import { sanitizeSynopsis } from './sanitizer';
 import { canonicalBookIsbn, cleanIsbn } from './isbn';
 import { imageReferences, isImageReference } from './imageUrls';
@@ -101,7 +102,7 @@ export function createRegistrationDraft(
   const depth =
     typeof book.depth === 'number' && Number.isFinite(book.depth) ? roundPhysicalMeasurement(book.depth) : undefined;
 
-  return {
+  const draft: RegistrationDraft = {
     condition: initialCondition,
     registrationMode: registrationModeForCondition(initialCondition, registrationMode),
     parentCode: '', // Sempre manual (etiqueta física da loja, ex: LV26579-P)
@@ -144,6 +145,9 @@ export function createRegistrationDraft(
     fiscalOrigin: '0 - Nacional',
     unit: 'UN',
   };
+  draft.metaDescription = generateMetaDescription(draft);
+  draft.metaDescriptionEdited = false;
+  return draft;
 }
 
 /** Decimal reais, with Brazilian grouping; never accept partial parses or exponent notation. */

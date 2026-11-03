@@ -23,6 +23,7 @@ import BibliographicSection from './BibliographicSection';
 import PhysicalAttributesSection from './PhysicalAttributesSection';
 import ImagesSection from './ImagesSection';
 import SynopsisSection from './SynopsisSection';
+import SeoSection from './SeoSection';
 import AdvancedFiscalSection from './AdvancedFiscalSection';
 import {
   ArrowLeft,
@@ -273,6 +274,7 @@ export default function ProductRegistrationForm({
           <p className="font-bold">Observações informativas — não impedem a confirmação</p>
           <ul className="mt-2 list-inside list-disc space-y-1">{Object.entries(validation.warnings).map(([field, message]) => <li key={field}>{message}</li>)}</ul>
         </div>}
+        <div><h3 className="text-sm font-bold">Meta Description</h3><p className="whitespace-pre-wrap text-sm text-slate-700">{draft.metaDescription || 'Não informada'}</p></div>
         {draft.synopsis && <div><h3 className="text-sm font-bold">Sinopse</h3><p className="whitespace-pre-wrap text-sm text-slate-700">{draft.synopsis}</p></div>}
         {buildFinalDescription(draft) && <div><h3 className="text-sm font-bold">Descrição final</h3><p className="whitespace-pre-wrap text-sm text-slate-700">{buildFinalDescription(draft)}</p></div>}
         <div><h3 className="mb-3 text-sm font-bold">Imagens selecionadas</h3>{reviewedImages.length ? <div className="grid gap-4 sm:grid-cols-3">{reviewedImages.map((url, index) => <div key={url}><RegistrationImage url={url} label={index ? `Imagem adicional ${index}` : 'Capa principal'} /></div>)}</div> : <p className="text-sm text-slate-500">Sem imagens. O cadastro pode continuar.</p>}</div>
@@ -439,6 +441,8 @@ export default function ProductRegistrationForm({
         draft={draft}
         onChange={onUpdateDraft}
       />
+
+      <SeoSection draft={draft} onChange={onUpdateDraft} />
 
       {/* Seção 8: Configurações Fiscais e Avançadas (Colapsável) */}
       <AdvancedFiscalSection
