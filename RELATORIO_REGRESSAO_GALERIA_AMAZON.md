@@ -1,34 +1,63 @@
-# Correção de regressão — galeria complementar Amazon
+# PR #3 — galeria Amazon parcial: investigação e correção
 
-Base: Fase 1 homologada, main 33b0da7b838a6f06f9eb88e4f61678cb294e4605.
-Branch: fix/amazon-gallery-complement. Publicação somente em Preview, sem merge ou alteração de produção.
+Branch: fix/amazon-gallery-complement. PR #3 permanece em rascunho. Sem merge ou publicação em produção.
+Base de produção preservada: 33b0da7b838a6f06f9eb88e4f61678cb294e4605.
+Correção anterior da PR: 84c48db23bb3a28d6e6d8a7e769de2256a6a78f0.
 
-## Causa raiz
+## ISBNs e evidências reais
 
-O guard canUseAmazonOfficial exigia que a loja operacional fosse o UUID do contexto técnico de credenciais Amazon. O mesmo guard era reutilizado pela complementação de imagens. Ao selecionar Sebo Livraria Sul, ambas as consultas eram ignoradas antes da requisição. Além disso, App limitava a complementação ao ambiente Desenvolvimento. A seleção de loja apresentava o contexto técnico como segunda loja operacional.
+O proprietário confirmou que a homologação visual com apenas duas imagens usou **9786555982688**. O teste técnico anterior usou **9781419762109**. Não eram o mesmo livro.
 
-## Correção pontual
+Em 03/11/2026, uma nova consulta de leitura por ISBN, usando o transporte e extrator existentes, retornou:
 
-- A consulta oficial permanece com as permissões de Desenvolvimento e a autorização privada SP-API existentes, mas deixa de depender da loja operacional técnica no cliente. Credenciais e autorização oficial não foram alteradas.
-- A complementação de imagens usa a loja operacional selecionada e envia X-ISBN-Store-Id junto da sessão. Desenvolvimento, Proprietário (admin) e Operador podem consultá-la, conforme orientação expressa do proprietário nesta tarefa.
-- A Function reutiliza as leituras existentes: valida token no Auth, perfil ativo, vínculo ativo com a loja exata e loja ativa, usando o token do solicitante e RLS. Nenhuma permissão é concedida por headers de perfil ou metadados do usuário. Saúde/diagnóstico e painel do laboratório continuam exclusivos de Desenvolvimento.
-- O contexto técnico de credenciais não é oferecido como loja operacional. Os vínculos e dados existentes são preservados. Duas lojas comerciais reais continuam exigindo seleção explícita; uma única loja comercial entra diretamente.
-- Extração, identificação por ISBN, deduplicação, prioridade da capa, limites HTTP, tratamento de CAPTCHA e descarte de resultados após troca de identidade permanecem.
-- Nenhuma mudança em banco, migrations, Storage, credenciais, autenticação Supabase, RLS, dados comerciais, integração Magazord ou atributos do cadastro.
+| ISBN | HTTP | Correspondência | Capa | Adicionais distintas | Total |
+| --- | --- | --- | --- | --- | --- |
+| 9786555982688 | 200 | corresponde | 1 | 5 | 6 |
+| 9781419762109 | 200 | corresponde | 1 | 5 | 6 |
 
-## Validação
+Tempos aproximados: 2,6 s e 2,1 s. HTML mantido somente em memória; sem cookies, repetição ou contorno de bloqueios. Isso comprova disponibilidade na origem a partir deste ambiente, não uma resposta idêntica da Amazon para a Vercel.
 
-- TypeScript: npm.cmd run typecheck — passou.
-- Lint do projeto: npm.cmd run lint (tsc --noEmit) — passou.
-- Build: npm.cmd run build — passou; avisos de bundle/tipos de importação já existentes.
-- Suíte completa: 697 testes, 694 passaram, 3 falhas preexistentes em infrastructureUi.test.mjs (mock React sem lazy). As mesmas 3 falhas foram reproduzidas na árvore da Fase 1 anterior à correção. Nenhuma falha nova restante.
-- Regressões permanentes exercitam Sebo Livraria Sul nos três perfis: resultado de ISBN com 1 capa + 5 imagens adicionais, galeria com 6 imagens, revisão e retorno sem perda nem novas consultas. Também cobrem isolamento, revogação, lojas inativas, sessão divergente e restrição dos diagnósticos.
-- O harness de histórico foi atualizado para controlar explicitamente as consultas Amazon agora habilitadas na loja operacional, sem depender do antigo bloqueio por UUID.
-- Consulta HTTP real, somente leitura, pelo transporte/extrator existente: ISBN 9781419762109, HTTP 200, correspondência confirmada, 1 imagem principal e 5 adicionais, aproximadamente 2,5 segundos. Sem cookies, repetição, contorno de restrições ou persistência de HTML.
+## Causa comprovada no código
 
-A consulta HTTP real confirma a disponibilidade das imagens na fonte. O fluxo de interface foi validado por integração automatizada com respostas controladas; a homologação visual autenticada no Preview fica para a sessão do usuário. Nenhum produto ou operação comercial real foi gravado nos testes.
+Em src/services/amazonOfficial.ts, complementAmazonImages calculava hasGallery como a existência de qualquer imagem adicional distinta da capa. Se outra fonte já fornecesse capa + uma foto, a função retornava antes de consultar o Laboratório. Uma galeria parcial era tratada como completa.
 
-## Arquivos
+A reprodução automatizada antes da correção falhou para os três perfis: o resultado manteve apenas a primeira foto adicional e perdeu as quatro fotos esperadas, pois a consulta complementar não era executada. Não era um limite de duas imagens no formulário nem uma substituição posterior da resposta do Laboratório pela SP-API. App consolida BrasilAPI/Curitiba, complementa com SP-API e somente então consulta o Laboratório.
 
-Implementação: src/App.tsx, src/contexts/UserContext.tsx, src/services/amazonOfficial.ts, src/services/amazonLabClient.ts, server/amazonAuthorization.ts, server/amazonFunction.ts.
-Testes: tests/spapiIntegrated.test.mjs, tests/amazonVercel.test.mjs, tests/storeSelection.test.mjs, tests/history.test.mjs.
+Há também uma condição externa comprovada no Preview anterior dpl_EWKAtmfQc7kCLmmKKMwuXq5HiZwo: em 03/11/2026 às 19:13:09 UTC (16:13:09 de Brasília), POST /api/amazon registrou status_http 200, codigo amazon_captcha e motivo blocked. Essa execução não entregou uma galeria de seis imagens. Os logs não incluem ISBN ou identidade; portanto, não é possível atribuir esse evento ao ISBN visual com certeza. Não há evidência de seis imagens saindo da Function naquela sessão autenticada.
+
+## Alteração mínima
+
+Removida somente a condição hasGallery e ajustado seu comentário. Cada pesquisa elegível faz uma única consulta complementar, mesmo se outra fonte já tiver fotos. A mesclagem e deduplicação existentes preservam capa prioritária e fotos válidas, adicionando somente referências distintas.
+
+Não foram alterados autenticação, permissões, banco, Storage, RLS, credenciais, seleção de loja, campos do cadastro, fontes bibliográficas ou integração Magazord. O bloqueio por CAPTCHA permanece: sem repetição ou contorno, preservando as imagens já disponíveis.
+
+## Rastreio permanente de integração
+
+O teste usa ambos os ISBNs e os três perfis na loja Sebo Livraria Sul. Parte de uma galeria parcial com capa + uma foto. Um documento sanitizado e controlado contém seis imagens distintas e uma duplicação redimensionada. São reais o parser, o handler da Function, a serialização JSON, o cliente autenticado, a consolidação do App, o estado do rascunho, ImagesSection e a revisão. Somente autorização e transporte externo são controlados no teste; não é uma sessão real de usuário.
+
+| Etapa no teste de integração | Capa | Adicionais distintas | Total |
+| --- | --- | --- | --- |
+| Galeria parcial das fontes anteriores | 1 | 1 | 2 |
+| Extração/normalização do Laboratório | 1 | 5 | 6 |
+| Resposta JSON do handler da Function | 1 | 5 | 6 |
+| Resultado normalizado do App, pelo cliente real | 1 | 5 | 6 |
+| Mesclagem, filtragem e deduplicação | 1 | 5 | 6 |
+| Estado do formulário | 1 | 5 | 6 |
+| Renderização de ImagesSection | 1 | 5 | 6 |
+| Revisão e retorno ao formulário | 1 | 5 | 6 |
+
+As asserções comparam todas as referências e contagens. Falham se uma foto válida desaparecer ou se a duplicação redimensionada permanecer. A resposta da SP-API inclui MAIN + PT01 para reproduzir o bloqueio anterior; as fotos complementares não substituem título ou capa existentes. Um teste separado confirma que CAPTCHA não produz imagens fictícias e preserva a galeria parcial de duas fotos com uma única tentativa.
+
+## Verificação técnica
+
+- npm.cmd run typecheck: passou.
+- npm.cmd run lint: passou (o lint configurado é tsc --noEmit).
+- npm.cmd run build: passou, com os avisos de bundle já existentes.
+- Suíte completa executada: 700 testes, 697 aprovados, somente as 3 falhas preexistentes de infrastructureUi.test.mjs (mock React sem lazy).
+- Testes pertinentes finais, incluindo o cenário adicional de CAPTCHA com galeria parcial: 74/74 aprovados (spapiIntegrated, amazonVercel e amazonGallery).
+
+Arquivos desta revisão: src/services/amazonOfficial.ts, tests/spapiIntegrated.test.mjs e este relatório.
+
+## Homologação
+
+A correção do bloqueio prematuro está comprovada pelos testes. A homologação visual autenticada do novo Preview permanece aberta até observar as imagens disponíveis na sessão real. CAPTCHA no ambiente Vercel pode impedir a complementação mesmo com o código corrigido; não deve ser anunciado como seis imagens recuperadas quando isso não ocorreu.
