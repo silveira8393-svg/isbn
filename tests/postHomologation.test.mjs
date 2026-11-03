@@ -18,6 +18,7 @@ const bundle = await build({
     export { default as IdentitySection } from './src/components/magazord/ProductIdentitySection';
     export { default as CommercialSection } from './src/components/magazord/CommercialSection';
     export { default as PhysicalSection } from './src/components/magazord/PhysicalAttributesSection';
+    export { default as FiscalSection } from './src/components/magazord/AdvancedFiscalSection';
   ` }, bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic',
   plugins: [{ name: 'offline-only', setup(builder) {
     const mocks = [[/^react$/, 'module.exports=deps.react'],
@@ -43,6 +44,30 @@ const cover = `${directory}lv491848_1.jpg`;
 const extra = `${directory}lv491848_2.jpg`;
 const book = { isbn13: '9786555113655', title: 'O Atlas da Terra Média', authors: ['Autor'], coverUrl: cover, additionalImages: [extra] };
 const at = '2026-10-15T14:21:31.110Z';
+
+test('cBenef defaults only on new drafts, remains optional/editable and round-trips exactly without changing other fiscal values', () => {
+  for (const condition of ['novo', 'usado']) {
+    const initial = utils.createRegistrationDraft(book, condition);
+    assert.equal(initial.fiscalBenefitCode, 'SC800001');
+    const view = mount('FiscalSection', initial);
+    view.click('Configurações Fiscais & Avançadas');
+    const field = () => view.find(node => node.props.id === 'fiscal-benefit-code');
+    assert.equal(field().props.value, 'SC800001'); assert.equal(field().props.required, undefined);
+    for (const code of ['SC999999', '', '  código manual  ']) {
+      field().props.onChange({ target: { value: code } }); view.render();
+      assert.equal(view.draft().fiscalBenefitCode, code);
+      assert.equal(field().props.value, code);
+      assert.deepEqual({ ...view.draft(), fiscalBenefitCode: initial.fiscalBenefitCode }, initial);
+      assert.equal(utils.validateRegistrationDraft(view.draft()).errors.fiscalBenefitCode, undefined);
+      assert.equal(utils.readRegistrationSnapshot(utils.createRegistrationSnapshot(view.draft(), at)).fields.fiscalBenefitCode, code);
+    }
+    assert.equal(utils.createRegistrationDraft(book, condition).fiscalBenefitCode, 'SC800001');
+    const old = { ...initial }; delete old.fiscalBenefitCode;
+    const oldView = mount('FiscalSection', old); oldView.click('Configurações Fiscais & Avançadas');
+    assert.equal(oldView.find(node => node.props.id === 'fiscal-benefit-code').props.value, '');
+    assert.equal(utils.readRegistrationSnapshot(utils.createRegistrationSnapshot(old, at)).fields.fiscalBenefitCode, undefined);
+  }
+});
 const photoUser = { id: '11111111-1111-4111-8111-111111111111', storeId: '492af2ad-905c-42f8-90f4-aa6c1dc142f3', active: true, role: 'developer' };
 const pngBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
 const photoFile = (name = 'foto.png', tail = '') => new File([pngBytes, tail], name, { type: 'image/png' });
@@ -149,32 +174,69 @@ test('Brazilian prices are parsed entirely and formatted with exactly two decima
   for (const input of ['', '-10', '1e3', 'Infinity', '1.23,45', '50,001', '1,2,3', '10 reais']) assert.equal(utils.parseRegistrationPrice(input), undefined, input);
 });
 
-test('price typing preserves the entered text and formats two Brazilian decimal places only on blur', () => {
-  const view = mount('CommercialSection', utils.createRegistrationDraft(book));
-  const input = () => view.find(node => node.props['data-registration-field'] === 'price');
-  for (const [typed, completed] of [['5', '5,00'], ['50', '50,00'], ['50,00', '50,00'], ['1.234,56', '1.234,56'], ['50,', '50,'], ['-10', '-10']]) {
-    input().props.onFocus(); view.render();
-    input().props.onChange({ target: { value: typed } }); view.render();
-    assert.equal(input().props.value, typed, 'typing cannot move the caret by rewriting the value');
-    input().props.onBlur({ target: { value: typed } }); view.render();
-    assert.equal(input().props.value, completed);
+test('cent mask handles sequential typing, numpad/mobile input, backspace, clearing and stable caret', () => {
+  for (const [digits, expected] of [['1', '0,01'], ['12', '0,12'], ['123', '1,23'], ['1234', '12,34'], ['5000', '50,00'], ['5050', '50,50'], ['123456', '1.234,56']]) {
+    assert.equal(utils.maskRegistrationPriceDigits(digits), expected);
   }
-  assert.ok(utils.validateRegistrationDraft(view.draft()).errors.price, 'invalid negative input remains invalid');
+  for (const [typed, expected] of [['5000', '50,00'], ['5050', '50,50'], ['123456', '1.234,56']]) {
+    const view = mount('CommercialSection', utils.createRegistrationDraft(book));
+    const input = () => view.find(node => node.props['data-registration-field'] === 'price');
+    assert.equal(input().props.value, ''); assert.equal(input().props.placeholder, '0,00');
+    assert.equal(input().props.inputMode, 'numeric');
+    for (const digit of typed) {
+      const target = { value: input().props.value + digit, setSelectionRange(start, end) { this.caret = [start, end]; } };
+      input().props.onChange({ target, nativeEvent: { inputType: 'insertText', data: digit } }); view.render();
+      assert.deepEqual(target.caret, [target.value.length, target.value.length]);
+    }
+    assert.equal(input().props.value, expected);
+    assert.equal(input().props.onBlur, undefined, 'blur cannot reinterpret cents');
+    const before = view.draft().price; view.render(); assert.equal(view.draft().price, before);
+    const states = [];
+    while (input().props.value) {
+      const target = { value: input().props.value.slice(0, -1) };
+      input().props.onChange({ target, nativeEvent: { inputType: 'deleteContentBackward' } }); view.render();
+      states.push(input().props.value); assert.ok(states.length <= typed.length);
+    }
+    if (typed === '5000') assert.deepEqual(states, ['5,00', '0,50', '0,05', '']);
+    input().props.onChange({ target: { value: '123' } }); view.render();
+    input().props.onChange({ target: { value: '' }, nativeEvent: { inputType: 'deleteContentBackward' } }); view.render();
+    assert.equal(view.draft().price, '');
+  }
+  let current = '';
+  assert.deepEqual([... '5000'].map(digit => current = utils.editRegistrationPriceInput(current + digit)), ['0,05', '0,50', '5,00', '50,00']);
 });
 
-test('unfocused price is formatted from the current draft even on mounting, delayed parent updates and returning to the form', () => {
+test('paste preserves explicit reais and rejects malformed, negative, exponential and unsafe amounts without changing the field', () => {
+  const view = mount('CommercialSection', utils.createRegistrationDraft(book));
+  const input = () => view.find(node => node.props['data-registration-field'] === 'price');
+  for (const [text, expected] of [['50,00', '50,00'], ['50.50', '50,50'], ['1.234,56', '1.234,56'], ['R$ 50,00', '50,00'], ['5000', '50,00']]) {
+    let prevented = false;
+    const target = { value: input().props.value };
+    input().props.onPaste({ preventDefault() { prevented = true; }, currentTarget: target, clipboardData: { getData: () => text } }); view.render();
+    assert.ok(prevented); assert.equal(view.draft().price, expected);
+  }
+  for (const bad of ['-50', '1e3', 'abc', '1.23,45', '50,001', '9007199254740992', '90071992547409,92', '99999999999999999999']) {
+    assert.equal(utils.pasteRegistrationPriceInput(bad), undefined, bad);
+    const before = view.draft().price, target = { value: input().props.value };
+    input().props.onPaste({ preventDefault() {}, currentTarget: target, clipboardData: { getData: () => bad } }); view.render();
+    assert.equal(view.draft().price, before); assert.equal(target.value, before);
+  }
+  for (const bad of ['-50', '1e3', 'abc', '99999999999999999999']) {
+    const before = view.draft().price, target = { value: bad };
+    input().props.onChange({ target }); view.render(); assert.equal(view.draft().price, before); assert.equal(target.value, before);
+  }
+  input().props.onChange({ target: { value: '0' } }); view.render();
+  assert.equal(view.draft().price, '0,00'); assert.ok(utils.validateRegistrationDraft(view.draft()).errors.price);
+});
+
+test('existing reais values keep their meaning on mounting and returning to the form', () => {
   for (const price of ['50', '50,00', '1.234,56']) {
-    const initial = { ...utils.createRegistrationDraft(book), price }, changes = [];
-    const view = mount('CommercialSection', initial, { props: { onChange: update => changes.push(update) } });
-    const input = () => view.find(node => node.props['data-registration-field'] === 'price');
+    const initial = { ...utils.createRegistrationDraft(book), price };
+    const view = mount('CommercialSection', initial);
     const formatted = price === '1.234,56' ? price : '50,00';
-    assert.equal(input().props.value, formatted);
-    input().props.onFocus(); view.render(); assert.equal(input().props.value, price);
-    input().props.onBlur({ target: { value: price } }); view.render();
-    assert.equal(input().props.value, formatted, 'rendered price must not depend on a synchronous parent update');
-    assert.equal(view.draft().price, price, 'test parent intentionally keeps the original raw value');
-    assert.equal(mount('CommercialSection', initial).find(node => node.props['data-registration-field'] === 'price').props.value, formatted);
-    assert.ok(view.all(node => node.type === 'span' && node.props.children === 'R$').length, 'visual currency prefix is preserved');
+    assert.equal(view.find(node => node.props['data-registration-field'] === 'price').props.value, formatted);
+    assert.equal(view.draft().price, price);
+    assert.equal(mount('CommercialSection', view.draft()).find(node => node.props['data-registration-field'] === 'price').props.value, formatted);
   }
 });
 
@@ -215,6 +277,22 @@ test('optional metadata and unconfirmed units produce observations, while essent
   assert.match(unconfirmed.warnings.language, /sem confirmação explícita/);
   assert.match(unconfirmed.warnings.weight, /não declarou a unidade/); assert.match(unconfirmed.warnings.width, /não declarou centímetros/);
   assert.deepEqual(utils.validateRegistrationDraft({ ...draft, title: 'Livro', parentCode: 'P', childCode: 'EXEMPLAR', price: '50', quantity: 1, condition: 'usado' }).errors, {});
+});
+
+test('Draft preparation expands known language codes, preserves unknown/manual values and does not confirm provenance', () => {
+  for (const condition of ['novo', 'usado']) {
+    for (const [language, expected] of [['pt', 'Português'], ['por', 'Português'], ['en', 'Inglês'], ['eng', 'Inglês'],
+      ['es', 'Espanhol'], ['spa', 'Espanhol'], ['fr-CA', 'Francês'], ['deu', 'Alemão'], ['jpn', 'Japonês'], ['xyz', 'xyz'], ['Idioma próprio', 'Idioma próprio']]) {
+      const source = { id: 'source', title: 'Livro', language }, before = structuredClone(source);
+      const draft = utils.createRegistrationDraft(source, condition);
+      assert.equal(draft.language, expected); assert.deepEqual(source, before);
+      draft.language = 'Idioma editado livremente';
+      assert.equal(utils.createRegistrationSnapshot(draft, '2026-11-03T12:00:00Z').fields.language, 'Idioma editado livremente');
+    }
+  }
+  const presumed = { id: 'brasilapi-fixture', title: 'Livro', language: 'pt' };
+  assert.equal(utils.createRegistrationDraft(presumed).language, 'Português');
+  assert.match(utils.validateRegistrationDraft(utils.createRegistrationDraft(presumed), presumed).warnings.language, /sem confirmação explícita/);
 });
 
 test('image references are validated without availability probes, and placeholder titles cannot be confirmed', t => {

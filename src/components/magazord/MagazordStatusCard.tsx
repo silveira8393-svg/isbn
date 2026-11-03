@@ -10,7 +10,8 @@ import {
   BookCondition,
   MagazordMatchItem,
 } from '../../types';
-import { magazordMockService, type MagazordSimulationMode } from '../../services/magazordMockService';
+import { magazordMockService as sharedMagazordService, type MagazordSimulationMode } from '../../services/magazordMockService';
+import { useUser } from '../../contexts/UserContext';
 import { getMagazordModeLabel as getModeLabel, useMagazordTestMode } from './useMagazordTestMode';
 import { magazordPresentation } from '../../utils/magazordPresentation';
 import {
@@ -55,6 +56,8 @@ export default function MagazordStatusCard({
   onResetForNextBook,
   onLinkStock,
 }: MagazordStatusCardProps) {
+  const { currentUser } = useUser();
+  const magazordMockService = sharedMagazordService.forStore?.(currentUser?.storeId) ?? sharedMagazordService;
   // Estado para vinculação de estoque ao produto NOVO existente
   const [stockQuantityToAdd, setStockQuantityToAdd] = useState(1);
   const [isLinkingStock, setIsLinkingStock] = useState(false);

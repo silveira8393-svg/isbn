@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { RegistrationDraft } from '../../types';
 import { sanitizeSynopsis } from '../../utils/sanitizer';
 import { buildFinalDescription } from '../../utils/draft';
+import UsedConditionTemplatePicker from './UsedConditionTemplatePicker';
 import { FileText, Sparkles, Check, Info, Tag, Eye } from 'lucide-react';
 
 interface SynopsisSectionProps {
@@ -170,6 +171,11 @@ export default function SynopsisSection({
             </span>
           </div>
 
+          <UsedConditionTemplatePicker selectedId={draft.usedConditionTemplateId} onSelect={(text, id) => onChange({
+            usedConditionTemplateId: id,
+            usedBookConditionNotes: text,
+            description: buildFinalDescription({ ...draft, usedBookConditionNotes: text }),
+          })} />
           <textarea
             rows={3}
             value={draft.usedBookConditionNotes || ''}

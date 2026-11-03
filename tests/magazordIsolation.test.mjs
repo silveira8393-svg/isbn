@@ -46,6 +46,30 @@ const seedOperational = () => new Map([
   [legacyKey, JSON.stringify({ [isbn]: [operationalRecord] })],
 ]);
 
+test('Store-scoped simulated catalogs, stock and modes never inherit or overwrite other stores or unscoped legacy data', async t => {
+  const app = setup(t, seedOperational()), first = app.service.forStore('11111111-1111-4111-8111-111111111111'), second = app.service.forStore('22222222-2222-4222-8222-222222222222');
+  assert.equal(first.hasUnscopedLegacyCatalog(), true);
+  assert.deepEqual(first.getRecordsForEan(isbn), []); assert.deepEqual(second.getRecordsForEan(isbn), []);
+  await first.createProduct(draft('novo', { quantity: 4, fiscalBenefitCode: 'SC800001' }));
+  assert.equal(first.getRecordsForEan(isbn)[0].stock, 4); assert.deepEqual(second.getRecordsForEan(isbn), []);
+  first.setSimulationConfig({ mode: 'force_error' }); assert.equal(second.getSimulationConfig().mode, 'auto');
+  assert.equal(app.reload().getRecordsForEan(isbn)[0].stock, 7);
+  assert.equal(app.storage.get(operationalKey), seedOperational().get(operationalKey));
+  assert.equal(app.storage.get(legacyKey), seedOperational().get(legacyKey));
+});
+
+test('Simulated catalog persists the exact optional cBenef for NEW/USED, including clearing and old records', async t => {
+  const app = setup(t, seedOperational());
+  assert.equal(app.service.getRecordsForEan(isbn)[0].fiscalBenefitCode, undefined);
+  for (const condition of ['novo', 'usado']) for (const code of ['SC800001', 'SC999999', '', '  manual  ']) {
+    const payload = draft(condition, { fiscalBenefitCode: code });
+    await app.service.createProduct(payload, 'auto');
+    const records = app.reload().getRecordsForEan(isbn);
+    const record = condition === 'novo' ? records.find(item => item.condition === 'novo') : records.at(-1);
+    assert.equal(record.fiscalBenefitCode, code);
+  }
+});
+
 test('Required reproduction: Auto missing -> forced Novo 3 -> sandbox stock 5 -> Auto still missing', async t => {
   const app = setup(t), service = app.service;
   assert.equal((await service.checkProductByEan(isbn)).status, 'NOT_FOUND');

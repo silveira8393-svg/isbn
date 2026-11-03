@@ -10,7 +10,7 @@ import {
   BookInfo,
   User,
 } from '../../types';
-import { magazordMockService, type MagazordSimulationMode } from '../../services/magazordMockService';
+import { magazordMockService as sharedMagazordService, type MagazordSimulationMode } from '../../services/magazordMockService';
 import { buildFinalDescription, formatRegistrationPrice, parseRegistrationPrice, registrationModeForCondition, validateRegistrationDraft } from '../../utils/draft';
 import { cleanIsbn } from '../../utils/isbn';
 import { formatPhysicalMeasurement, normalizeLanguage, roundPhysicalMeasurement } from '../../utils/bibliographicNormalization';
@@ -23,6 +23,7 @@ import BibliographicSection from './BibliographicSection';
 import PhysicalAttributesSection from './PhysicalAttributesSection';
 import ImagesSection from './ImagesSection';
 import SynopsisSection from './SynopsisSection';
+import SeoSection from './SeoSection';
 import AdvancedFiscalSection from './AdvancedFiscalSection';
 import {
   ArrowLeft,
@@ -36,6 +37,7 @@ import {
 } from 'lucide-react';
 
 interface ProductRegistrationFormProps {
+  simulationService?: typeof sharedMagazordService;
   draft: RegistrationDraft;
   originalBook: BookInfo;
   captureActionMode?: () => MagazordSimulationMode;
@@ -49,6 +51,7 @@ interface ProductRegistrationFormProps {
 }
 
 export default function ProductRegistrationForm({
+  simulationService = sharedMagazordService,
   draft,
   originalBook,
   captureActionMode,
@@ -60,6 +63,7 @@ export default function ProductRegistrationForm({
   imageUser,
   onImageUploadBusyChange,
 }: ProductRegistrationFormProps) {
+  const magazordMockService = simulationService;
   const [reviewing, setReviewing] = useState(false);
   const [reviewRequested, setReviewRequested] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -254,7 +258,7 @@ export default function ProductRegistrationForm({
     ['Quantidade', draft.quantity], ['Localização', draft.location], ['Categoria', draft.category], ['Marca', draft.brand],
     ['Peso', draft.weight == null ? undefined : `${formatPhysicalMeasurement(draft.weight * (draft.weightUnit === 'kg' ? 1000 : 1))} g`],
     ['Largura', draft.width == null ? undefined : `${formatPhysicalMeasurement(draft.width)} cm`], ['Altura', draft.height == null ? undefined : `${formatPhysicalMeasurement(draft.height)} cm`], ['Espessura / profundidade', draft.depth == null ? undefined : `${formatPhysicalMeasurement(draft.depth)} cm`],
-    ['NCM', draft.ncm], ['Origem fiscal', draft.fiscalOrigin], ['Unidade', draft.unit],
+    ['NCM', draft.ncm], ['Origem fiscal', draft.fiscalOrigin], ['Benefício Fiscal (cBenef)', draft.fiscalBenefitCode], ['Unidade', draft.unit],
   ];
 
   return (
@@ -273,6 +277,7 @@ export default function ProductRegistrationForm({
           <p className="font-bold">Observações informativas — não impedem a confirmação</p>
           <ul className="mt-2 list-inside list-disc space-y-1">{Object.entries(validation.warnings).map(([field, message]) => <li key={field}>{message}</li>)}</ul>
         </div>}
+        <div><h3 className="text-sm font-bold">Meta Description</h3><p className="whitespace-pre-wrap text-sm text-slate-700">{draft.metaDescription || 'Não informada'}</p></div>
         {draft.synopsis && <div><h3 className="text-sm font-bold">Sinopse</h3><p className="whitespace-pre-wrap text-sm text-slate-700">{draft.synopsis}</p></div>}
         {buildFinalDescription(draft) && <div><h3 className="text-sm font-bold">Descrição final</h3><p className="whitespace-pre-wrap text-sm text-slate-700">{buildFinalDescription(draft)}</p></div>}
         <div><h3 className="mb-3 text-sm font-bold">Imagens selecionadas</h3>{reviewedImages.length ? <div className="grid gap-4 sm:grid-cols-3">{reviewedImages.map((url, index) => <div key={url}><RegistrationImage url={url} label={index ? `Imagem adicional ${index}` : 'Capa principal'} /></div>)}</div> : <p className="text-sm text-slate-500">Sem imagens. O cadastro pode continuar.</p>}</div>
@@ -439,6 +444,8 @@ export default function ProductRegistrationForm({
         draft={draft}
         onChange={onUpdateDraft}
       />
+
+      <SeoSection draft={draft} onChange={onUpdateDraft} />
 
       {/* Seção 8: Configurações Fiscais e Avançadas (Colapsável) */}
       <AdvancedFiscalSection

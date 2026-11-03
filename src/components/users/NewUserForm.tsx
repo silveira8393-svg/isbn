@@ -41,7 +41,7 @@ export default function NewUserForm({ onCancel, onSuccess }: {
     pending.current = true;
     setSending(true);
     try {
-      const result = await inviteStoreUser(payload, { expectedUserId: currentUser.id, isCurrent });
+      const result = await inviteStoreUser(payload, { expectedUserId: currentUser.id, storeId: currentUser.storeId, isCurrent });
       completed.current = true;
       if (isCurrent()) {
         setDisplayName(''); setEmail(''); setRole('');

@@ -7,6 +7,8 @@ import React, { lazy, Suspense, useState } from 'react';
 import { isAmazonLabAvailable } from '../services/amazonLabClient';
 import { useUser } from '../contexts/UserContext';
 import MagazordTestMode from './magazord/MagazordTestMode';
+import ConditionTemplateManager from './ConditionTemplateManager';
+import { canManageConditionTemplates } from '../services/conditionTemplatesService';
 import UserManagement from './users/UserManagement';
 import InfrastructureEntry from './infrastructure/InfrastructureEntry';
 import {
@@ -22,7 +24,7 @@ import {
 } from 'lucide-react';
 
 const AmazonLab = lazy(() => import('./AmazonLab'));
-type SettingsTab = 'loja' | 'magazord' | 'amazon' | 'amazon-lab' | 'parametros' | 'usuarios' | 'infraestrutura';
+type SettingsTab = 'modelos' | 'loja' | 'magazord' | 'amazon' | 'amazon-lab' | 'parametros' | 'usuarios' | 'infraestrutura';
 
 export default function SettingsView() {
   const { currentUser, canViewDeveloperTools } = useUser();
@@ -60,6 +62,8 @@ export default function SettingsView() {
 
       {/* Navegação entre seções de configuração */}
       <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-2">
+        {canManageConditionTemplates(currentUser) && <button type="button" onClick={() => setActiveSubTab('modelos')}
+          className={`rounded-lg px-3.5 py-2 text-xs font-semibold ${activeSubTab === 'modelos' ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}>Modelos de conservação</button>}
         {canViewDeveloperTools && <button type="button" onClick={() => setActiveSubTab('infraestrutura')}
           className={`rounded-lg px-3.5 py-2 text-xs font-semibold ${activeSubTab === 'infraestrutura' ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}>
           Infraestrutura
@@ -140,6 +144,7 @@ export default function SettingsView() {
         {activeSubTab === 'amazon-lab' && showAmazonLab && AmazonLab && <Suspense fallback={<p role="status">Carregando laboratório Amazon…</p>}>
           <AmazonLab key={currentUser.id} />
         </Suspense>}
+        {activeSubTab === 'modelos' && <ConditionTemplateManager />}
         {/* 1. LOJA */}
         {activeSubTab === 'loja' && (
           <div className="space-y-4">

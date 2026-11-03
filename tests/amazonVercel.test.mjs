@@ -67,7 +67,8 @@ test('authorization validates Auth and fresh profile, membership and store with 
   const membership = h.auth.calls.find(call => call.url.pathname.endsWith('store_users'));
   assert.equal(membership.url.searchParams.get('user_id'), `eq.${uid}`);
   assert.equal(membership.url.searchParams.get('limit'), '1');
-  assert.equal(membership.url.searchParams.get('order'), 'store_id.asc');
+  assert.equal(membership.url.searchParams.get('order'), null);
+    assert.equal(membership.url.searchParams.get('role'), 'eq.developer');
   assert.deepEqual((await response.json()).fixtures, []);
 });
 

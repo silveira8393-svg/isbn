@@ -41,11 +41,12 @@ const output = await build({
 });
 
 const legacyHistoryKey = 'sebo_isbn_history_v1';
-const configKey = 'sebo_magazord_sim_config_v2';
+
 const isbn = '9788535914849';
 const otherIsbn = '9788553131303';
 const actor = '22222222-3333-4444-5555-666666666666';
 const storeId = '11111111-2222-3333-4444-555555555555';
+const configKey = `sebo_magazord_sim_config_v2:store:${storeId}`;
 const historyKey = `sebo_isbn_history_v2:${storeId}:${actor}`;
 const book = { title: 'Livro de teste', isbn13: isbn, authors: ['Autor'] };
 const oldEntry = { timestamp: 1, isbn, title: 'Registro anterior', success: true, userId: actor, storeId,
@@ -185,7 +186,7 @@ function setup(t, mode = 'auto', initialHistory = []) {
     badges: items => module.exports.HistoryGroup({ items, onSelect() {}, onClear() {}, onExport() {} }),
     mountStatusCard: props => mount(module.exports.StatusCard, props),
     mountRegistration: props => mount(module.exports.RegistrationForm, props),
-    service: module.exports.magazordMockService,
+    service: module.exports.magazordMockService.forStore(storeId),
     hold: delay => heldTimers.set(delay, []),
     release: delay => { const callbacks = heldTimers.get(delay); heldTimers.delete(delay); callbacks.forEach(callback => callback()); },
   };
@@ -773,7 +774,7 @@ test('Developer sandbox stock remains separate when operator queries the same IS
   await app.prop('MagazordStatusCard').onLinkStock(2); await flush(); app.view.render();
   await app.search();
   assert.equal(app.prop('MagazordStatusCard').checkResult.currentStock, 5);
-  const sandbox = app.storage.get('sebo_magazord_sandbox_db_v1');
+  const sandbox = app.storage.get(`sebo_magazord_sandbox_db_v1:store:${storeId}`);
   app.setRole('operator');
   assert.equal(app.prop('MagazordStatusCard').checkResult, null, 'Previously displayed test data is hidden immediately');
   assert.equal(app.service.getSimulationConfig().mode, 'auto');
@@ -781,7 +782,7 @@ test('Developer sandbox stock remains separate when operator queries the same IS
   assert.equal(app.prop('MagazordStatusCard').checkResult.status, 'NOT_FOUND');
   assert.ok(app.prop('SearchHistoryGroup').items.every(item => item.historyKind === 'operational'));
   assert.ok(app.history().some(item => item.historyKind === 'test'));
-  assert.equal(app.storage.get('sebo_magazord_sandbox_db_v1'), sandbox);
+  assert.equal(app.storage.get(`sebo_magazord_sandbox_db_v1:store:${storeId}`), sandbox);
   assert.deepEqual(app.service.getRecordsForEan(isbn, 'auto'), []);
   assert.deepEqual(app.rows.map(row => row.operation_type), ['isbn_search', 'isbn_search', 'new_product_reused', 'isbn_search', 'isbn_search']);
   assert.ok(app.rows.every(row => !('environment' in row) && !('user_id' in row)));
@@ -791,16 +792,16 @@ for (const role of ['admin', 'operator']) {
   test(role + ' queries only Auto even with a previously persisted forced mode and an existing sandbox', async t => {
     const app = setup(t, 'force_new_found');
     await app.service.addStockToExistingProduct(isbn, 2);
-    const sandbox = app.storage.get('sebo_magazord_sandbox_db_v1');
+    const sandbox = app.storage.get(`sebo_magazord_sandbox_db_v1:store:${storeId}`);
     app.setRole(role); await app.search();
     assert.equal(app.prop('MagazordStatusCard').checkResult.status, 'NOT_FOUND');
     assert.equal(app.history()[0].historyKind, 'operational');
     assert.equal(app.service.getSimulationConfig().mode, 'auto');
-    assert.equal(app.storage.get('sebo_magazord_sandbox_db_v1'), sandbox);
+    assert.equal(app.storage.get(`sebo_magazord_sandbox_db_v1:store:${storeId}`), sandbox);
     const { completion } = await app.registration();
     await completion; await flush(); app.view.render();
     assert.equal(app.service.getRecordsForEan(isbn, 'auto')[0].stock, 2);
-    assert.equal(app.storage.get('sebo_magazord_sandbox_db_v1'), sandbox);
+    assert.equal(app.storage.get(`sebo_magazord_sandbox_db_v1:store:${storeId}`), sandbox);
     assert.equal(app.history()[0].historyKind, 'operational');
     assert.equal(app.rows.length, 2);
   });

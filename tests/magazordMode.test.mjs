@@ -12,6 +12,8 @@ const output = await build({
   plugins: [{ name: 'controlled-component', setup(builder) {
     const mocks = [
       [/^react$/, 'module.exports=deps.react'],
+      [/\/lib\/supabase$/, 'exports.supabase={}'],
+      [/\/(ConditionTemplateManager|InfrastructureEntry|AmazonLab)$/, 'module.exports=()=>null'],
       [/^react\/jsx-runtime$/, 'exports.jsx=exports.jsxs=(type,props)=>({type,props})'],
       [/^lucide-react$/, 'module.exports=new Proxy({},{get:(_,key)=>String(key)})'],
       [/\/contexts\/UserContext$/, 'exports.useUser=()=>deps.user'],
@@ -23,7 +25,7 @@ const output = await build({
     });
     builder.onLoad({ filter: /.*/, namespace: 'mock' }, args => ({ contents: args.pluginData, loader: 'js' }));
     builder.onLoad({ filter: /useMagazordTestMode\.ts$/ }, async args => {
-      const source = await readFile(args.path, 'utf8');
+      const source = (await readFile(args.path, 'utf8')).replace(/\r\n/g, '\n');
       // Capture real handlers and state only in this in-memory test bundle.
       const marker = '  return {\n    isDeveloper,';
       assert.ok(source.includes(marker));
@@ -33,7 +35,8 @@ const output = await build({
   } }],
 });
 
-const configKey = 'sebo_magazord_sim_config_v2';
+const storeId = '11111111-2222-3333-4444-555555555555';
+const configKey = `sebo_magazord_sim_config_v2:store:${storeId}`;
 const modes = [
   ['auto', 'Padrão (Auto)', 'Padrão (Auto - catálogo simulado local)'],
   ['force_new_found', 'Novo Encontrado', 'Forçar: Novo Encontrado'],
@@ -69,7 +72,7 @@ function setupView(initialView, role, storage = saved('auto')) {
   const props = { checkResult: null, isChecking: false, checkError: null, book: {},
     onRetryCheck: () => { retries++; }, onOpenRegistration() {}, onResetForNextBook() {} };
   const deps = {
-    user: { currentUser: { role, name: 'Conta atual' }, users: [], isDeveloper: role === 'developer' },
+    user: { currentUser: { storeId, active: true, role, name: 'Conta atual' }, users: [], isDeveloper: role === 'developer' },
     capture(value, mockService) {
       controls = value;
       if (service !== mockService) {
@@ -79,6 +82,7 @@ function setupView(initialView, role, storage = saved('auto')) {
       }
     },
     react: {
+      lazy: () => () => null, Suspense: ({ children }) => children,
       useState(initial) {
         const slots = activeSlots, index = cursor++;
         if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
