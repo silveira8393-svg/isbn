@@ -75,15 +75,17 @@ const componentMocks = [
   [/\/utils\/draft$/, 'exports.createRegistrationDraft=(book,condition="novo")=>({...book,condition});exports.buildFinalDescription=()=>"description";exports.registrationModeForCondition=(condition,mode)=>condition==="usado"?"new_used_from_known_edition":mode==="reuse_existing_new"?mode:"new_product"'],
   [/\/utils\/metrics$/, 'exports.CANONICAL_CSV_DATASET=[]'],
 ];
-async function component(entry) {
+async function component(entry, realDraft = false) {
   // Preserve each component name so assertions can find the public event props.
-  const mocks = componentMocks.filter(([pattern]) => !entry.includes('ProductRegistrationForm') || !pattern.test('/utils/draft'));
+  const mocks = componentMocks.filter(([pattern]) => !(realDraft || entry.includes('ProductRegistrationForm')) || !pattern.test('/utils/draft'));
   const paths = ['Header', 'SearchForm', 'BookDetailsCard', 'SearchHistoryGroup', 'CameraScannerModal', 'MagazordStatusCard', 'ProductRegistrationForm', 'OwnerDashboard', 'SettingsView',
     'ProductIdentitySection', 'CategoryAndBrandSection', 'CommercialSection', 'BibliographicSection', 'PhysicalAttributesSection', 'ImagesSection', 'SynopsisSection', 'SeoSection', 'AdvancedFiscalSection', 'RegistrationImage'];
   for (const name of paths) mocks.push([new RegExp(`(?:^|/)${name}$`), `module.exports=${JSON.stringify(name)}`]);
   return compile(entry, mocks);
 }
 const app = await component('src/App.tsx');
+const actualDraftApp = await component('src/App.tsx', true);
+const commercial = await component('src/components/magazord/CommercialSection.tsx', true);
 const form = await component('src/components/magazord/ProductRegistrationForm.tsx');
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 
@@ -126,6 +128,60 @@ function dependencies(overrides = {}) {
     ...overrides };
 }
 async function search(view) { await view.find(n => n.type === 'SearchForm').props.onSearch(input.isbn); await flush(); }
+
+test('Real App search and registration opening retain normalized language instead of overwriting it with provider codes', async () => {
+  for (const [language, expected] of [['pt', 'Português'], ['por', 'Português'], ['en', 'Inglês'], ['eng', 'Inglês'], ['es', 'Espanhol'], ['spa', 'Espanhol'], ['fr', 'Francês'], ['fra', 'Francês'], ['xyz', 'xyz']]) {
+    const source = { id: 'brasilapi-fixture', title: 'Livro', isbn13: input.isbn, language };
+    const before = structuredClone(source);
+    const deps = dependencies({ brasil: async () => ({ book: source, diagnostic: { status: 200 } }) });
+    const view = mount(actualDraftApp, deps); await search(view);
+    view.find(n => n.type === 'Header').props.onTabChange('cadastro'); await flush();
+    assert.equal(view.find(n => n.type === 'ProductRegistrationForm').props.draft.language, expected, 'draft immediately after search');
+    for (const condition of ['novo', 'usado']) {
+      view.find(n => n.type === 'Header').props.onTabChange('consultar'); await flush();
+      view.find(n => n.type === 'MagazordStatusCard').props.onOpenRegistration(condition); await flush();
+      const formProps = view.find(n => n.type === 'ProductRegistrationForm').props;
+      assert.equal(formProps.draft.language, expected, 'explicit registration opening');
+      formProps.onUpdateDraft({ language: 'Idioma manual', price: '50,50', parentCode: 'P', childCode: 'C' }); await flush();
+      view.find(n => n.type === 'Header').props.onTabChange('consultar'); await flush();
+      view.find(n => n.type === 'MagazordStatusCard').props.onOpenRegistration(condition); await flush();
+      assert.equal(view.find(n => n.type === 'ProductRegistrationForm').props.draft.language, 'Idioma manual', 'same-condition draft reopening');
+    }
+    assert.deepEqual(source, before);
+  }
+});
+
+test('Typing cents through the actual commercial component keeps review, return, simulator and audit snapshot amounts identical', async () => {
+  for (const condition of ['novo', 'usado']) for (const [digits, expectedPrice, reviewLabel] of [
+    ['5000', '50,00', 'R$ 50,00'], ['5050', '50,50', 'R$ 50,50'], ['123456', '1234,56', 'R$ 1.234,56'],
+  ]) {
+    const source = { id: 'brasilapi-fixture', title: 'Livro', isbn13: input.isbn, language: 'pt' };
+    const deps = dependencies({ brasil: async () => ({ book: source, diagnostic: { status: 200 } }) });
+    const appView = mount(actualDraftApp, deps); await search(appView);
+    appView.find(n => n.type === 'MagazordStatusCard').props.onOpenRegistration(condition); await flush();
+    const appProps = appView.find(n => n.type === 'ProductRegistrationForm').props;
+    const draft = { ...appProps.draft, parentCode: 'P', childCode: 'C' }, calls = [];
+    deps.magazord.createProduct = async payload => { calls.push(payload); return { success: true, parentCode: 'P', childCode: 'C', registeredAt: 1 }; };
+    const priceView = mount(commercial, deps, { draft, errors: {}, onChange: updates => Object.assign(draft, updates) });
+    for (const digit of digits) {
+      const field = priceView.find(n => n.props?.['data-registration-field'] === 'price');
+      field.props.onChange({ target: { value: field.props.value + digit }, nativeEvent: { inputType: 'insertText' } }); priceView.render();
+    }
+    const formView = mount(form, deps, { ...appProps, draft });
+    formView.find(n => n.props?.id === 'btn-submit-magazord-registration').props.onClick(); await flush();
+    const review = formView.find(n => n.props?.['aria-label'] === 'Revisão do cadastro');
+    assert.ok(JSON.stringify(review).replace(/\s/g, ' ').includes(reviewLabel));
+    assert.ok(JSON.stringify(review).includes('Português'));
+    formView.find(n => n.props?.id === 'btn-return-to-registration').props.onClick(); await flush();
+    assert.equal(priceView.find(n => n.props?.['data-registration-field'] === 'price').props.value, digits === '123456' ? '1.234,56' : expectedPrice);
+    formView.find(n => n.props?.id === 'btn-submit-magazord-registration').props.onClick(); await flush();
+    await formView.find(n => n.props?.id === 'btn-confirm-magazord-registration').props.onClick(); await flush();
+    assert.equal(calls.length, 1); assert.equal(calls[0].price, expectedPrice); assert.equal(calls[0].language, 'Português');
+    const event = deps.records.find(row => row.operationType === (condition === 'novo' ? 'new_product_created' : 'used_copy_created'));
+    assert.equal(event.metadata.registrationSnapshot.fields.price, expectedPrice);
+    assert.equal(event.metadata.registrationSnapshot.fields.language, 'Português');
+  }
+});
 
 test('Multiple bibliographic sources, including enrichment failure, produce one successful search; rerender/reload do not replay', async () => {
   const deps = dependencies(); const view = mount(app, deps); await search(view);

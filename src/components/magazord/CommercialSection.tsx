@@ -4,8 +4,7 @@
  */
 
 import { RegistrationDraft } from '../../types';
-import { useState } from 'react';
-import { formatRegistrationPriceInput } from '../../utils/draft';
+import { editRegistrationPriceInput, formatRegistrationPriceInput, pasteRegistrationPriceInput } from '../../utils/draft';
 import { DollarSign, Package, MapPin, AlertCircle } from 'lucide-react';
 
 interface CommercialSectionProps {
@@ -19,12 +18,12 @@ export default function CommercialSection({
   onChange,
   errors,
 }: CommercialSectionProps) {
-  const [editingPrice, setEditingPrice] = useState(false);
-  // Keep the caret and partial input intact; format only after leaving the field.
-  const handlePriceChange = (val: string) => {
-    setEditingPrice(true);
-    // Permite digitação livre de números e vírgula/ponto
-    onChange({ price: val });
+  const displayedPrice = formatRegistrationPriceInput(draft.price);
+  const updatePrice = (input: HTMLInputElement, price: string | undefined) => {
+    input.value = price ?? displayedPrice;
+    // Terminal-style entry continues from the right after formatting, including mobile input.
+    input.setSelectionRange?.(input.value.length, input.value.length);
+    if (price !== undefined) onChange({ price });
   };
 
   return (
@@ -59,15 +58,14 @@ export default function CommercialSection({
             </span>
             <input
               type="text"
-              value={editingPrice ? draft.price : formatRegistrationPriceInput(draft.price)}
+              value={displayedPrice}
               data-registration-field="price"
-              inputMode="decimal"
-              onFocus={() => setEditingPrice(true)}
-              onChange={(e) => handlePriceChange(e.target.value)}
-              onBlur={(e) => {
-                const price = formatRegistrationPriceInput(e.target.value);
-                setEditingPrice(false);
-                if (price !== e.target.value) onChange({ price });
+              inputMode="numeric"
+              onChange={(e) => updatePrice(e.target, editRegistrationPriceInput(e.target.value,
+                (e.nativeEvent as InputEvent)?.inputType?.startsWith('delete')))}
+              onPaste={(e) => {
+                e.preventDefault();
+                updatePrice(e.currentTarget, pasteRegistrationPriceInput(e.clipboardData.getData('text')));
               }}
               placeholder="0,00"
               className={`w-full pl-9 pr-3.5 py-2.5 rounded-lg border text-sm font-bold text-slate-900 transition-colors focus:outline-none focus:ring-2 ${

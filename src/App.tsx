@@ -224,7 +224,6 @@ export default function App() {
       setFoundBook(lookupBook);
       if (lookupBook) {
         const draft = createRegistrationDraft(lookupBook);
-        draft.language = lookupBook.language || '';
         draft.format = lookupBook.format || '';
         setRegistrationDraft(draft);
       }
@@ -355,8 +354,8 @@ export default function App() {
       draft.mainImageUrl = registrationDraft.mainImageUrl;
       draft.additionalImageUrls = [...registrationDraft.additionalImageUrls];
       draft.imageSelectionManual = registrationDraft.imageSelectionManual;
+      draft.language = registrationDraft.language;
     }
-    draft.language = foundBook.language || '';
     draft.format = foundBook.format || '';
     setRegistrationDraft(draft);
     registrationCompleted.current = false;

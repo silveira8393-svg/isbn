@@ -150,12 +150,17 @@ export function createRegistrationDraft(
   return draft;
 }
 
-/** Decimal reais, with Brazilian grouping; never accept partial parses or exponent notation. */
-export function parseRegistrationPrice(value: string): number | undefined {
+function registrationPriceDecimal(value: string): string | undefined {
   const text = value.trim();
   if (!/^(?:\d+(?:[,.]\d{1,2})?|\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?)$/.test(text)) return;
-  const normalized = text.includes(',') ? text.replace(/\./g, '').replace(',', '.')
+  return text.includes(',') ? text.replace(/\./g, '').replace(',', '.')
     : /^\d{1,3}(?:\.\d{3})+$/.test(text) ? text.replace(/\./g, '') : text;
+}
+
+/** Decimal reais, with Brazilian grouping; never accept partial parses or exponent notation. */
+export function parseRegistrationPrice(value: string): number | undefined {
+  const normalized = registrationPriceDecimal(value);
+  if (normalized === undefined) return;
   const amount = Number(normalized);
   return Number.isFinite(amount) && Number.isSafeInteger(Math.round(amount * 100)) ? amount : undefined;
 }
@@ -171,6 +176,38 @@ export function formatRegistrationPrice(value: string): string {
 export function formatRegistrationPriceInput(value: string): string {
   const amount = parseRegistrationPrice(value);
   return amount === undefined ? value : new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+}
+
+/** Keyboard digits represent cents only at the input boundary. Stored prices remain reais. */
+export function maskRegistrationPriceDigits(value: string): string | undefined {
+  if (value === '') return '';
+  if (!/^\d+$/.test(value)) return;
+  const digits = value.replace(/^0+(?=\d)/, '');
+  if (digits.length > 16 || BigInt(digits) > BigInt(Number.MAX_SAFE_INTEGER)) return;
+  const padded = digits.padStart(3, '0');
+  const formatted = `${padded.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/g, '.')},${padded.slice(-2)}`;
+  const amount = parseRegistrationPrice(formatted);
+  // Refuse amounts that the existing numeric simulator cannot represent to the exact cent.
+  if (amount === undefined || amount.toFixed(2).replace('.', '') !== padded
+    || formatRegistrationPriceInput(formatted) !== formatted) return;
+  return formatted;
+}
+
+/** Browser input may contain separators already inserted by the mask. */
+export function editRegistrationPriceInput(value: string, deleting = false): string | undefined {
+  if (!/^[\d.,]*$/.test(value)) return;
+  const digits = value.replace(/[.,]/g, '');
+  return deleting && /^0*$/.test(digits) ? '' : maskRegistrationPriceDigits(digits);
+}
+
+/** Pasted monetary separators/currency denote reais; unformatted pasted digits denote cents. */
+export function pasteRegistrationPriceInput(value: string): string | undefined {
+  const text = value.trim();
+  if (/^\d*$/.test(text)) return maskRegistrationPriceDigits(text);
+  const decimal = registrationPriceDecimal(text.replace(/^R\$\s*/, ''));
+  if (decimal === undefined) return;
+  const [reais, cents = ''] = decimal.split('.');
+  return maskRegistrationPriceDigits(reais + cents.padEnd(2, '0'));
 }
 
 export type RegistrationValidation = { errors: Record<string, string>; warnings: Record<string, string> };

@@ -86,3 +86,22 @@ Arquivos corrigidos: `src/utils/draft.ts`, `src/services/conditionTemplatesServi
 - Meta Description e cadastros NOVO/USADO preservados pelos testes existentes. As cinco falhas preexistentes não foram objeto de correção; a suíte completa não foi repetida nesta etapa.
 
 Homologação: na PR #2, abrir USADO com a conta técnica e conferir “Loja de origem dos modelos: Sebo Livraria Sul” e “17 modelos ativos disponíveis”. Selecionar um modelo, editar as observações, revisar e retornar. Conferir também idioma por extenso em NOVO/USADO e manutenção do aviso de origem não confirmada quando aplicável.
+
+## Correções finais: idioma e máscara monetária
+
+Causa do idioma ainda em código: dois handlers reais de `App.tsx` atribuíam novamente `book.language` depois de `createRegistrationDraft()`, tanto ao concluir a consulta quanto ao abrir explicitamente o cadastro. A correção anterior no utilitário era anulada nessas duas atribuições. Foram removidas; o idioma manual também é preservado na reabertura de um rascunho da mesma condição. Não foram alterados dados das fontes, proveniência ou avisos de idioma presumido. Os novos testes executam esses handlers reais com o utilitário real, além dos testes isolados já existentes.
+
+Causa do preço: `CommercialSection` mantinha entrada livre e formatava como reais somente no blur, sem implementar a digitação por centavos aprovada. A nova máscara é aplicada exclusivamente na fronteira de entrada do campo, com funções testáveis no utilitário monetário já existente. Dígitos digitados representam centavos; colagens com separadores ou `R$` são interpretadas como valores explícitos em reais. Campo vazio, Backspace, limpeza, separadores brasileiros e cursor ao final da edição são cobertos. Entradas inválidas ou sem representação exata no simulador são recusadas, preservando o valor anterior. Não existe conversão adicional no blur. Os preços do rascunho, revisão, confirmação, simulador e auditoria continuam em reais, e os valores já persistidos mantêm seu significado.
+
+Arquivos desta etapa: `src/App.tsx`, `src/components/magazord/CommercialSection.tsx`, `src/utils/draft.ts`, testes `operations.test.mjs` e `postHomologation.test.mjs`, e este relatório. Nenhuma dependência adicionada.
+
+Validação técnica:
+
+- **101 testes relacionados aprovados** (`operations`, `postHomologation`, `metaDescription`, `conditionTemplates` e `conditionTemplateImport`).
+- TypeScript, lint e build aprovados; apenas o aviso já conhecido de bundle grande.
+- Testes reais de fluxo confirmam `5000 → R$ 50,00`, `5050 → R$ 50,50`, `123456 → R$ 1.234,56` na revisão, retorno, payload enviado ao simulador e snapshot de auditoria, para NOVO e USADO.
+- Cobertura de idiomas conhecidos/desconhecidos na consulta, criação, reabertura e atualização manual; Português chega à revisão e ao snapshot sem alterar a fonte. Avisos de proveniência permanecem cobertos.
+- Testes da seleção dos 17 modelos, administração, preservação de edição e Meta Description continuam aprovados. Não foram executadas gravações nem alterações de configuração no Supabase ou na origem dos modelos.
+- As cinco falhas preexistentes descritas acima não foram objeto de alteração. A suíte completa não foi repetida nesta etapa.
+
+Roteiro final: fazer uma nova consulta, abrir NOVO/USADO e conferir o idioma por extenso; editar o idioma e reabrir o mesmo cadastro. Digitar os exemplos monetários sem vírgula, testar Backspace e colagem, revisar e retornar. Confirmar um cadastro simulado e comparar o preço com o snapshot. Merge e produção continuam pendentes de homologação.
