@@ -1,0 +1,295 @@
+{
+  "context": "Real components, local fixture users and database stub; all external requests blocked. No authentication, integration or production persistence exercised.",
+  "evidence": [
+    {
+      "role": "operator",
+      "width": 360,
+      "scrollWidth": 360,
+      "header": "rgb(30, 27, 50)",
+      "logo": [
+        {
+          "loaded": true,
+          "width": 72
+        }
+      ],
+      "tabs": [
+        "Consultar",
+        "Cadastro",
+        "Histórico"
+      ],
+      "javascriptErrors": []
+    },
+    {
+      "role": "admin",
+      "width": 360,
+      "scrollWidth": 360,
+      "header": "rgb(30, 27, 50)",
+      "logo": [
+        {
+          "loaded": true,
+          "width": 72
+        }
+      ],
+      "tabs": [
+        "Consultar",
+        "Cadastro",
+        "Histórico",
+        "Dashboard",
+        "Config."
+      ],
+      "javascriptErrors": []
+    },
+    {
+      "role": "developer",
+      "width": 360,
+      "scrollWidth": 360,
+      "header": "rgb(30, 27, 50)",
+      "logo": [
+        {
+          "loaded": true,
+          "width": 72
+        }
+      ],
+      "tabs": [
+        "Consultar",
+        "Cadastro",
+        "Histórico",
+        "Dashboard",
+        "Config."
+      ],
+      "javascriptErrors": []
+    },
+    {
+      "role": "operator",
+      "width": 390,
+      "scrollWidth": 390,
+      "header": "rgb(30, 27, 50)",
+      "logo": [
+        {
+          "loaded": true,
+          "width": 72
+        }
+      ],
+      "tabs": [
+        "Consultar",
+        "Cadastro",
+        "Histórico"
+      ],
+      "javascriptErrors": []
+    },
+    {
+      "role": "admin",
+      "width": 390,
+      "scrollWidth": 390,
+      "header": "rgb(30, 27, 50)",
+      "logo": [
+        {
+          "loaded": true,
+          "width": 72
+        }
+      ],
+      "tabs": [
+        "Consultar",
+        "Cadastro",
+        "Histórico",
+        "Dashboard",
+        "Config."
+      ],
+      "javascriptErrors": []
+    },
+    {
+      "role": "developer",
+      "width": 390,
+      "scrollWidth": 390,
+      "header": "rgb(30, 27, 50)",
+      "logo": [
+        {
+          "loaded": true,
+          "width": 72
+        }
+      ],
+      "tabs": [
+        "Consultar",
+        "Cadastro",
+        "Histórico",
+        "Dashboard",
+        "Config."
+      ],
+      "javascriptErrors": []
+    },
+    {
+      "role": "operator",
+      "width": 768,
+      "scrollWidth": 768,
+      "header": "rgb(30, 27, 50)",
+      "logo": [
+        {
+          "loaded": true,
+          "width": 108
+        }
+      ],
+      "tabs": [
+        "Consultar",
+        "Cadastro",
+        "Histórico"
+      ],
+      "javascriptErrors": []
+    },
+    {
+      "role": "admin",
+      "width": 768,
+      "scrollWidth": 768,
+      "header": "rgb(30, 27, 50)",
+      "logo": [
+        {
+          "loaded": true,
+          "width": 108
+        }
+      ],
+      "tabs": [
+        "Consultar",
+        "Cadastro",
+        "Histórico",
+        "Dashboard",
+        "Configurações"
+      ],
+      "javascriptErrors": []
+    },
+    {
+      "role": "developer",
+      "width": 768,
+      "scrollWidth": 768,
+      "header": "rgb(30, 27, 50)",
+      "logo": [
+        {
+          "loaded": true,
+          "width": 108
+        }
+      ],
+      "tabs": [
+        "Consultar",
+        "Cadastro",
+        "Histórico",
+        "Dashboard",
+        "Configurações"
+      ],
+      "javascriptErrors": []
+    },
+    {
+      "role": "operator",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "header": "rgb(30, 27, 50)",
+      "logo": [
+        {
+          "loaded": true,
+          "width": 108
+        }
+      ],
+      "tabs": [
+        "Consultar",
+        "Cadastro",
+        "Histórico"
+      ],
+      "javascriptErrors": []
+    },
+    {
+      "role": "admin",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "header": "rgb(30, 27, 50)",
+      "logo": [
+        {
+          "loaded": true,
+          "width": 108
+        }
+      ],
+      "tabs": [
+        "Consultar",
+        "Cadastro",
+        "Histórico",
+        "Dashboard",
+        "Configurações"
+      ],
+      "javascriptErrors": []
+    },
+    {
+      "role": "developer",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "header": "rgb(30, 27, 50)",
+      "logo": [
+        {
+          "loaded": true,
+          "width": 108
+        }
+      ],
+      "tabs": [
+        "Consultar",
+        "Cadastro",
+        "Histórico",
+        "Dashboard",
+        "Configurações"
+      ],
+      "javascriptErrors": []
+    },
+    {
+      "role": "operator",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "header": "rgb(30, 27, 50)",
+      "logo": [
+        {
+          "loaded": true,
+          "width": 108
+        }
+      ],
+      "tabs": [
+        "Consultar",
+        "Cadastro",
+        "Histórico"
+      ],
+      "javascriptErrors": []
+    },
+    {
+      "role": "admin",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "header": "rgb(30, 27, 50)",
+      "logo": [
+        {
+          "loaded": true,
+          "width": 108
+        }
+      ],
+      "tabs": [
+        "Consultar",
+        "Cadastro",
+        "Histórico",
+        "Dashboard",
+        "Configurações"
+      ],
+      "javascriptErrors": []
+    },
+    {
+      "role": "developer",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "header": "rgb(30, 27, 50)",
+      "logo": [
+        {
+          "loaded": true,
+          "width": 108
+        }
+      ],
+      "tabs": [
+        "Consultar",
+        "Cadastro",
+        "Histórico",
+        "Dashboard",
+        "Configurações"
+      ],
+      "javascriptErrors": []
+    }
+  ]
+}

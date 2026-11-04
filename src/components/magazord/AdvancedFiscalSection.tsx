@@ -19,7 +19,7 @@ export default function AdvancedFiscalSection({
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+    <div className="isbn-form-section isbn-fiscal-section bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
       {/* Botão de abrir/fechar seção colapsável */}
       <button
         type="button"

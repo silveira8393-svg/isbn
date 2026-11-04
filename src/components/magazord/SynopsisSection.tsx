@@ -80,7 +80,7 @@ export default function SynopsisSection({
   const finalPreview = buildFinalDescription(draft);
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-5">
+    <div className="isbn-form-section bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-5">
       {/* Cabeçalho da Seção */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
         <div className="flex items-center gap-2">

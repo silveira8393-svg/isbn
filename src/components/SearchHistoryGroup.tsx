@@ -26,7 +26,7 @@ export default function SearchHistoryGroup({
 
   if (items.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-6 flex flex-col items-center justify-center text-center min-h-[220px]">
+      <div className="isbn-history isbn-history-empty bg-white rounded-xl border border-slate-200 shadow-xs p-6 flex flex-col items-center justify-center text-center min-h-[220px]">
         <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
           <History className="w-5 h-5 stroke-[1.5]" />
         </div>
@@ -39,7 +39,7 @@ export default function SearchHistoryGroup({
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col overflow-hidden">
+    <div className="isbn-history bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col overflow-hidden">
       {/* Header */}
       <div className="p-3.5 px-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -79,7 +79,7 @@ export default function SearchHistoryGroup({
       </div>
 
       {/* List */}
-      <div className="divide-y divide-slate-100 overflow-y-auto max-h-[480px] xl:max-h-[640px] custom-scrollbar">
+      <div className="isbn-history-list divide-y divide-slate-100 overflow-y-auto max-h-[480px] xl:max-h-[640px] custom-scrollbar">
         {items.map((item) => (
           <button
             key={`${item.timestamp}-${item.isbn}`}
@@ -106,9 +106,9 @@ export default function SearchHistoryGroup({
             </div>
 
             {/* Info */}
-            <div className="min-w-0 flex-1">
+            <div className="isbn-history-record min-w-0 flex-1">
               <p
-                className={`text-xs font-semibold line-clamp-1 group-hover:text-blue-700 transition-colors ${
+                className={`isbn-history-title text-xs font-semibold line-clamp-1 group-hover:text-blue-700 transition-colors ${
                   item.success ? 'text-slate-900' : 'text-slate-600 italic'
                 }`}
               >
@@ -121,14 +121,14 @@ export default function SearchHistoryGroup({
               </p>
 
               {item.authors && item.authors.length > 0 && (
-                <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+                <p className="isbn-history-authors text-[11px] text-slate-500 line-clamp-1 mt-0.5">
                   {item.authors.join(', ')}
                 </p>
               )}
 
               {/* Status Magazord e Operação no Histórico */}
               {item.magazordStatus && (
-                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                <div className="isbn-history-status flex flex-wrap items-center gap-1.5 mt-1.5">
                   {item.operationType === 'reaproveitamento_produto_novo' ? (
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                       Entrada Vinculada (Novo)
@@ -189,7 +189,7 @@ export default function SearchHistoryGroup({
                 </div>
               )}
 
-              <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400 font-mono">
+              <div className="isbn-history-identifiers flex items-center justify-between mt-1 text-[10px] text-slate-400 font-mono">
                 <span className="text-blue-700 font-medium">ISBN {item.isbn}</span>
                 <span className="flex items-center gap-1" title={`${formatStoreDateTime(item.timestamp)} (São Paulo)`}>
                   <Clock className="w-2.5 h-2.5" />

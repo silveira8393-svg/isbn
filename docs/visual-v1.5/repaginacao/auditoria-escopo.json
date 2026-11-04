@@ -1,0 +1,83 @@
+{
+  "reference": "48f25bcbcfac7e5491e508fe36e14e6fc15b5fc0",
+  "functionalReference": "93ff20473ca68b50d42d075276e07c624772c9e0",
+  "protectedPathsUnchanged": true,
+  "evidence": [
+    {
+      "file": "src/App.tsx",
+      "result": "identical AST after removing presentation classes and the static login wrapper/panel"
+    },
+    {
+      "file": "src/components/BookDetailsCard.tsx",
+      "result": "identical AST after removing presentation classes and the static login wrapper/panel"
+    },
+    {
+      "file": "src/components/Login.tsx",
+      "result": "identical AST after removing presentation classes and the static login wrapper/panel"
+    },
+    {
+      "file": "src/components/OwnerDashboard.tsx",
+      "result": "identical AST after removing presentation classes and the static login wrapper/panel"
+    },
+    {
+      "file": "src/components/SearchForm.tsx",
+      "result": "identical AST after removing presentation classes and the static login wrapper/panel"
+    },
+    {
+      "file": "src/components/SearchHistoryGroup.tsx",
+      "result": "identical AST after removing presentation classes and the static login wrapper/panel"
+    },
+    {
+      "file": "src/components/SettingsView.tsx",
+      "result": "identical AST after removing presentation classes and the static login wrapper/panel"
+    },
+    {
+      "file": "src/components/magazord/AdvancedFiscalSection.tsx",
+      "result": "identical AST after removing presentation classes and the static login wrapper/panel"
+    },
+    {
+      "file": "src/components/magazord/BibliographicSection.tsx",
+      "result": "identical AST after removing presentation classes and the static login wrapper/panel"
+    },
+    {
+      "file": "src/components/magazord/CategoryAndBrandSection.tsx",
+      "result": "identical AST after removing presentation classes and the static login wrapper/panel"
+    },
+    {
+      "file": "src/components/magazord/CommercialSection.tsx",
+      "result": "identical AST after removing presentation classes and the static login wrapper/panel"
+    },
+    {
+      "file": "src/components/magazord/ImagesSection.tsx",
+      "result": "identical AST after removing presentation classes and the static login wrapper/panel"
+    },
+    {
+      "file": "src/components/magazord/MagazordStatusCard.tsx",
+      "result": "identical AST after removing presentation classes and the static login wrapper/panel"
+    },
+    {
+      "file": "src/components/magazord/PhysicalAttributesSection.tsx",
+      "result": "identical AST after removing presentation classes and the static login wrapper/panel"
+    },
+    {
+      "file": "src/components/magazord/ProductIdentitySection.tsx",
+      "result": "identical AST after removing presentation classes and the static login wrapper/panel"
+    },
+    {
+      "file": "src/components/magazord/ProductRegistrationForm.tsx",
+      "result": "identical AST after removing presentation classes and the static login wrapper/panel"
+    },
+    {
+      "file": "src/components/magazord/SeoSection.tsx",
+      "result": "identical AST after removing presentation classes and the static login wrapper/panel"
+    },
+    {
+      "file": "src/components/magazord/SynopsisSection.tsx",
+      "result": "identical AST after removing presentation classes and the static login wrapper/panel"
+    },
+    {
+      "file": "src/components/magazord/UsedBookConditionSection.tsx",
+      "result": "identical AST after removing presentation classes and the static login wrapper/panel"
+    }
+  ]
+}

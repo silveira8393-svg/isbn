@@ -67,8 +67,19 @@ export default function Login({ message, notice }: { message: string | null; not
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-sm bg-white border border-slate-200 rounded-xl p-8 shadow-xs">
+    <main className="isbn-login min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
+      <div className="isbn-login-shell">
+        <aside className="isbn-login-brand">
+          <img src="/brand/livraria-sul.svg" alt="Sebo Livraria Sul" width="220" height="82" />
+          <div className="isbn-login-intro">
+            <span className="isbn-eyebrow">Ambiente de trabalho da livraria</span>
+            <h2>Consulta e cadastro<br />de livros.</h2>
+            <p>Do primeiro ISBN ao próximo capítulo do acervo.</p>
+          </div>
+          <BookOpen className="isbn-login-book" aria-hidden="true" strokeWidth={0.65} />
+          <span className="isbn-login-signature">SEBO LIVRARIA SUL · PROJETO ISBN</span>
+        </aside>
+      <div className="isbn-login-form w-full max-w-sm bg-white border border-slate-200 rounded-xl p-8 shadow-xs">
         <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-4"><BookOpen aria-hidden="true" /></div>
         <h1 className="text-xl font-bold text-slate-900">Projeto ISBN</h1>
         <p className="text-sm text-slate-500 mt-1 mb-6">Entre com sua conta para continuar.</p>
@@ -86,6 +97,7 @@ export default function Login({ message, notice }: { message: string | null; not
           <button type="submit" disabled={busy || recoveryBusy} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg py-2.5 disabled:opacity-60 cursor-pointer">{busy ? 'Entrando...' : 'Entrar'}</button>
           <button type="button" onClick={() => { void requestRecovery(); }} disabled={busy || recoveryBusy} className="w-full text-sm text-blue-600 hover:underline disabled:opacity-60 cursor-pointer">{recoveryBusy ? 'Enviando link...' : 'Esqueci minha senha'}</button>
         </form>
+      </div>
       </div>
     </main>
   );

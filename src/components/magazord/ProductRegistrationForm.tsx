@@ -262,12 +262,12 @@ export default function ProductRegistrationForm({
   ];
 
   return (
-    <div data-registration-form className="space-y-6 animate-fade-in w-full pb-16">
+    <div data-registration-form className="isbn-registration space-y-6 animate-fade-in w-full pb-16">
       <style>{[
         ...validFields.map(field => `[data-registration-form] [data-registration-field="${field}"] { border-color: #6ee7b7; }`),
         ...Object.keys(errors).map(field => `[data-registration-form] [data-registration-field="${field}"] { border-color: #f87171; background-color: #fef2f2; }`),
       ].join('\n')}</style>
-      {reviewing && <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-5 sm:p-7" aria-label="Revisão do cadastro">
+      {reviewing && <section className="isbn-review space-y-5 rounded-xl border border-slate-200 bg-white p-5 sm:p-7" aria-label="Revisão do cadastro">
         <h2 data-registration-field="review" tabIndex={-1} className="text-xl font-bold text-slate-900">Revisão do cadastro</h2>
         <p className="text-sm text-slate-600">Confira os dados e as imagens selecionadas. A operação será executada somente ao confirmar, no simulador existente.</p>
         <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{reviewRows.map(([label, value]) => <div key={label} className="min-w-0">
@@ -287,7 +287,7 @@ export default function ProductRegistrationForm({
           <button type="button" id="btn-confirm-magazord-registration" disabled={isSubmitting || imageUploadBusy} onClick={handleSubmit} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-bold text-white disabled:opacity-60">{isSubmitting ? 'Confirmando cadastro...' : 'Confirmar cadastro'}</button>
         </div>
       </section>}
-      <div hidden={reviewing} className="space-y-6" onChangeCapture={event => {
+      <div hidden={reviewing} className="isbn-registration-grid space-y-6" onChangeCapture={event => {
         const field = (event.target as HTMLElement).getAttribute?.('data-registration-field'); if (field) setEditingField(field);
       }} onBlurCapture={event => {
         const field = (event?.target as HTMLElement | undefined)?.getAttribute?.('data-registration-field');
@@ -295,7 +295,7 @@ export default function ProductRegistrationForm({
         setEditingField(null);
       }}>
       {/* Barra de Navegação e Título da Tela */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="isbn-registration-heading bg-white rounded-xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -454,7 +454,7 @@ export default function ProductRegistrationForm({
       />
 
       {/* Barra de Ação Inferior Flutuante / Fixa */}
-      <div className="sticky bottom-4 z-30 bg-slate-900 text-white rounded-2xl p-4 px-6 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4 border border-slate-700/80">
+      <div className="isbn-registration-actions sticky bottom-4 z-30 bg-slate-900 text-white rounded-2xl p-4 px-6 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4 border border-slate-700/80">
         <div className="flex items-center gap-3 text-xs">
           <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold">
             <Sparkles className="w-5 h-5" />

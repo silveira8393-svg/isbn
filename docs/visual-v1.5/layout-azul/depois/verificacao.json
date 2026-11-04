@@ -1,0 +1,1087 @@
+{
+  "stage": "depois",
+  "context": "Real components with isolated fixture users, books and database. External requests blocked. No authenticated production integration or persistence tested.",
+  "controlSignature": "SHA-256 of ordered control attributes and values serialized as JSON; excludes presentation classes.",
+  "evidence": [
+    {
+      "role": "operator",
+      "view": "login",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 4,
+      "controlSignature": "85d9811be4fbdb37022c2512a0e5c59cc569d3d7e7c6e3007111e8816bac5d1c"
+    },
+    {
+      "role": "operator",
+      "view": "consulta",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 17,
+      "controlSignature": "cc494d1fe654fe4eee1986443810b4a54b81982d37c553a358d914070c4b127c"
+    },
+    {
+      "role": "operator",
+      "view": "resultado",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 25,
+      "controlSignature": "1a749a12f359905250291f121e503d344ea34159d9215778f18bce581291eaf0"
+    },
+    {
+      "role": "operator",
+      "view": "cadastro-novo",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 54,
+      "controlSignature": "638b4e7e2a826b382a3b388b43668ebecdc7e974f4d02f0be0f4e15404164e05"
+    },
+    {
+      "role": "operator",
+      "view": "cadastro-usado",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 64,
+      "controlSignature": "5f0066577db47728b5df5dd463155a56038505fa1e9861f7efb8ff20ee30cbbf"
+    },
+    {
+      "role": "operator",
+      "view": "galeria",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 25,
+      "controlSignature": "1a749a12f359905250291f121e503d344ea34159d9215778f18bce581291eaf0"
+    },
+    {
+      "role": "operator",
+      "view": "revisao",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 62,
+      "controlSignature": "c6a93ab624b8d62f85eaa9b33a0d140fdf0b7a919bec9b3cb718c39b7c9c1c96"
+    },
+    {
+      "role": "operator",
+      "view": "historico",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 13,
+      "controlSignature": "bb7367f2b1b4ab05f0e8a3f453d4fe4ef355aeeb36cc5a6b77b3c586f30c92fb"
+    },
+    {
+      "role": "admin",
+      "view": "login",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 4,
+      "controlSignature": "85d9811be4fbdb37022c2512a0e5c59cc569d3d7e7c6e3007111e8816bac5d1c"
+    },
+    {
+      "role": "admin",
+      "view": "consulta",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 21,
+      "controlSignature": "35e55a6c4d4797bd32ffe7719a82d0fa3f458f4eef2d05e915a255ec27ef22c6"
+    },
+    {
+      "role": "admin",
+      "view": "resultado",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 29,
+      "controlSignature": "9915796ff748cf83542e93b744a2ca18e754fa71076231058f4a79f745dd720f"
+    },
+    {
+      "role": "admin",
+      "view": "cadastro-novo",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 58,
+      "controlSignature": "3bac6e553e1fb00ae53ecd9856cdeac609baedc9dca9b60583922519e9e640ba"
+    },
+    {
+      "role": "admin",
+      "view": "cadastro-usado",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 68,
+      "controlSignature": "a078b188f0a905c9b7189eb88f8c8d52664be1e62cd919d7b229130508892151"
+    },
+    {
+      "role": "admin",
+      "view": "galeria",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 29,
+      "controlSignature": "9915796ff748cf83542e93b744a2ca18e754fa71076231058f4a79f745dd720f"
+    },
+    {
+      "role": "admin",
+      "view": "revisao",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 66,
+      "controlSignature": "2bb794d519021bd7877497032cfe04d70e4ccca0b3cafb0b4e18ef6cace8da91"
+    },
+    {
+      "role": "admin",
+      "view": "historico",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 17,
+      "controlSignature": "58cc0e763135deb57f1d271d61354ddb92077957a0fec76a8a308a6a8cfc69b0"
+    },
+    {
+      "role": "admin",
+      "view": "dashboard",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 25,
+      "controlSignature": "4de82d495e5dd65ff305dd749a16cd3518f16db2a65f54ecf75cb9ab9e364dbd"
+    },
+    {
+      "role": "admin",
+      "view": "registros",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 40,
+      "controlSignature": "3d17f18191a6c1f2185d742e9afddd23075c8754bc8398f6f7e75605dd675784"
+    },
+    {
+      "role": "admin",
+      "view": "configuracoes",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 20,
+      "controlSignature": "55ea044d1ac13aa68697eb788aded0348de9ba530f7190f40b51f17451e4faf7"
+    },
+    {
+      "role": "developer",
+      "view": "login",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 4,
+      "controlSignature": "85d9811be4fbdb37022c2512a0e5c59cc569d3d7e7c6e3007111e8816bac5d1c"
+    },
+    {
+      "role": "developer",
+      "view": "consulta",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 21,
+      "controlSignature": "847cac6087c7e45d53a8beecebd8c85fff8ff05adafe2c3b0174240f8f8cb8da"
+    },
+    {
+      "role": "developer",
+      "view": "resultado",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 30,
+      "controlSignature": "e21f85cdf6f6ee238de35a06eb47c1e807ef4be0f701deb9927c800160f2ad09"
+    },
+    {
+      "role": "developer",
+      "view": "cadastro-novo",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 58,
+      "controlSignature": "0e2e375123b08094a752b37c743a8cfdc44afe4a29d53a6da9f0b7afcccb0d17"
+    },
+    {
+      "role": "developer",
+      "view": "cadastro-usado",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 68,
+      "controlSignature": "e177b1537a3e4bfbffc3efb8e980b11b5a131e857e01cd38f93c6c3e4f43871b"
+    },
+    {
+      "role": "developer",
+      "view": "galeria",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 30,
+      "controlSignature": "e21f85cdf6f6ee238de35a06eb47c1e807ef4be0f701deb9927c800160f2ad09"
+    },
+    {
+      "role": "developer",
+      "view": "revisao",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 66,
+      "controlSignature": "5d38b5cc9a0c192077e0df6d4346516a205cc2997823447891e30239d88ba387"
+    },
+    {
+      "role": "developer",
+      "view": "historico",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 17,
+      "controlSignature": "5b33b5814132a6a7bd9bce9562ecde2d549706fc60fb5b519e004613a59a1583"
+    },
+    {
+      "role": "developer",
+      "view": "dashboard",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 25,
+      "controlSignature": "03d073f67d1559fcd20b118ca458597b86c27aa93acd8e208557fa3585889301"
+    },
+    {
+      "role": "developer",
+      "view": "registros",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 40,
+      "controlSignature": "b32de89fb7167b8fc40bff3df9757a3b4d50c748aa95cbfbaad076b55297f07b"
+    },
+    {
+      "role": "developer",
+      "view": "configuracoes",
+      "width": 390,
+      "scrollWidth": 390,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 22,
+      "controlSignature": "ee6c5fa8c5483e7e8b7a5f11635ce489bc8c61e9351e8dcb42400491cd0c74b7"
+    },
+    {
+      "role": "operator",
+      "view": "login",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 4,
+      "controlSignature": "85d9811be4fbdb37022c2512a0e5c59cc569d3d7e7c6e3007111e8816bac5d1c"
+    },
+    {
+      "role": "operator",
+      "view": "consulta",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 17,
+      "controlSignature": "cc494d1fe654fe4eee1986443810b4a54b81982d37c553a358d914070c4b127c"
+    },
+    {
+      "role": "operator",
+      "view": "resultado",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 25,
+      "controlSignature": "1a749a12f359905250291f121e503d344ea34159d9215778f18bce581291eaf0"
+    },
+    {
+      "role": "operator",
+      "view": "cadastro-novo",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 54,
+      "controlSignature": "638b4e7e2a826b382a3b388b43668ebecdc7e974f4d02f0be0f4e15404164e05"
+    },
+    {
+      "role": "operator",
+      "view": "cadastro-usado",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 64,
+      "controlSignature": "5f0066577db47728b5df5dd463155a56038505fa1e9861f7efb8ff20ee30cbbf"
+    },
+    {
+      "role": "operator",
+      "view": "galeria",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 25,
+      "controlSignature": "1a749a12f359905250291f121e503d344ea34159d9215778f18bce581291eaf0"
+    },
+    {
+      "role": "operator",
+      "view": "revisao",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 62,
+      "controlSignature": "c6a93ab624b8d62f85eaa9b33a0d140fdf0b7a919bec9b3cb718c39b7c9c1c96"
+    },
+    {
+      "role": "operator",
+      "view": "historico",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 13,
+      "controlSignature": "bb7367f2b1b4ab05f0e8a3f453d4fe4ef355aeeb36cc5a6b77b3c586f30c92fb"
+    },
+    {
+      "role": "admin",
+      "view": "login",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 4,
+      "controlSignature": "85d9811be4fbdb37022c2512a0e5c59cc569d3d7e7c6e3007111e8816bac5d1c"
+    },
+    {
+      "role": "admin",
+      "view": "consulta",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 21,
+      "controlSignature": "35e55a6c4d4797bd32ffe7719a82d0fa3f458f4eef2d05e915a255ec27ef22c6"
+    },
+    {
+      "role": "admin",
+      "view": "resultado",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 29,
+      "controlSignature": "9915796ff748cf83542e93b744a2ca18e754fa71076231058f4a79f745dd720f"
+    },
+    {
+      "role": "admin",
+      "view": "cadastro-novo",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 58,
+      "controlSignature": "3bac6e553e1fb00ae53ecd9856cdeac609baedc9dca9b60583922519e9e640ba"
+    },
+    {
+      "role": "admin",
+      "view": "cadastro-usado",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 68,
+      "controlSignature": "a078b188f0a905c9b7189eb88f8c8d52664be1e62cd919d7b229130508892151"
+    },
+    {
+      "role": "admin",
+      "view": "galeria",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 29,
+      "controlSignature": "9915796ff748cf83542e93b744a2ca18e754fa71076231058f4a79f745dd720f"
+    },
+    {
+      "role": "admin",
+      "view": "revisao",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 66,
+      "controlSignature": "2bb794d519021bd7877497032cfe04d70e4ccca0b3cafb0b4e18ef6cace8da91"
+    },
+    {
+      "role": "admin",
+      "view": "historico",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 17,
+      "controlSignature": "58cc0e763135deb57f1d271d61354ddb92077957a0fec76a8a308a6a8cfc69b0"
+    },
+    {
+      "role": "admin",
+      "view": "dashboard",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 25,
+      "controlSignature": "4de82d495e5dd65ff305dd749a16cd3518f16db2a65f54ecf75cb9ab9e364dbd"
+    },
+    {
+      "role": "admin",
+      "view": "registros",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 40,
+      "controlSignature": "3d17f18191a6c1f2185d742e9afddd23075c8754bc8398f6f7e75605dd675784"
+    },
+    {
+      "role": "admin",
+      "view": "configuracoes",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 20,
+      "controlSignature": "55ea044d1ac13aa68697eb788aded0348de9ba530f7190f40b51f17451e4faf7"
+    },
+    {
+      "role": "developer",
+      "view": "login",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 4,
+      "controlSignature": "85d9811be4fbdb37022c2512a0e5c59cc569d3d7e7c6e3007111e8816bac5d1c"
+    },
+    {
+      "role": "developer",
+      "view": "consulta",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 21,
+      "controlSignature": "847cac6087c7e45d53a8beecebd8c85fff8ff05adafe2c3b0174240f8f8cb8da"
+    },
+    {
+      "role": "developer",
+      "view": "resultado",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 30,
+      "controlSignature": "e21f85cdf6f6ee238de35a06eb47c1e807ef4be0f701deb9927c800160f2ad09"
+    },
+    {
+      "role": "developer",
+      "view": "cadastro-novo",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 58,
+      "controlSignature": "0e2e375123b08094a752b37c743a8cfdc44afe4a29d53a6da9f0b7afcccb0d17"
+    },
+    {
+      "role": "developer",
+      "view": "cadastro-usado",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 68,
+      "controlSignature": "e177b1537a3e4bfbffc3efb8e980b11b5a131e857e01cd38f93c6c3e4f43871b"
+    },
+    {
+      "role": "developer",
+      "view": "galeria",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 30,
+      "controlSignature": "e21f85cdf6f6ee238de35a06eb47c1e807ef4be0f701deb9927c800160f2ad09"
+    },
+    {
+      "role": "developer",
+      "view": "revisao",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 66,
+      "controlSignature": "5d38b5cc9a0c192077e0df6d4346516a205cc2997823447891e30239d88ba387"
+    },
+    {
+      "role": "developer",
+      "view": "historico",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 17,
+      "controlSignature": "5b33b5814132a6a7bd9bce9562ecde2d549706fc60fb5b519e004613a59a1583"
+    },
+    {
+      "role": "developer",
+      "view": "dashboard",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 25,
+      "controlSignature": "03d073f67d1559fcd20b118ca458597b86c27aa93acd8e208557fa3585889301"
+    },
+    {
+      "role": "developer",
+      "view": "registros",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 40,
+      "controlSignature": "b32de89fb7167b8fc40bff3df9757a3b4d50c748aa95cbfbaad076b55297f07b"
+    },
+    {
+      "role": "developer",
+      "view": "configuracoes",
+      "width": 768,
+      "scrollWidth": 768,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 22,
+      "controlSignature": "ee6c5fa8c5483e7e8b7a5f11635ce489bc8c61e9351e8dcb42400491cd0c74b7"
+    },
+    {
+      "role": "operator",
+      "view": "login",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 4,
+      "controlSignature": "85d9811be4fbdb37022c2512a0e5c59cc569d3d7e7c6e3007111e8816bac5d1c"
+    },
+    {
+      "role": "operator",
+      "view": "consulta",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 17,
+      "controlSignature": "cc494d1fe654fe4eee1986443810b4a54b81982d37c553a358d914070c4b127c"
+    },
+    {
+      "role": "operator",
+      "view": "resultado",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 25,
+      "controlSignature": "1a749a12f359905250291f121e503d344ea34159d9215778f18bce581291eaf0"
+    },
+    {
+      "role": "operator",
+      "view": "cadastro-novo",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 54,
+      "controlSignature": "638b4e7e2a826b382a3b388b43668ebecdc7e974f4d02f0be0f4e15404164e05"
+    },
+    {
+      "role": "operator",
+      "view": "cadastro-usado",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 64,
+      "controlSignature": "5f0066577db47728b5df5dd463155a56038505fa1e9861f7efb8ff20ee30cbbf"
+    },
+    {
+      "role": "operator",
+      "view": "galeria",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 25,
+      "controlSignature": "1a749a12f359905250291f121e503d344ea34159d9215778f18bce581291eaf0"
+    },
+    {
+      "role": "operator",
+      "view": "revisao",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 62,
+      "controlSignature": "c6a93ab624b8d62f85eaa9b33a0d140fdf0b7a919bec9b3cb718c39b7c9c1c96"
+    },
+    {
+      "role": "operator",
+      "view": "historico",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 13,
+      "controlSignature": "bb7367f2b1b4ab05f0e8a3f453d4fe4ef355aeeb36cc5a6b77b3c586f30c92fb"
+    },
+    {
+      "role": "admin",
+      "view": "login",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 4,
+      "controlSignature": "85d9811be4fbdb37022c2512a0e5c59cc569d3d7e7c6e3007111e8816bac5d1c"
+    },
+    {
+      "role": "admin",
+      "view": "consulta",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 21,
+      "controlSignature": "35e55a6c4d4797bd32ffe7719a82d0fa3f458f4eef2d05e915a255ec27ef22c6"
+    },
+    {
+      "role": "admin",
+      "view": "resultado",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 29,
+      "controlSignature": "9915796ff748cf83542e93b744a2ca18e754fa71076231058f4a79f745dd720f"
+    },
+    {
+      "role": "admin",
+      "view": "cadastro-novo",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 58,
+      "controlSignature": "3bac6e553e1fb00ae53ecd9856cdeac609baedc9dca9b60583922519e9e640ba"
+    },
+    {
+      "role": "admin",
+      "view": "cadastro-usado",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 68,
+      "controlSignature": "a078b188f0a905c9b7189eb88f8c8d52664be1e62cd919d7b229130508892151"
+    },
+    {
+      "role": "admin",
+      "view": "galeria",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 29,
+      "controlSignature": "9915796ff748cf83542e93b744a2ca18e754fa71076231058f4a79f745dd720f"
+    },
+    {
+      "role": "admin",
+      "view": "revisao",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 66,
+      "controlSignature": "2bb794d519021bd7877497032cfe04d70e4ccca0b3cafb0b4e18ef6cace8da91"
+    },
+    {
+      "role": "admin",
+      "view": "historico",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 17,
+      "controlSignature": "58cc0e763135deb57f1d271d61354ddb92077957a0fec76a8a308a6a8cfc69b0"
+    },
+    {
+      "role": "admin",
+      "view": "dashboard",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 25,
+      "controlSignature": "4de82d495e5dd65ff305dd749a16cd3518f16db2a65f54ecf75cb9ab9e364dbd"
+    },
+    {
+      "role": "admin",
+      "view": "registros",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 40,
+      "controlSignature": "3d17f18191a6c1f2185d742e9afddd23075c8754bc8398f6f7e75605dd675784"
+    },
+    {
+      "role": "admin",
+      "view": "configuracoes",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 20,
+      "controlSignature": "55ea044d1ac13aa68697eb788aded0348de9ba530f7190f40b51f17451e4faf7"
+    },
+    {
+      "role": "developer",
+      "view": "login",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 4,
+      "controlSignature": "85d9811be4fbdb37022c2512a0e5c59cc569d3d7e7c6e3007111e8816bac5d1c"
+    },
+    {
+      "role": "developer",
+      "view": "consulta",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 21,
+      "controlSignature": "847cac6087c7e45d53a8beecebd8c85fff8ff05adafe2c3b0174240f8f8cb8da"
+    },
+    {
+      "role": "developer",
+      "view": "resultado",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 30,
+      "controlSignature": "e21f85cdf6f6ee238de35a06eb47c1e807ef4be0f701deb9927c800160f2ad09"
+    },
+    {
+      "role": "developer",
+      "view": "cadastro-novo",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 58,
+      "controlSignature": "0e2e375123b08094a752b37c743a8cfdc44afe4a29d53a6da9f0b7afcccb0d17"
+    },
+    {
+      "role": "developer",
+      "view": "cadastro-usado",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 68,
+      "controlSignature": "e177b1537a3e4bfbffc3efb8e980b11b5a131e857e01cd38f93c6c3e4f43871b"
+    },
+    {
+      "role": "developer",
+      "view": "galeria",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 30,
+      "controlSignature": "e21f85cdf6f6ee238de35a06eb47c1e807ef4be0f701deb9927c800160f2ad09"
+    },
+    {
+      "role": "developer",
+      "view": "revisao",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 66,
+      "controlSignature": "5d38b5cc9a0c192077e0df6d4346516a205cc2997823447891e30239d88ba387"
+    },
+    {
+      "role": "developer",
+      "view": "historico",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 17,
+      "controlSignature": "5b33b5814132a6a7bd9bce9562ecde2d549706fc60fb5b519e004613a59a1583"
+    },
+    {
+      "role": "developer",
+      "view": "dashboard",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 25,
+      "controlSignature": "03d073f67d1559fcd20b118ca458597b86c27aa93acd8e208557fa3585889301"
+    },
+    {
+      "role": "developer",
+      "view": "registros",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 40,
+      "controlSignature": "b32de89fb7167b8fc40bff3df9757a3b4d50c748aa95cbfbaad076b55297f07b"
+    },
+    {
+      "role": "developer",
+      "view": "configuracoes",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 22,
+      "controlSignature": "ee6c5fa8c5483e7e8b7a5f11635ce489bc8c61e9351e8dcb42400491cd0c74b7"
+    },
+    {
+      "role": "operator",
+      "view": "login",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 4,
+      "controlSignature": "85d9811be4fbdb37022c2512a0e5c59cc569d3d7e7c6e3007111e8816bac5d1c"
+    },
+    {
+      "role": "operator",
+      "view": "consulta",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 17,
+      "controlSignature": "cc494d1fe654fe4eee1986443810b4a54b81982d37c553a358d914070c4b127c"
+    },
+    {
+      "role": "operator",
+      "view": "resultado",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 25,
+      "controlSignature": "1a749a12f359905250291f121e503d344ea34159d9215778f18bce581291eaf0"
+    },
+    {
+      "role": "operator",
+      "view": "cadastro-novo",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 54,
+      "controlSignature": "638b4e7e2a826b382a3b388b43668ebecdc7e974f4d02f0be0f4e15404164e05"
+    },
+    {
+      "role": "operator",
+      "view": "cadastro-usado",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 64,
+      "controlSignature": "5f0066577db47728b5df5dd463155a56038505fa1e9861f7efb8ff20ee30cbbf"
+    },
+    {
+      "role": "operator",
+      "view": "galeria",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 25,
+      "controlSignature": "1a749a12f359905250291f121e503d344ea34159d9215778f18bce581291eaf0"
+    },
+    {
+      "role": "operator",
+      "view": "revisao",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 62,
+      "controlSignature": "c6a93ab624b8d62f85eaa9b33a0d140fdf0b7a919bec9b3cb718c39b7c9c1c96"
+    },
+    {
+      "role": "operator",
+      "view": "historico",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 13,
+      "controlSignature": "bb7367f2b1b4ab05f0e8a3f453d4fe4ef355aeeb36cc5a6b77b3c586f30c92fb"
+    },
+    {
+      "role": "admin",
+      "view": "login",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 4,
+      "controlSignature": "85d9811be4fbdb37022c2512a0e5c59cc569d3d7e7c6e3007111e8816bac5d1c"
+    },
+    {
+      "role": "admin",
+      "view": "consulta",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 21,
+      "controlSignature": "35e55a6c4d4797bd32ffe7719a82d0fa3f458f4eef2d05e915a255ec27ef22c6"
+    },
+    {
+      "role": "admin",
+      "view": "resultado",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 29,
+      "controlSignature": "9915796ff748cf83542e93b744a2ca18e754fa71076231058f4a79f745dd720f"
+    },
+    {
+      "role": "admin",
+      "view": "cadastro-novo",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 58,
+      "controlSignature": "3bac6e553e1fb00ae53ecd9856cdeac609baedc9dca9b60583922519e9e640ba"
+    },
+    {
+      "role": "admin",
+      "view": "cadastro-usado",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 68,
+      "controlSignature": "a078b188f0a905c9b7189eb88f8c8d52664be1e62cd919d7b229130508892151"
+    },
+    {
+      "role": "admin",
+      "view": "galeria",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 29,
+      "controlSignature": "9915796ff748cf83542e93b744a2ca18e754fa71076231058f4a79f745dd720f"
+    },
+    {
+      "role": "admin",
+      "view": "revisao",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 66,
+      "controlSignature": "2bb794d519021bd7877497032cfe04d70e4ccca0b3cafb0b4e18ef6cace8da91"
+    },
+    {
+      "role": "admin",
+      "view": "historico",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 17,
+      "controlSignature": "58cc0e763135deb57f1d271d61354ddb92077957a0fec76a8a308a6a8cfc69b0"
+    },
+    {
+      "role": "admin",
+      "view": "dashboard",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 25,
+      "controlSignature": "4de82d495e5dd65ff305dd749a16cd3518f16db2a65f54ecf75cb9ab9e364dbd"
+    },
+    {
+      "role": "admin",
+      "view": "registros",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 40,
+      "controlSignature": "3d17f18191a6c1f2185d742e9afddd23075c8754bc8398f6f7e75605dd675784"
+    },
+    {
+      "role": "admin",
+      "view": "configuracoes",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 20,
+      "controlSignature": "55ea044d1ac13aa68697eb788aded0348de9ba530f7190f40b51f17451e4faf7"
+    },
+    {
+      "role": "developer",
+      "view": "login",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 4,
+      "controlSignature": "85d9811be4fbdb37022c2512a0e5c59cc569d3d7e7c6e3007111e8816bac5d1c"
+    },
+    {
+      "role": "developer",
+      "view": "consulta",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 21,
+      "controlSignature": "847cac6087c7e45d53a8beecebd8c85fff8ff05adafe2c3b0174240f8f8cb8da"
+    },
+    {
+      "role": "developer",
+      "view": "resultado",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 30,
+      "controlSignature": "e21f85cdf6f6ee238de35a06eb47c1e807ef4be0f701deb9927c800160f2ad09"
+    },
+    {
+      "role": "developer",
+      "view": "cadastro-novo",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 58,
+      "controlSignature": "0e2e375123b08094a752b37c743a8cfdc44afe4a29d53a6da9f0b7afcccb0d17"
+    },
+    {
+      "role": "developer",
+      "view": "cadastro-usado",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 68,
+      "controlSignature": "e177b1537a3e4bfbffc3efb8e980b11b5a131e857e01cd38f93c6c3e4f43871b"
+    },
+    {
+      "role": "developer",
+      "view": "galeria",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 30,
+      "controlSignature": "e21f85cdf6f6ee238de35a06eb47c1e807ef4be0f701deb9927c800160f2ad09"
+    },
+    {
+      "role": "developer",
+      "view": "revisao",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 66,
+      "controlSignature": "5d38b5cc9a0c192077e0df6d4346516a205cc2997823447891e30239d88ba387"
+    },
+    {
+      "role": "developer",
+      "view": "historico",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 17,
+      "controlSignature": "5b33b5814132a6a7bd9bce9562ecde2d549706fc60fb5b519e004613a59a1583"
+    },
+    {
+      "role": "developer",
+      "view": "dashboard",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 25,
+      "controlSignature": "03d073f67d1559fcd20b118ca458597b86c27aa93acd8e208557fa3585889301"
+    },
+    {
+      "role": "developer",
+      "view": "registros",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 40,
+      "controlSignature": "b32de89fb7167b8fc40bff3df9757a3b4d50c748aa95cbfbaad076b55297f07b"
+    },
+    {
+      "role": "developer",
+      "view": "configuracoes",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+      "controlCount": 22,
+      "controlSignature": "ee6c5fa8c5483e7e8b7a5f11635ce489bc8c61e9351e8dcb42400491cd0c74b7"
+    }
+  ]
+}
