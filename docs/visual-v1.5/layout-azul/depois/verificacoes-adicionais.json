@@ -1,0 +1,617 @@
+{
+  "context": "Isolated UI checks, no confirmation/submission or backend write.",
+  "checks": [
+    {
+      "role": "operator",
+      "width": 390,
+      "view": "consulta",
+      "tabOrder": [
+        {
+          "id": "",
+          "title": "Limpar campo"
+        },
+        {
+          "id": "",
+          "title": "Ler código de barras via câmera"
+        },
+        {
+          "id": "search-submit-button",
+          "title": null
+        }
+      ],
+      "mobileDisclosureVerified": true,
+      "primaryControlContrast": [
+        5.41,
+        5.41,
+        14.68
+      ]
+    },
+    {
+      "role": "operator",
+      "width": 390,
+      "view": "cadastro-novo",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "operator",
+      "width": 390,
+      "view": "cadastro-usado",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "operator",
+      "width": 390,
+      "view": "revisao",
+      "registrationHiddenDuringReview": true
+    },
+    {
+      "role": "admin",
+      "width": 390,
+      "view": "consulta",
+      "tabOrder": [
+        {
+          "id": "",
+          "title": "Limpar campo"
+        },
+        {
+          "id": "",
+          "title": "Ler código de barras via câmera"
+        },
+        {
+          "id": "search-submit-button",
+          "title": null
+        }
+      ],
+      "mobileDisclosureVerified": true,
+      "primaryControlContrast": [
+        5.41,
+        5.41,
+        14.68
+      ]
+    },
+    {
+      "role": "admin",
+      "width": 390,
+      "view": "cadastro-novo",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "admin",
+      "width": 390,
+      "view": "cadastro-usado",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "admin",
+      "width": 390,
+      "view": "revisao",
+      "registrationHiddenDuringReview": true
+    },
+    {
+      "role": "admin",
+      "width": 390,
+      "view": "configuracoes",
+      "technicalNavigationRestricted": true
+    },
+    {
+      "role": "developer",
+      "width": 390,
+      "view": "consulta",
+      "tabOrder": [
+        {
+          "id": "",
+          "title": "Limpar campo"
+        },
+        {
+          "id": "",
+          "title": "Ler código de barras via câmera"
+        },
+        {
+          "id": "search-submit-button",
+          "title": null
+        }
+      ],
+      "mobileDisclosureVerified": true,
+      "primaryControlContrast": [
+        5.41,
+        5.41,
+        14.68
+      ]
+    },
+    {
+      "role": "developer",
+      "width": 390,
+      "view": "cadastro-novo",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "developer",
+      "width": 390,
+      "view": "cadastro-usado",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "developer",
+      "width": 390,
+      "view": "revisao",
+      "registrationHiddenDuringReview": true
+    },
+    {
+      "role": "developer",
+      "width": 390,
+      "view": "configuracoes",
+      "technicalNavigationRestricted": true
+    },
+    {
+      "role": "operator",
+      "width": 768,
+      "view": "consulta",
+      "tabOrder": [
+        {
+          "id": "",
+          "title": "Limpar campo"
+        },
+        {
+          "id": "",
+          "title": "Ler código de barras via câmera"
+        },
+        {
+          "id": "search-submit-button",
+          "title": null
+        }
+      ],
+      "mobileDisclosureVerified": false,
+      "primaryControlContrast": [
+        5.41,
+        5.41,
+        14.68
+      ]
+    },
+    {
+      "role": "operator",
+      "width": 768,
+      "view": "cadastro-novo",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "operator",
+      "width": 768,
+      "view": "cadastro-usado",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "operator",
+      "width": 768,
+      "view": "revisao",
+      "registrationHiddenDuringReview": true
+    },
+    {
+      "role": "admin",
+      "width": 768,
+      "view": "consulta",
+      "tabOrder": [
+        {
+          "id": "",
+          "title": "Limpar campo"
+        },
+        {
+          "id": "",
+          "title": "Ler código de barras via câmera"
+        },
+        {
+          "id": "search-submit-button",
+          "title": null
+        }
+      ],
+      "mobileDisclosureVerified": false,
+      "primaryControlContrast": [
+        5.41,
+        5.41,
+        14.68
+      ]
+    },
+    {
+      "role": "admin",
+      "width": 768,
+      "view": "cadastro-novo",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "admin",
+      "width": 768,
+      "view": "cadastro-usado",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "admin",
+      "width": 768,
+      "view": "revisao",
+      "registrationHiddenDuringReview": true
+    },
+    {
+      "role": "admin",
+      "width": 768,
+      "view": "configuracoes",
+      "technicalNavigationRestricted": true
+    },
+    {
+      "role": "developer",
+      "width": 768,
+      "view": "consulta",
+      "tabOrder": [
+        {
+          "id": "",
+          "title": "Limpar campo"
+        },
+        {
+          "id": "",
+          "title": "Ler código de barras via câmera"
+        },
+        {
+          "id": "search-submit-button",
+          "title": null
+        }
+      ],
+      "mobileDisclosureVerified": false,
+      "primaryControlContrast": [
+        5.41,
+        5.41,
+        14.68
+      ]
+    },
+    {
+      "role": "developer",
+      "width": 768,
+      "view": "cadastro-novo",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "developer",
+      "width": 768,
+      "view": "cadastro-usado",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "developer",
+      "width": 768,
+      "view": "revisao",
+      "registrationHiddenDuringReview": true
+    },
+    {
+      "role": "developer",
+      "width": 768,
+      "view": "configuracoes",
+      "technicalNavigationRestricted": true
+    },
+    {
+      "role": "operator",
+      "width": 1024,
+      "view": "consulta",
+      "tabOrder": [
+        {
+          "id": "",
+          "title": "Limpar campo"
+        },
+        {
+          "id": "",
+          "title": "Ler código de barras via câmera"
+        },
+        {
+          "id": "search-submit-button",
+          "title": null
+        }
+      ],
+      "mobileDisclosureVerified": false,
+      "primaryControlContrast": [
+        5.41,
+        5.41,
+        14.68
+      ]
+    },
+    {
+      "role": "operator",
+      "width": 1024,
+      "view": "cadastro-novo",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "operator",
+      "width": 1024,
+      "view": "cadastro-usado",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "operator",
+      "width": 1024,
+      "view": "revisao",
+      "registrationHiddenDuringReview": true
+    },
+    {
+      "role": "admin",
+      "width": 1024,
+      "view": "consulta",
+      "tabOrder": [
+        {
+          "id": "",
+          "title": "Limpar campo"
+        },
+        {
+          "id": "",
+          "title": "Ler código de barras via câmera"
+        },
+        {
+          "id": "search-submit-button",
+          "title": null
+        }
+      ],
+      "mobileDisclosureVerified": false,
+      "primaryControlContrast": [
+        5.41,
+        5.41,
+        14.68
+      ]
+    },
+    {
+      "role": "admin",
+      "width": 1024,
+      "view": "cadastro-novo",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "admin",
+      "width": 1024,
+      "view": "cadastro-usado",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "admin",
+      "width": 1024,
+      "view": "revisao",
+      "registrationHiddenDuringReview": true
+    },
+    {
+      "role": "admin",
+      "width": 1024,
+      "view": "configuracoes",
+      "technicalNavigationRestricted": true
+    },
+    {
+      "role": "developer",
+      "width": 1024,
+      "view": "consulta",
+      "tabOrder": [
+        {
+          "id": "",
+          "title": "Limpar campo"
+        },
+        {
+          "id": "",
+          "title": "Ler código de barras via câmera"
+        },
+        {
+          "id": "search-submit-button",
+          "title": null
+        }
+      ],
+      "mobileDisclosureVerified": false,
+      "primaryControlContrast": [
+        5.41,
+        5.41,
+        14.68
+      ]
+    },
+    {
+      "role": "developer",
+      "width": 1024,
+      "view": "cadastro-novo",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "developer",
+      "width": 1024,
+      "view": "cadastro-usado",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "developer",
+      "width": 1024,
+      "view": "revisao",
+      "registrationHiddenDuringReview": true
+    },
+    {
+      "role": "developer",
+      "width": 1024,
+      "view": "configuracoes",
+      "technicalNavigationRestricted": true
+    },
+    {
+      "role": "operator",
+      "width": 1440,
+      "view": "consulta",
+      "tabOrder": [
+        {
+          "id": "",
+          "title": "Limpar campo"
+        },
+        {
+          "id": "",
+          "title": "Ler código de barras via câmera"
+        },
+        {
+          "id": "search-submit-button",
+          "title": null
+        }
+      ],
+      "mobileDisclosureVerified": false,
+      "primaryControlContrast": [
+        5.41,
+        5.41,
+        14.68
+      ]
+    },
+    {
+      "role": "operator",
+      "width": 1440,
+      "view": "cadastro-novo",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "operator",
+      "width": 1440,
+      "view": "cadastro-usado",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "operator",
+      "width": 1440,
+      "view": "revisao",
+      "registrationHiddenDuringReview": true
+    },
+    {
+      "role": "admin",
+      "width": 1440,
+      "view": "consulta",
+      "tabOrder": [
+        {
+          "id": "",
+          "title": "Limpar campo"
+        },
+        {
+          "id": "",
+          "title": "Ler código de barras via câmera"
+        },
+        {
+          "id": "search-submit-button",
+          "title": null
+        }
+      ],
+      "mobileDisclosureVerified": false,
+      "primaryControlContrast": [
+        5.41,
+        5.41,
+        14.68
+      ]
+    },
+    {
+      "role": "admin",
+      "width": 1440,
+      "view": "cadastro-novo",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "admin",
+      "width": 1440,
+      "view": "cadastro-usado",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "admin",
+      "width": 1440,
+      "view": "revisao",
+      "registrationHiddenDuringReview": true
+    },
+    {
+      "role": "admin",
+      "width": 1440,
+      "view": "configuracoes",
+      "technicalNavigationRestricted": true
+    },
+    {
+      "role": "developer",
+      "width": 1440,
+      "view": "consulta",
+      "tabOrder": [
+        {
+          "id": "",
+          "title": "Limpar campo"
+        },
+        {
+          "id": "",
+          "title": "Ler código de barras via câmera"
+        },
+        {
+          "id": "search-submit-button",
+          "title": null
+        }
+      ],
+      "mobileDisclosureVerified": false,
+      "primaryControlContrast": [
+        5.41,
+        5.41,
+        14.68
+      ]
+    },
+    {
+      "role": "developer",
+      "width": 1440,
+      "view": "cadastro-novo",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "developer",
+      "width": 1440,
+      "view": "cadastro-usado",
+      "quantityDefault": 1,
+      "quantityEditable": true,
+      "centMask": true
+    },
+    {
+      "role": "developer",
+      "width": 1440,
+      "view": "revisao",
+      "registrationHiddenDuringReview": true
+    },
+    {
+      "role": "developer",
+      "width": 1440,
+      "view": "configuracoes",
+      "technicalNavigationRestricted": true
+    }
+  ]
+}

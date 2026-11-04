@@ -1,0 +1,57 @@
+{
+  "reference": "8c96e2c00ebdb360142b80b49038512b42979d1c",
+  "functionalReference": "93ff20473ca68b50d42d075276e07c624772c9e0",
+  "protectedPathsUnchanged": true,
+  "evidence": [
+    {
+      "file": "src/App.tsx",
+      "functionalDeclarationsAndExpressionsUnchanged": true,
+      "orderedControlPropertiesUnchanged": true
+    },
+    {
+      "file": "src/components/Header.tsx",
+      "functionalDeclarationsAndExpressionsUnchanged": true,
+      "orderedControlPropertiesUnchanged": true
+    },
+    {
+      "file": "src/components/SearchHistoryGroup.tsx",
+      "functionalDeclarationsAndExpressionsUnchanged": true,
+      "orderedControlPropertiesUnchanged": true
+    },
+    {
+      "file": "src/components/SettingsView.tsx",
+      "functionalDeclarationsAndExpressionsUnchanged": true,
+      "orderedControlPropertiesUnchanged": true
+    },
+    {
+      "file": "src/components/magazord/AdvancedFiscalSection.tsx",
+      "functionalDeclarationsAndExpressionsUnchanged": true,
+      "orderedControlPropertiesUnchanged": true
+    },
+    {
+      "file": "src/components/magazord/BibliographicSection.tsx",
+      "functionalDeclarationsAndExpressionsUnchanged": true,
+      "orderedControlPropertiesUnchanged": true
+    },
+    {
+      "file": "src/components/magazord/CommercialSection.tsx",
+      "functionalDeclarationsAndExpressionsUnchanged": true,
+      "orderedControlPropertiesUnchanged": true
+    },
+    {
+      "file": "src/components/magazord/ImagesSection.tsx",
+      "functionalDeclarationsAndExpressionsUnchanged": true,
+      "orderedControlPropertiesUnchanged": true
+    },
+    {
+      "file": "src/components/magazord/PhysicalAttributesSection.tsx",
+      "functionalDeclarationsAndExpressionsUnchanged": true,
+      "orderedControlPropertiesUnchanged": true
+    },
+    {
+      "file": "src/components/magazord/ProductRegistrationForm.tsx",
+      "functionalDeclarationsAndExpressionsUnchanged": true,
+      "orderedControlPropertiesUnchanged": true
+    }
+  ]
+}

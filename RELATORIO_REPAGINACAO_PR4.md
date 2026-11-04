@@ -1,5 +1,7 @@
 # PR #4 — repaginação visual completa
 
+Registro histórico da iteração `8c96e2c`. A direção estética atual é o [layout azul aprovado](RELATORIO_LAYOUT_AZUL_PR4.md), que substitui esta apresentação sem alterar a referência funcional.
+
 ## Controle anterior à implementação
 
 - Continuação exclusiva de `feat/isbn-visual-livraria-sul` e da PR #4 em rascunho.

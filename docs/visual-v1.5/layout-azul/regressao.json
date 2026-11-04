@@ -1,0 +1,12 @@
+{
+  "command": "node --test --test-concurrency=1 tests/*.test.mjs",
+  "tests": 701,
+  "passed": 698,
+  "failed": 3,
+  "failures": [
+    "tests\\infrastructureUi.test.mjs:58:56",
+    "tests\\infrastructureUi.test.mjs:58:56",
+    "tests\\infrastructureUi.test.mjs:58:56"
+  ],
+  "diagnostic": "Same pre-existing infrastructureUi.test.mjs mock lacks React.lazy. No functional tests were edited."
+}

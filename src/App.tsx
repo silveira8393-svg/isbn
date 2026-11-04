@@ -825,7 +825,7 @@ export default function App() {
 
         {/* ABA 3: HISTÓRICO */}
         {activeTab === 'historico' && (
-          <div className="max-w-3xl mx-auto">
+          <div className="isbn-history-page max-w-3xl mx-auto">
             <SearchHistoryGroup
               items={visibleHistory}
               onSelect={(isbn) => {

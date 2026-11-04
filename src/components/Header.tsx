@@ -10,6 +10,7 @@ import {
   Sparkles,
   BarChart3,
   Settings,
+  Menu,
 } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
 import UserSwitcher from './UserSwitcher';
@@ -38,24 +39,17 @@ export default function Header({
 
   return (
     <header className="isbn-header bg-blue-600 border-b border-blue-700 shadow-sm text-white sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+      <div className="isbn-shell-container max-w-7xl mx-auto px-4 sm:px-6">
         {/* DESKTOP / TABLET (md e superior): Linha única com navegação centralizada e perfil à direita */}
         <div className="isbn-header-layout hidden md:grid md:grid-cols-[1fr_auto_1fr] items-center h-16 gap-4">
           {/* Logo / Identidade à esquerda */}
-          <div className="flex items-center gap-3 min-w-0">
+          <aside className="isbn-sidebar">
+          <div className="isbn-sidebar-brand">
             <img className="isbn-brand-logo" src="/brand/livraria-sul.svg" alt="Sebo Livraria Sul" width="220" height="82" />
-            <div className="min-w-0">
-              <h1 className="text-lg lg:text-xl font-bold tracking-tight text-white leading-tight truncate">
-                Projeto ISBN
-              </h1>
-              <p className="text-xs text-blue-100 truncate">
-                Balcão · Magazord simulada
-              </p>
-            </div>
           </div>
 
           {/* Navegação centralizada e equilibrada */}
-          <nav className="flex items-center gap-1.5 p-1 bg-blue-700/70 border border-blue-500/40 rounded-lg text-xs font-medium justify-center shrink-0">
+          <nav aria-label="Navegação principal" className="flex items-center gap-1.5 p-1 bg-blue-700/70 border border-blue-500/40 rounded-lg text-xs font-medium justify-center shrink-0">
             <button
               type="button"
               onClick={() => onTabChange?.('consultar')}
@@ -140,6 +134,16 @@ export default function Header({
               </button>
             )}
           </nav>
+          </aside>
+
+          <div className="isbn-topbar-context min-w-0">
+            <h1 className="text-lg lg:text-xl font-bold tracking-tight text-white leading-tight truncate">
+              Projeto ISBN
+            </h1>
+            <p className="text-xs text-blue-100 truncate">
+              Balcão · Magazord simulada
+            </p>
+          </div>
 
           {/* Coluna direita: Identificação e Seletor do Usuário */}
           <div className="flex items-center justify-end min-w-0">
@@ -148,7 +152,7 @@ export default function Header({
         </div>
 
         {/* MOBILE (menor que md): Duas linhas organizadas sem qualquer overflow */}
-        <div className="md:hidden py-2.5 space-y-2">
+        <div className="isbn-mobile-shell md:hidden py-2.5 space-y-2">
           {/* LINHA 1: Logo/ícone + identificação do sistema à esquerda e Perfil à direita */}
           <div className="flex items-center justify-between gap-2 min-w-0">
             <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -170,7 +174,10 @@ export default function Header({
           </div>
 
           {/* LINHA 2: Navegação responsiva proporcional sem overflow */}
+          <details className="isbn-mobile-navigation" open>
+            <summary><Menu className="w-4 h-4" aria-hidden="true" /><span>Menu de navegação</span></summary>
           <nav
+            aria-label="Navegação principal"
             className={`w-full grid gap-1 p-1 bg-blue-700/70 border border-blue-500/40 rounded-lg text-[10px] sm:text-xs font-medium ${
               isOperator ? 'grid-cols-3' : 'grid-cols-5'
             }`}
@@ -259,6 +266,7 @@ export default function Header({
               </button>
             )}
           </nav>
+          </details>
         </div>
       </div>
     </header>

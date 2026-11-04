@@ -287,7 +287,7 @@ export default function ProductRegistrationForm({
           <button type="button" id="btn-confirm-magazord-registration" disabled={isSubmitting || imageUploadBusy} onClick={handleSubmit} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-bold text-white disabled:opacity-60">{isSubmitting ? 'Confirmando cadastro...' : 'Confirmar cadastro'}</button>
         </div>
       </section>}
-      <div hidden={reviewing} className="space-y-6" onChangeCapture={event => {
+      <div hidden={reviewing} className="isbn-registration-grid space-y-6" onChangeCapture={event => {
         const field = (event.target as HTMLElement).getAttribute?.('data-registration-field'); if (field) setEditingField(field);
       }} onBlurCapture={event => {
         const field = (event?.target as HTMLElement | undefined)?.getAttribute?.('data-registration-field');

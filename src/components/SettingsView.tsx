@@ -61,7 +61,8 @@ export default function SettingsView() {
       </div>
 
       {/* Navegação entre seções de configuração */}
-      <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-2">
+      <div className="isbn-settings-layout">
+      <div className="isbn-settings-navigation flex flex-wrap gap-2 border-b border-slate-200 pb-2">
         {canManageConditionTemplates(currentUser) && <button type="button" onClick={() => setActiveSubTab('modelos')}
           className={`rounded-lg px-3.5 py-2 text-xs font-semibold ${activeSubTab === 'modelos' ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-600'}`}>Modelos de conservação</button>}
         {canViewDeveloperTools && <button type="button" onClick={() => setActiveSubTab('infraestrutura')}
@@ -139,7 +140,7 @@ export default function SettingsView() {
       </div>
 
       {/* Conteúdo Conforme Subaba */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs space-y-4">
+      <div className="isbn-settings-content bg-white rounded-xl border border-slate-200 p-6 shadow-xs space-y-4">
         {activeSubTab === 'infraestrutura' && canViewDeveloperTools && <InfrastructureEntry />}
         {activeSubTab === 'amazon-lab' && showAmazonLab && AmazonLab && <Suspense fallback={<p role="status">Carregando laboratório Amazon…</p>}>
           <AmazonLab key={currentUser.id} />
@@ -261,6 +262,7 @@ export default function SettingsView() {
         {activeSubTab === 'usuarios' && (
           <UserManagement />
         )}
+      </div>
       </div>
     </div>
   );
