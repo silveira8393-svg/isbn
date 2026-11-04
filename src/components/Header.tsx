@@ -5,7 +5,6 @@
 
 import React from 'react';
 import {
-  BookOpen,
   Search,
   History,
   Sparkles,
@@ -38,21 +37,19 @@ export default function Header({
   const { canViewProduction, canViewSettings, isOperator } = useUser();
 
   return (
-    <header className="bg-blue-600 border-b border-blue-700 shadow-sm text-white sticky top-0 z-40">
+    <header className="isbn-header bg-blue-600 border-b border-blue-700 shadow-sm text-white sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         {/* DESKTOP / TABLET (md e superior): Linha única com navegação centralizada e perfil à direita */}
-        <div className="hidden md:grid md:grid-cols-[1fr_auto_1fr] items-center h-16 gap-4">
+        <div className="isbn-header-layout hidden md:grid md:grid-cols-[1fr_auto_1fr] items-center h-16 gap-4">
           {/* Logo / Identidade à esquerda */}
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center text-white shrink-0 shadow-xs">
-              <BookOpen className="w-5 h-5 stroke-[2]" />
-            </div>
+            <img className="isbn-brand-logo" src="/brand/livraria-sul.svg" alt="Sebo Livraria Sul" width="220" height="82" />
             <div className="min-w-0">
               <h1 className="text-lg lg:text-xl font-bold tracking-tight text-white leading-tight truncate">
-                Consulta ISBN para Sebos
+                Projeto ISBN
               </h1>
               <p className="text-xs text-blue-100 truncate">
-                Balcão de Atendimento · Magazord simulada
+                Balcão · Magazord simulada
               </p>
             </div>
           </div>
@@ -155,12 +152,10 @@ export default function Header({
           {/* LINHA 1: Logo/ícone + identificação do sistema à esquerda e Perfil à direita */}
           <div className="flex items-center justify-between gap-2 min-w-0">
             <div className="flex items-center gap-2 min-w-0 flex-1">
-              <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center text-white shrink-0 shadow-xs">
-                <BookOpen className="w-4 h-4 stroke-[2]" />
-              </div>
+              <img className="isbn-brand-logo isbn-brand-logo-mobile" src="/brand/livraria-sul.svg" alt="Sebo Livraria Sul" width="220" height="82" />
               <div className="min-w-0 flex-1">
                 <h1 className="text-sm font-bold tracking-tight text-white leading-tight truncate">
-                  Consulta ISBN para Sebos
+                  Projeto ISBN
                 </h1>
                 <p className="text-[10px] text-blue-100 truncate">
                   Balcão · Magazord simulada
