@@ -7,7 +7,7 @@ interface SeoSectionProps {
 
 export default function SeoSection({ draft, onChange }: SeoSectionProps) {
   const value = draft.metaDescription ?? '';
-  return <section aria-label="SEO do produto" className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
+  return <section aria-label="SEO do produto" className="isbn-form-section space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
     <div>
       <h3 className="text-sm font-bold text-slate-900">SEO do produto</h3>
       <p className="text-xs text-slate-500">Resumo da obra para os mecanismos de busca, separado da sinopse e das observações do exemplar.</p>

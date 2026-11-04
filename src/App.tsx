@@ -637,9 +637,9 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col selection:bg-blue-100 selection:text-blue-800">
+    <div className="isbn-app-shell min-h-screen bg-slate-50 flex flex-col selection:bg-blue-100 selection:text-blue-800">
       {/* 1. Header azul profissional com navegação Consultar | Cadastro | Histórico */}
-      <div className="border-b bg-white px-4 py-2 text-xs text-slate-600">Loja operacional: <strong>{currentUser.storeName}</strong>
+      <div className="isbn-store-context border-b bg-white px-4 py-2 text-xs text-slate-600">Loja operacional: <strong>{currentUser.storeName}</strong>
         {magazordMockService.hasUnscopedLegacyCatalog?.() && <p>O catálogo simulado agora é separado por loja. Registros locais antigos sem identificação de loja estão preservados, sem atribuição automática.</p>}
       </div>
       <Header
@@ -653,7 +653,7 @@ export default function App() {
       />
 
       {/* 2. Main Content Viewport */}
-      <main className={`${activeTab === 'dashboard' ? 'max-w-[1440px]' : 'max-w-7xl'} mx-auto px-4 sm:px-6 py-6 flex-1 w-full`}>
+      <main className={`isbn-workspace ${activeTab === 'dashboard' ? 'max-w-[1440px]' : 'max-w-7xl'} mx-auto px-4 sm:px-6 py-6 flex-1 w-full`}>
         <p data-integration-mode={magazordPresentation.mode} className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">{magazordPresentation.notice}</p>
         {savingAudit > 0 && <p role="status" className="mb-3 text-sm text-slate-600">Confirmando auditoria de {savingAudit} operação(ões)...</p>}
         {auditConfirmation && <p role="status" className="mb-3 break-words text-xs text-slate-600">Último evento com auditoria confirmada: {auditConfirmation.eventId} · {formatStoreDateTime(auditConfirmation.at)} (São Paulo). Este registro não comprova publicação na Magazord.</p>}
@@ -743,7 +743,7 @@ export default function App() {
 
               {/* Empty / Counter Welcome State */}
               {!foundBook && !errorText && !isLoading && (
-                <div className="bg-white rounded-xl border border-slate-200 p-8 sm:p-12 text-center shadow-xs flex flex-col items-center justify-center min-h-[360px] animate-fade-in">
+                <div className="isbn-lookup-empty bg-white rounded-xl border border-slate-200 p-8 sm:p-12 text-center shadow-xs flex flex-col items-center justify-center min-h-[360px] animate-fade-in">
                   <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4 border border-blue-100">
                     <BookOpen className="w-7 h-7 stroke-[1.7]" />
                   </div>

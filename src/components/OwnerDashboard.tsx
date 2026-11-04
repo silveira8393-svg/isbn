@@ -141,7 +141,7 @@ export default function OwnerDashboard() {
 
   if (!canViewProduction) return null;
 
-  return <div className="mx-auto w-full min-w-0 max-w-[1440px] space-y-4 pb-6 animate-fade-in">
+  return <div className="isbn-dashboard mx-auto w-full min-w-0 max-w-[1440px] space-y-4 pb-6 animate-fade-in">
     <header className="rounded-lg border border-slate-200 bg-white">
       <div className="flex flex-wrap items-center gap-3 px-4 py-2 lg:flex-nowrap">
         <div className="min-w-0 lg:mr-auto">

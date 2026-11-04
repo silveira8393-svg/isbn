@@ -40,7 +40,7 @@ export default function UsedBookConditionSection({
   };
 
   return (
-    <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-5 sm:p-6 space-y-4 animate-fade-in">
+    <div className="isbn-form-section bg-amber-50/70 border border-amber-200 rounded-xl p-5 sm:p-6 space-y-4 animate-fade-in">
       <div className="flex items-center gap-2 border-b border-amber-200/60 pb-3">
         <div className="w-8 h-8 rounded-lg bg-amber-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
           <Tag className="w-4 h-4" />

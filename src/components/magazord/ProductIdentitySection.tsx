@@ -62,7 +62,7 @@ export default function ProductIdentitySection({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-5">
+    <div className="isbn-form-section bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-5">
       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-sm">

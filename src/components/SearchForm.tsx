@@ -45,7 +45,7 @@ export default function SearchForm({
   const isTooBig = cleanLength > 13;
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-4 sm:p-5">
+    <div className="isbn-search-panel bg-white rounded-xl border border-slate-200 shadow-xs p-4 sm:p-5">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center">

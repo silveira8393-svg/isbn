@@ -1,5 +1,7 @@
 ﻿# Projeto ISBN — identidade visual 1.5
 
+Este é o registro histórico da primeira iteração (`48f25bc`). A continuação da PR #4 está documentada em [RELATORIO_REPAGINACAO_PR4.md](RELATORIO_REPAGINACAO_PR4.md).
+
 ## Controle anterior à implementação
 
 - Base protegida: `93ff20473ca68b50d42d075276e07c624772c9e0`.

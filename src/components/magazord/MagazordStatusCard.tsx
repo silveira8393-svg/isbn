@@ -128,7 +128,7 @@ export default function MagazordStatusCard({
   const usedMatches = checkResult?.matches?.filter((m) => m.condition === 'usado') || [];
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-fade-in">
+    <div className="isbn-integration-card bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-fade-in">
       {/* Barra superior de status Magazord */}
       <div className="bg-slate-900 text-white px-5 py-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">

@@ -26,7 +26,7 @@ export default function SearchHistoryGroup({
 
   if (items.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-6 flex flex-col items-center justify-center text-center min-h-[220px]">
+      <div className="isbn-history isbn-history-empty bg-white rounded-xl border border-slate-200 shadow-xs p-6 flex flex-col items-center justify-center text-center min-h-[220px]">
         <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
           <History className="w-5 h-5 stroke-[1.5]" />
         </div>
@@ -39,7 +39,7 @@ export default function SearchHistoryGroup({
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col overflow-hidden">
+    <div className="isbn-history bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col overflow-hidden">
       {/* Header */}
       <div className="p-3.5 px-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">

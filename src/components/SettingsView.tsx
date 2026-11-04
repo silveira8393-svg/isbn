@@ -32,7 +32,7 @@ export default function SettingsView() {
   const showAmazonLab = isAmazonLabAvailable(currentUser.role, currentUser.active);
 
   return (
-    <div className="w-full max-w-5xl mx-auto space-y-6 animate-fade-in pb-12">
+    <div className="isbn-settings w-full max-w-5xl mx-auto space-y-6 animate-fade-in pb-12">
       {/* Header de Configurações */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">

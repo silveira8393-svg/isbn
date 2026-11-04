@@ -1,0 +1,12 @@
+{
+  "command": "node --test --test-concurrency=1 tests/*.test.mjs",
+  "tests": 701,
+  "passed": 698,
+  "failed": 3,
+  "failures": [
+    "tests\\infrastructureUi.test.mjs:58:56",
+    "tests\\infrastructureUi.test.mjs:58:56",
+    "tests\\infrastructureUi.test.mjs:58:56"
+  ],
+  "diagnostic": "React mock in infrastructureUi.test.mjs does not implement lazy; same three failures reproduced in the homologated baseline during the first visual iteration."
+}
