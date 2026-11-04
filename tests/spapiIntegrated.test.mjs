@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
-const serverBuild = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts', contents: `export * from './server/spapi/core'; export * from './server/spapi/handler'; export * from './shared/publicationDate'; export {createRegistrationDraft} from './src/utils/draft'; export * from './src/utils/imageUrls';` },
+const serverBuild = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts', contents: `export {createAmazonFunction} from './server/amazonFunction'; export {parseAmazonHtml,toLabResult} from './experimentos/amazon/extrator_amazon'; export {isbn10For} from './experimentos/amazon/consulta_amazon'; export * from './server/spapi/core'; export * from './server/spapi/handler'; export * from './shared/publicationDate'; export {createRegistrationDraft} from './src/utils/draft'; export * from './src/utils/imageUrls';` },
   bundle: true, write: false, platform: 'node', format: 'esm' });
 const api = await import('data:text/javascript;base64,' + Buffer.from(serverBuild.outputFiles[0].text).toString('base64'));
 const uid = '11111111-1111-4111-8111-111111111111', sid = api.PRIVATE_STORE_ID, isbn = '9788535914849';
@@ -77,12 +77,12 @@ const clientBuild = await build({ stdin: { resolveDir: process.cwd(), loader: 't
     b.onLoad({ filter: /.*/, namespace: 'mock' }, () => ({ contents: 'export const supabase={auth:{getSession:async()=>globalThis.__spapiSession}}' }));
   } }] });
 const client = await import('data:text/javascript;base64,' + Buffer.from(clientBuild.outputFiles[0].text).toString('base64'));
-const user = { id: uid, storeId: sid, role: 'developer', active: true };
-test('automatic client uses same-origin session only for authorized Lab developer, without extra actions', async t => {
+const user = { id: uid, storeId: '6058abd1-96e5-465b-a1df-292e5cf76de3', role: 'developer', active: true };
+test('automatic client uses same-origin session only for developer in the operational store, without extra actions', async t => {
   const calls = []; globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
   t.after(() => { delete globalThis.__spapiSession; });
   t.mock.method(globalThis, 'fetch', async (url, init) => { calls.push({ url, init }); return Response.json({ isbn, items: [{ isbn, asin: 'SYNTHETIC1', marketplaceId: api.MARKETPLACE, title: 'Title', publisher: 'Publisher', images: ['forbidden'], synopsis: 'forbidden' }] }); });
-  for (const other of [{ ...user, role: 'operator' }, { ...user, storeId: uid }, { ...user, active: false }]) assert.equal((await client.searchAmazonOfficial(isbn, other)).status, 'skipped');
+  for (const other of [{ ...user, role: 'operator' }, { ...user, storeId: undefined }, { ...user, active: false }]) assert.equal((await client.searchAmazonOfficial(isbn, other)).status, 'skipped');
   assert.equal(calls.length, 0);
   const result = await client.searchAmazonOfficial(isbn, user); assert.equal(result.status, 'success'); assert.equal(result.book.publisher, 'Publisher');
   assert.equal(result.book.synopsis, undefined); assert.equal(result.book.coverUrl, undefined);
@@ -499,13 +499,14 @@ test('9781419762109: only MAIN plus blocked/empty laboratory preserves the cover
   }
 });
 
-test('a distinct PT01 image suppresses the laboratory, but cover/thumbnail URLs alone do not', async t => {
+test('a distinct PT01 image does not suppress complementary research; cover and existing photo are retained', async t => {
   const query = '9781419762109', cover = cdn('BATMANCOVER'), inside = cdn('BATMANINSIDE');
   t.mock.method(globalThis, 'fetch', async () => Response.json({ isbn: query, items: [{ isbn: query, asin: 'SYNTHETIC1', marketplaceId: api.MARKETPLACE,
     title: 'The Art of the Batman', images: [{ variant: 'MAIN', link: cover, width: 1400, height: 1900 },
       { variant: 'PT01', link: inside, width: 600, height: 800 }] }] }));
-  const view = mountApp({ lab: () => assert.fail('a real additional image needs no fallback') });
-  await view.search(query); view.render(); assert.deepEqual(view.find('BookDetailsCard').props.book.additionalImages, [inside]);
+  let partialCalls = 0;
+  const view = mountApp({ lab: async () => { partialCalls++; return { status: 'interrompida' }; } });
+  await view.search(query); view.render(); assert.deepEqual(view.find('BookDetailsCard').props.book.additionalImages, [inside]); assert.equal(partialCalls, 1);
   let calls = 0;
   const onlyCovers = mountApp({ brasil: { book: { id: 'base', title: 'Priority', coverUrl: cover, thumbnailUrl: cdn('THUMB') }, diagnostic: { status: 200 } },
     lab: async () => { calls++; return { status: 'interrompida' }; } });
@@ -531,17 +532,15 @@ test('automatic fallback reuses one authenticated laboratory request, imports on
   assert.deepEqual(base, before); assert.equal(calls.length, 1);
   const draft = api.createRegistrationDraft(merged);
   assert.equal(draft.mainImageUrl, base.coverUrl); assert.deepEqual(draft.additionalImageUrls, [cdn('BACK'), cdn('INSIDE')]);
-  await client.complementAmazonImages(merged, isbn, user); assert.equal(calls.length, 1, 'an available gallery needs no laboratory lookup');
+  await client.complementAmazonImages(merged, isbn, user); assert.equal(calls.length, 2, 'a later lookup may complement an existing gallery without duplicating images');
 });
 
-test('fallback skips restricted actors, invalid ISBNs, existing galleries and changed sessions', async t => {
+test('fallback skips restricted actors, invalid ISBNs and changed sessions', async t => {
   t.mock.method(globalThis, 'fetch', () => assert.fail('must not request Amazon'));
   const base = { id: 'base', title: 'Priority', coverUrl: cdn('MAIN') };
-  for (const actor of [{ ...user, role: 'operator' }, { ...user, storeId: uid }, { ...user, active: false }])
+  for (const actor of [{ ...user, role: 'unknown' }, { ...user, storeId: undefined }, { ...user, active: false }])
     assert.equal(await client.complementAmazonImages(base, isbn, actor), base);
   for (const query of ['invalid', '9788535914848', '9791090636071']) assert.equal(await client.complementAmazonImages(base, query, user), base);
-  const gallery = { ...base, additionalImages: [cdn('BACK')] };
-  assert.equal(await client.complementAmazonImages(gallery, isbn, user), gallery);
   globalThis.__spapiSession = { data: { session: { user: { id: 'other-user' }, access_token: 'synthetic-session' } } };
   t.after(() => { delete globalThis.__spapiSession; });
   assert.equal(await client.complementAmazonImages(base, isbn, user), base);
@@ -592,7 +591,7 @@ test('normal ISBN lookup automatically consolidates fallback gallery once and fo
   assert.equal(draft.mainImageUrl, cdn('MAIN')); assert.deepEqual(draft.additionalImageUrls, [cdn('BACK'), cdn('INSIDE')]);
 });
 
-test('late laboratory images are discarded if the actor changes and production mode never invokes the fallback', async t => {
+test('late laboratory images are discarded if the actor changes', async t => {
   t.mock.method(globalThis, 'fetch', async () => Response.json({ isbn, items: [] }));
   let release, started;
   const ready = new Promise(resolve => { started = resolve; });
@@ -600,8 +599,6 @@ test('late laboratory images are discarded if the actor changes and production m
   const pending = view.search(); await ready;
   view.deps.user.currentUser = { ...user, storeId: uid }; view.render(); release(labImages()); await pending; view.render();
   assert.equal(view.find('BookDetailsCard').props.book.coverUrl, undefined);
-  const production = mountApp({ user: { currentUser: user, operationEnvironment: 'production' }, lab: () => assert.fail('no fallback in production') });
-  await production.search(); production.render(); assert.equal(production.find('BookDetailsCard').props.book.coverUrl, undefined);
 });
 
 test('switching environments while laboratory images are pending discards the development result', async t => {
@@ -791,27 +788,67 @@ test('9781419762109: SP-API physical axes stay named as returned, conversions lo
   assert.doesNotMatch(imageText(review), /299999|179999|499999/);
 });
 
-test('9781419762109: one SP-API cover plus five available Lab photographs reach search, gallery, review and return without loss or extra queries', async t => {
-  const query = '9781419762109', cover = cdn('BATMANCOVER'), additions = Array.from({ length: 5 }, (_, i) => cdn(`BATMANINSIDE${i}`));
+for (const query of ['9786555982688', '9781419762109']) for (const role of ['developer', 'admin', 'operator'])
+test(`Sebo Livraria Sul ${role}, ${query}: six extracted images traverse Function, real client, partial gallery, form and review`, async t => {
+  const cover = cdn('REGRESSIONCOVER'), additions = Array.from({ length: 5 }, (_, i) => cdn(`REGRESSIONPHOTO${i}`));
+  // Sanitized controlled document: six distinct assets plus a resized duplicate. No remote HTML or tokens are persisted.
+  const colorImages = [{ variant: 'MAIN', hiRes: cover }, ...additions.map((hiRes, i) => ({ variant: 'PT0' + (i + 1), hiRes })),
+    { variant: 'PT06', hiRes: additions[0].replace('.jpg', '._SX75_.jpg') }];
+  const html = '<html><body><h1 id="productTitle">Gallery regression</h1><table id="productDetails_detailBullets_sections1"><tr><th>ISBN-10</th><td>' + api.isbn10For(query) + '</td></tr></table>'
+    + '<img id="landingImage" src="' + cover + '"><script>var imageBlockData = ' + JSON.stringify({ asin: api.isbn10For(query), colorImages: { initial: colorImages } }) + ';</script></body></html>';
+  const extracted = api.toLabResult(api.parseAmazonHtml(html, query, 'memoria', 'http_local_experimental'), 'http', 1, 200);
+  assert.equal(extracted.correspondencia, 'corresponde'); assert.equal(extracted.imagens.itens.length, 6);
+  const counts = { laboratory: extracted.imagens.itens.length }, logs = [];
   let official = 0, laboratory = 0;
-  t.mock.method(globalThis, 'fetch', async () => { official++; return Response.json({ isbn: query, items: [{ isbn: query, asin: '1419762109', marketplaceId: api.MARKETPLACE,
-    title: 'The Art of the Batman', images: [{ variant: 'MAIN', link: cover, width: 1400, height: 1900 }] }] }); });
-  const view = mountApp({ brasil: { book: null, diagnostic: { status: 404 } }, lab: async () => {
-    laboratory++; return { ...labImages([cover, ...additions, additions[0].replace('.jpg', '._SX75_.jpg')]),
-      isbn_pesquisado: query, isbn_encontrado: { isbn13: { valor: query, valido: true } } };
-  } });
+  // Only authorization and upstream HTML are controlled; serialization, parser, client and consolidation are real.
+  const handler = api.createAmazonFunction({ authorize: async () => {}, fetchHtml: async () => { laboratory++; return { html, status_http: 200 }; }, log: line => logs.push(JSON.parse(line)) });
+  globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
+  t.after(() => { delete globalThis.__spapiSession; });
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    if (String(url).startsWith('/api/amazon/spapi/catalog')) {
+      official++; return Response.json({ isbn: query, items: [{ isbn: query, asin: api.isbn10For(query), marketplaceId: api.MARKETPLACE,
+        images: [{ variant: 'MAIN', link: cover }, { variant: 'PT01', link: additions[0] }] }] });
+    }
+    assert.equal(url, '/api/amazon?acao=search'); assert.equal(init.headers['X-ISBN-Store-Id'], user.storeId);
+    assert.equal(JSON.parse(init.body).isbn, query);
+    const response = await handler(new Request('https://preview.example.invalid' + url, init));
+    const result = await response.clone().json(); counts.function = result.imagens.itens.length;
+    assert.equal(result.book_info.additionalImages.length, 5);
+    return response;
+  });
+  const view = mountApp({ user: { currentUser: { ...user, role }, operationEnvironment: role === 'developer' ? 'development' : 'production' },
+    brasil: { book: { id: 'brasil', title: 'Existing title', isbn13: query, coverUrl: cover, additionalImages: [additions[0]] }, diagnostic: { status: 200 } }, lab: client.searchAmazonLab });
   await view.search(query); view.render();
   const book = view.find('BookDetailsCard').props.book;
-  assert.equal(book.coverUrl, cover); assert.deepEqual(book.additionalImages, additions);
+  assert.equal(book.title, 'Existing title'); assert.equal(book.coverUrl, cover); assert.deepEqual(book.additionalImages, additions);
+  counts.normalized = 1 + book.additionalImages.length;
+  counts.distinct = new Set([book.coverUrl, ...book.additionalImages].map(api.imageIdentity)).size;
   view.find('Header').props.onTabChange('cadastro'); view.render();
-  const draft = { ...view.find('ProductRegistrationForm').props.draft, parentCode: 'BATMAN-P', price: '50' };
-  assert.deepEqual(draft.additionalImageUrls, additions);
-  const gallery = mountRegistration('Images', { draft, onChange() {} });
-  assert.equal(gallery.all(n => n.type === 'img').length, 6);
+  const draft = { ...view.find('ProductRegistrationForm').props.draft, parentCode: 'REGRESSION-P', price: '50' };
+  assert.deepEqual(draft.additionalImageUrls, additions); counts.form = 1 + draft.additionalImageUrls.length;
+  const gallery = mountRegistration('Images', { draft, onChange() {} }); counts.rendered = gallery.all(n => n.type === 'img').length;
   const form = mountRegistration('Form', { draft, originalBook: book, onUpdateDraft() {} }, {});
   form.find(n => n.props.id === 'btn-submit-magazord-registration').props.onClick(); form.render();
   assert.deepEqual(form.all(n => typeof n.type === 'function' && n.type.name === 'RegistrationImage').map(n => n.props.url), [cover, ...additions]);
   form.find(n => n.props.id === 'btn-return-to-registration').props.onClick(); form.render();
   assert.deepEqual(form.find(n => typeof n.type === 'function' && n.type.name === 'ImagesSection').props.draft.additionalImageUrls, additions);
-  assert.equal(official, 1); assert.equal(laboratory, 1, 'no probes, retry or new lookup on entering/reviewing the form');
+  assert.deepEqual(counts, { laboratory: 6, function: 6, normalized: 6, distinct: 6, form: 6, rendered: 6 });
+  assert.equal(logs[0].imagens_principais, 1); assert.equal(logs[0].imagens_adicionais, 5);
+  assert.equal(official, role === 'developer' ? 1 : 0); assert.equal(laboratory, 1, 'one request per search, no probes or retries');
+  t.diagnostic(JSON.stringify({ isbn: query, role, ...counts }));
+});
+
+test('CAPTCHA with a partial gallery preserves the existing two images, without inventing a complete laboratory response', async t => {
+  globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
+  t.after(() => { delete globalThis.__spapiSession; });
+  const base = { id: 'partial', title: 'Existing title', isbn13: '9786555982688', coverUrl: cdn('COVER'), additionalImages: [cdn('INSIDE')] };
+  let calls = 0;
+  const handler = api.createAmazonFunction({ authorize: async () => {}, log() {}, fetchHtml: async () => { calls++; return { html: null, status_http: 200, motivo: 'blocked', mensagem: 'CAPTCHA' }; } });
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    const response = await handler(new Request('https://preview.example.invalid' + url, init));
+    const payload = await response.clone().json(); assert.equal(payload.diagnostico.codigo, 'amazon_captcha');
+    assert.equal(payload.status, 'interrompida'); assert.equal(payload.imagens, undefined); return response;
+  });
+  assert.equal(await client.complementAmazonImages(base, base.isbn13, user), base);
+  assert.equal(calls, 1);
 });

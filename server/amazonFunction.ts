@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { fetchHtml, HTML_STOP_REASONS, LabError, validateAmazonQuery } from '../experimentos/amazon/consulta_amazon.js';
 import { parseAmazonHtml, toLabResult } from '../experimentos/amazon/extrator_amazon.js';
-import { AmazonAccessError, authorizeAmazonDeveloper, readLimitedJson } from './amazonAuthorization.js';
+import { AmazonAccessError, authorizeAmazonDeveloper, authorizeAmazonSearch, readLimitedJson } from './amazonAuthorization.js';
 
 export function createAmazonFunction(options: {
   authorize?: typeof authorizeAmazonDeveloper; fetchHtml?: typeof fetchHtml;
   env?: NodeJS.ProcessEnv; log?: (value: string) => void;
 } = {}) {
-  const authorize = options.authorize || authorizeAmazonDeveloper;
+  const authorize = options.authorize;
   const readHtml = options.fetchHtml || fetchHtml;
   const env = options.env || process.env;
   const log = options.log || ((value: string) => console.info(value));
@@ -46,7 +46,7 @@ export function createAmazonFunction(options: {
       if ((origin && origin !== url.origin) || request.headers.get('sec-fetch-site') === 'cross-site') {
         return reply(403, { mensagem: 'Origem não permitida.' }, 'origin_denied');
       }
-      await authorize(request, env);
+      await (authorize || (request.method === 'POST' ? authorizeAmazonSearch : authorizeAmazonDeveloper))(request, env);
       if (request.method === 'GET') return reply(200, { http_habilitado: true, fixtures: [], persistencia: false }, 'ready');
       if (!/^application\/json(?:;|$)/i.test(request.headers.get('content-type') || '')) {
         return reply(415, { mensagem: 'Utilize application/json.' }, 'content_type');

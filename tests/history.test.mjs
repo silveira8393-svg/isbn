@@ -73,6 +73,12 @@ function find(tree, predicate) {
 }
 
 function setup(t, mode = 'auto', initialHistory = []) {
+  // Operational-store developers now consult the official source too. Control its transport explicitly.
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (String(url).startsWith('/api/amazon/spapi/catalog?isbn=')) return Response.json({ isbn: new URL(String(url), 'https://isbn.example').searchParams.get('isbn'), items: [] });
+    assert.equal(url, '/api/amazon?acao=search');
+    return Response.json({ status: 'interrompida' });
+  });
   const previousStorage = globalThis.localStorage;
   const storage = new Map([[configKey, JSON.stringify({ mode })]]);
   if (initialHistory !== null) storage.set(historyKey, JSON.stringify(initialHistory));
@@ -93,7 +99,7 @@ function setup(t, mode = 'auto', initialHistory = []) {
     brasil: async target => ({ book: { ...book, isbn13: target }, diagnostic: { status: 200 } }),
     curitiba: async () => ({ book: null, diagnostic: { status: 404, state: 'not_found' } }),
     supabase: {
-      auth: { getSession: async () => ({ data: { session: { user: { id: deps.user.currentUser.id } } }, error: null }) },
+      auth: { getSession: async () => ({ data: { session: { user: { id: deps.user.currentUser.id }, access_token: 'synthetic-session' } }, error: null }) },
       from(table) {
         assert.equal(table, 'operations');
         return { insert: async row => { rows.push(row); return { error: null }; } };

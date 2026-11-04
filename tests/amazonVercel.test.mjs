@@ -7,11 +7,11 @@ import { build } from 'esbuild';
 
 const built = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts', contents: `
   export { createAmazonFunction } from './server/amazonFunction';
-  export { authorizeAmazonDeveloper } from './server/amazonAuthorization';
+  export { authorizeAmazonDeveloper, authorizeAmazonSearch } from './server/amazonAuthorization';
   export { LabError, fetchHtml } from './experimentos/amazon/consulta_amazon';
   export { default as entry } from './api/amazon';
 ` }, bundle: true, write: false, metafile: true, format: 'esm', platform: 'node', target: 'node24' });
-const { createAmazonFunction, authorizeAmazonDeveloper, LabError, fetchHtml, entry } = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].text).toString('base64'));
+const { createAmazonFunction, authorizeAmazonDeveloper, authorizeAmazonSearch, LabError, fetchHtml, entry } = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].text).toString('base64'));
 const isbn = '9788501014863';
 const html = await readFile('experimentos/amazon/tests/fixtures/amazon_estrangeiro_9788501014863_galeria_sanitizada.html', 'utf8');
 const uid = '11111111-1111-4111-8111-111111111111', store = '22222222-2222-4222-8222-222222222222';
@@ -27,7 +27,7 @@ function authFetcher(overrides = {}) {
   const data = { '/auth/v1/user': { id: uid, user_metadata: { role: 'developer' } },
     '/rest/v1/profiles': [{ id: uid, active: true }],
     '/rest/v1/store_users': [{ user_id: uid, store_id: store, active: true, role: 'developer' }],
-    '/rest/v1/stores': [{ id: store }], ...overrides };
+    '/rest/v1/stores': [{ id: store, active: true }], ...overrides };
   return { calls, fetch: async (url, init) => {
     const parsed = new URL(url); calls.push({ url: parsed, init });
     assert.equal(parsed.origin, env.SUPABASE_URL);
@@ -41,7 +41,7 @@ function harness(options = {}) {
   const logs = [], queries = [];
   const auth = authFetcher(options.authData);
   const handler = createAmazonFunction({ env,
-    authorize: (req, settings) => authorizeAmazonDeveloper(req, settings, auth.fetch),
+    authorize: (req, settings) => (req.method === 'POST' ? authorizeAmazonSearch : authorizeAmazonDeveloper)(req, settings, auth.fetch),
     log: line => logs.push(line), fetchHtml: async value => { queries.push(value); return { html, status_http: 200 }; }, ...options });
   return { handler, logs, queries, auth };
 }
@@ -226,4 +226,45 @@ test('concurrent calls in one instance are rejected without a queue; next call w
   const pending = h.handler(request({ isbn })); await started;
   assert.equal((await h.handler(request({ isbn }))).status, 409);
   finish({ html, status_http: 200 }); assert.equal((await pending).status, 200);
+});
+
+for (const role of ['developer', 'admin', 'operator']) test('Operational image source validates selected active store for ' + role, async () => {
+  const h = harness({ authData: { '/rest/v1/store_users': [{ user_id: uid, store_id: store, active: true, role }] } });
+  const response = await h.handler(request({ isbn, modo: 'http' }, { headers: { 'x-isbn-store-id': store } }));
+  assert.equal(response.status, 200); assert.deepEqual(h.queries, [isbn]);
+  const result = await response.json(); assert.equal(result.imagens.itens.length, 4);
+  const membership = h.auth.calls.find(c => c.url.pathname.endsWith('store_users'));
+  assert.equal(membership.url.searchParams.get('store_id'), 'eq.' + store);
+  assert.equal(membership.url.searchParams.get('role'), 'in.(developer,admin,operator)');
+  if (role !== 'developer') assert.equal((await h.handler(request(undefined, { headers: { 'x-isbn-store-id': store } }))).status, 403);
+});
+
+test('Selected-store research rejects forged, inactive, revoked or foreign-store access before transport', async () => {
+  for (const authData of [
+    { '/rest/v1/store_users': [] },
+    { '/rest/v1/store_users': [{ user_id: uid, store_id: uid, active: true, role: 'admin' }] },
+    { '/rest/v1/store_users': [{ user_id: store, store_id: store, active: true, role: 'admin' }] },
+    { '/rest/v1/store_users': [{ user_id: uid, store_id: store, active: false, role: 'operator' }] },
+    { '/rest/v1/store_users': [{ user_id: uid, store_id: store, active: true, role: 'unknown' }] },
+    { '/rest/v1/profiles': [{ id: uid, active: false }] },
+    { '/rest/v1/stores': [{ id: store, active: false }] },
+  ]) {
+    const h = harness({ authData });
+    assert.equal((await h.handler(request({ isbn }, { headers: { 'x-isbn-store-id': store } }))).status, 403);
+    assert.equal(h.queries.length, 0);
+  }
+  const h = harness(); assert.equal((await h.handler(request({ isbn }, { headers: { 'x-isbn-store-id': 'invalid' } }))).status, 403);
+  assert.equal(h.queries.length, 0);
+});
+
+test('Default Function routes commercial searches through scoped authorization while health stays developer-only', async t => {
+  const auth = authFetcher({ '/rest/v1/store_users': [{ user_id: uid, store_id: store, active: true, role: 'operator' }] });
+  t.mock.method(globalThis, 'fetch', auth.fetch);
+  let reads = 0;
+  const handler = createAmazonFunction({ env, log() {}, fetchHtml: async () => { reads++; return { html, status_http: 200 }; } });
+  const headers = { 'x-isbn-store-id': store };
+  assert.equal((await handler(request({ isbn }, { headers }))).status, 200);
+  assert.equal((await handler(request(undefined, { headers }))).status, 403);
+  assert.equal((await handler(request({ isbn }))).status, 403, 'commercial access requires an explicit operational store');
+  assert.equal(reads, 1);
 });

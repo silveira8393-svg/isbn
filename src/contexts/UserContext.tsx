@@ -54,6 +54,9 @@ export const isDeveloper = (user?: User | null) => user?.role === 'developer';
 export const getOperationEnvironment = (user?: User | null): OperationEnvironment => user?.role === 'developer' ? 'development' : 'production';
 
 
+// Existing SP-API credential context is a research source, never an operational store.
+const AMAZON_CREDENTIAL_STORE_ID = '492af2ad-905c-42f8-90f4-aa6c1dc142f3';
+
 /** All identities come from active memberships and visible stores, never UUID order or user metadata. */
 export async function loadAuthorizedStores(userId: string): Promise<User[]> {
   const { data: profile, error: profileError } = await supabase.from('profiles').select('id, display_name, active').eq('id', userId).maybeSingle();
@@ -65,7 +68,7 @@ export async function loadAuthorizedStores(userId: string): Promise<User[]> {
     if (!member.active || !['admin', 'operator', 'developer'].includes(member.role)) throw new Error('Seu vínculo de loja não é reconhecido.');
     const { data: store, error: storeError } = await supabase.from('stores').select('id, name, slug, active').eq('id', member.store_id).maybeSingle();
     if (storeError || !store || store.id !== member.store_id) throw new Error('Não foi possível identificar sua loja autorizada.');
-    if (!store.active) return null;
+    if (!store.active || store.id === AMAZON_CREDENTIAL_STORE_ID) return null;
     const displayName = profile.display_name?.trim() || 'Usuário';
     return { id: profile.id, name: displayName, displayName, role: member.role, active: true,
       storeId: store.id, storeName: store.name, storeSlug: store.slug,

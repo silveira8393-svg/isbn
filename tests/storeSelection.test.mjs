@@ -8,7 +8,8 @@ const bundled = await build({ entryPoints: ['src/contexts/UserContext.tsx'], bun
 } }] });
 const uid = 'c551813b-236c-4d24-8778-b748fa6a02cc';
 const commercial = '6058abd1-96e5-465b-a1df-292e5cf76de3', lab = '492af2ad-905c-42f8-90f4-aa6c1dc142f3';
-const stores = [{ id: commercial, name: 'Sebo Livraria Sul', slug: 'sebo', active: true }, { id: lab, name: 'Laboratório', slug: 'lab', active: true }];
+const other = '77777777-7777-4777-8777-777777777777';
+const stores = [{ id: commercial, name: 'Sebo Livraria Sul', slug: 'sebo', active: true }, { id: lab, name: 'Laboratório', slug: 'lab', active: true }, { id: other, name: 'Outra livraria', slug: 'outra', active: true }];
 function harness(t, memberships) {
   const previous = globalThis.window; globalThis.window = { location: { href: 'https://isbn.example/' } };
   t.after(() => { if (previous === undefined) delete globalThis.window; else globalThis.window = previous; });
@@ -41,15 +42,15 @@ function harness(t, memberships) {
 const member = (store_id, role = 'developer') => ({ user_id: uid, store_id, role, active: true });
 
 test('Two stores always require explicit selection regardless of UUID order; selection is revalidated and retained on token refresh', async t => {
-  const h = harness(t, [member(lab), member(commercial)]); await h.settle();
+  const h = harness(t, [member(other), member(commercial)]); await h.settle();
   assert.equal(h.user(), undefined); assert.match(h.text(), /Selecione a loja operacional/);
   h.data.memberships.reverse(); h.choose('Sebo Livraria Sul'); await h.settle();
   assert.equal(h.user().storeId, commercial); assert.equal(h.user().role, 'developer');
   assert.equal(h.tree().props.value.canViewDeveloperTools, true);
   h.refresh(); await h.settle(); assert.equal(h.user().storeId, commercial);
-  h.data.memberships = [member(lab)]; h.refresh(); await h.settle();
+  h.data.memberships = [member(other)]; h.refresh(); await h.settle();
   assert.equal(h.user(), undefined, 'revocation cannot silently switch to the other store');
-  h.choose('Laboratório'); await h.settle(); assert.equal(h.user().storeId, lab);
+  h.choose('Outra livraria'); await h.settle(); assert.equal(h.user().storeId, other);
   h.signOut(); await h.settle(); assert.equal(h.user(), undefined);
 });
 for (const role of ['admin', 'operator']) test(`Single-store ${role} enters directly and retains commercial permissions`, async t => {
@@ -60,4 +61,17 @@ for (const role of ['admin', 'operator']) test(`Single-store ${role} enters dire
 });
 test('An inactive or mismatched profile/store is never offered as an authorized operational identity', async t => {
   const h = harness(t, [member(commercial)]); h.data.profile.active = false; await h.settle(); assert.equal(h.user(), undefined);
+});
+
+for (const reversed of [false, true]) test('Amazon credential context is not an operational store; Sebo enters directly in either UUID order: ' + reversed, async t => {
+  const memberships = [member(lab), member(commercial)];
+  const h = harness(t, reversed ? memberships.reverse() : memberships); await h.settle();
+  assert.equal(h.user().storeId, commercial);
+  assert.equal(h.tree().props.value.canViewDeveloperTools, true);
+  assert.doesNotMatch(h.text(), /Selecione a loja operacional|Laboratório/);
+  h.refresh(); await h.settle(); assert.equal(h.user().storeId, commercial);
+});
+
+test('A technical membership alone never invents access to the commercial store', async t => {
+  const h = harness(t, [member(lab)]); await h.settle(); assert.equal(h.user(), undefined);
 });
