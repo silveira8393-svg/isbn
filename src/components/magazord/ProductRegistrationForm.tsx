@@ -48,6 +48,7 @@ interface ProductRegistrationFormProps {
   onProcessNextBook: () => void;
   imageUser?: User;
   onImageUploadBusyChange?: (busy: boolean) => void;
+  onReviewStateChange?: (reviewing: boolean) => void;
 }
 
 export default function ProductRegistrationForm({
@@ -62,6 +63,7 @@ export default function ProductRegistrationForm({
   onProcessNextBook,
   imageUser,
   onImageUploadBusyChange,
+  onReviewStateChange,
 }: ProductRegistrationFormProps) {
   const magazordMockService = simulationService;
   const [reviewing, setReviewing] = useState(false);
@@ -75,6 +77,7 @@ export default function ProductRegistrationForm({
   const submissionInFlight = useRef(false);
   const submissionCompleted = useRef(false);
   const reviewOpen = useRef(false);
+  useEffect(() => () => onReviewStateChange?.(false), []);
   const currentDraft = useRef(draft);
   currentDraft.current = draft;
   const submittedDraft = useRef<RegistrationDraft | null>(null);
@@ -111,7 +114,7 @@ export default function ProductRegistrationForm({
     const firstError = Object.keys(result.errors)[0];
     if (firstError) { setFocusField(firstError); return; }
     if (pendingPhotos.current) { setPendingAttention(true); setFocusField('pendingPhotos'); return; }
-    reviewOpen.current = true; setReviewing(true); setFocusField('review');
+    reviewOpen.current = true; onReviewStateChange?.(true); setReviewing(true); setFocusField('review');
   };
 
   const handleSubmit = async () => {
@@ -120,7 +123,7 @@ export default function ProductRegistrationForm({
     const draft = currentDraft.current;
     const firstError = Object.keys(validateRegistrationDraft(draft, originalBook).errors)[0];
     if (firstError || pendingPhotos.current) {
-      reviewOpen.current = false; setReviewing(false); setEditingField(null); setReviewRequested(true);
+      reviewOpen.current = false; onReviewStateChange?.(false); setReviewing(false); setEditingField(null); setReviewRequested(true);
       setPendingAttention(Boolean(pendingPhotos.current)); setFocusField(firstError || 'pendingPhotos'); return;
     }
 
@@ -283,7 +286,7 @@ export default function ProductRegistrationForm({
         <div><h3 className="mb-3 text-sm font-bold">Imagens selecionadas</h3>{reviewedImages.length ? <div className="grid gap-4 sm:grid-cols-3">{reviewedImages.map((url, index) => <div key={url}><RegistrationImage url={url} label={index ? `Imagem adicional ${index}` : 'Capa principal'} /></div>)}</div> : <p className="text-sm text-slate-500">Sem imagens. O cadastro pode continuar.</p>}</div>
         {submitError && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">{submitError}</p>}
         <div className="flex flex-wrap justify-end gap-3">
-          <button type="button" id="btn-return-to-registration" disabled={isSubmitting} onClick={() => { if (submissionInFlight.current) return; reviewOpen.current = false; setReviewing(false); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold disabled:opacity-60">Retornar ao cadastro</button>
+          <button type="button" id="btn-return-to-registration" disabled={isSubmitting} onClick={() => { if (submissionInFlight.current) return; reviewOpen.current = false; onReviewStateChange?.(false); setReviewing(false); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold disabled:opacity-60">Retornar ao cadastro</button>
           <button type="button" id="btn-confirm-magazord-registration" disabled={isSubmitting || imageUploadBusy} onClick={handleSubmit} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-bold text-white disabled:opacity-60">{isSubmitting ? 'Confirmando cadastro...' : 'Confirmar cadastro'}</button>
         </div>
       </section>}

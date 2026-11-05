@@ -36,9 +36,11 @@ import { searchAmazonOfficial, complementWithAmazon, complementAmazonImages } fr
 import {
   mergeBookWithDistribuidora,
   searchBookByIsbnDistribuidoraCuritiba,
+  type DistribuidoraSearchResult,
 } from './services/distribuidoraCuritiba';
 import { cleanIsbn, isValidIsbnFormat } from './utils/isbn';
 import { createRegistrationDraft } from './utils/draft';
+import { loadCuritibaGallery, appendCuritibaGallery, appendCuritibaGalleryToDraft } from './services/curitibaGallery';
 import { magazordMockService as sharedMagazordService, type MagazordSimulationMode } from './services/magazordMockService';
 import {
   BookOpen,
@@ -67,10 +69,19 @@ export default function App() {
   const stockLinkInFlight = useRef(false);
   const imageUploadInFlight = useRef(false);
   const registrationCompleted = useRef(false);
+  const galleryRequest = useRef<AbortController | null>(null);
+  const galleryGeneration = useRef(0);
+  const registrationReviewOpen = useRef(false);
+  const deferredGalleryDraft = useRef<(() => void) | null>(null);
   const currentUserRef = useRef(currentUser);
   currentUserRef.current = currentUser;
   const operationEnvironmentRef = useRef(operationEnvironment);
   operationEnvironmentRef.current = operationEnvironment;
+  useEffect(() => () => {
+    galleryGeneration.current++;
+    galleryRequest.current?.abort();
+    deferredGalleryDraft.current = null;
+  }, [currentUser.id, currentUser.storeId, currentUser.role, currentUser.active, operationEnvironment]);
   const checkActionMode = useRef<MagazordSimulationMode>('auto');
 
   const captureActionMode = (): MagazordSimulationMode => currentUserRef.current.role === 'developer'
@@ -167,6 +178,11 @@ export default function App() {
     }
 
     searchInFlight.current = true;
+    const generation = ++galleryGeneration.current;
+    galleryRequest.current?.abort();
+    deferredGalleryDraft.current = null;
+    const galleryController = new AbortController();
+    galleryRequest.current = galleryController;
     const actionMode = captureActionMode();
     setIsLoading(true);
     setErrorText(null);
@@ -187,9 +203,11 @@ export default function App() {
         book: null, diagnostic: { status: 'FALHA_CONEXAO' },
       }));
       // Preserve the source order and enrichment rules, including when BrasilAPI has no book.
-      const distribuidoraResult = await searchBookByIsbnDistribuidoraCuritiba(cleaned).catch(() => ({
-        book: null, diagnostic: { status: 'FALHA_CONEXAO', state: 'unavailable' },
+      const distribuidoraResult: DistribuidoraSearchResult = await searchBookByIsbnDistribuidoraCuritiba(cleaned).catch(() => ({
+        book: null, diagnostic: { provider: 'Distribuidora Curitiba', status: 'FALHA_CONEXAO', state: 'unavailable', responseTimeMs: 0 },
       }));
+      const galleryPending = 'gallery' in distribuidoraResult && distribuidoraResult.gallery
+        ? loadCuritibaGallery(distribuidoraResult.gallery, galleryController.signal) : null;
       const identifiers = cleaned.length === 13 ? { isbn13: cleaned } : { isbn10: cleaned };
       const isbnBook: BookInfo = { id: `isbn-${cleaned}`, title: '', ...identifiers };
       const primaryBook = result.book || distribuidoraResult.book ? {
@@ -228,6 +246,23 @@ export default function App() {
         draft.format = lookupBook.format || '';
         setRegistrationDraft(draft);
       }
+      // Secondary links never delay the bibliographic result, audit, simulated lookup or opening a form.
+      if (galleryPending) void galleryPending.then(images => {
+        const current = () => sameActor() && galleryGeneration.current === generation
+          && !galleryController.signal.aborted && !registrationCompleted.current;
+        const sameEdition = (value: {isbn13?:string;isbn10?:string}) =>
+          [value.isbn13,value.isbn10].some(isbn=>isbn && cleanIsbn(isbn)===cleaned);
+        if (!images.length || !current()) return;
+        setFoundBook(book => current() && book && sameEdition(book) ? appendCuritibaGallery(book,images) : book);
+        const updateDraft = () => {
+          if (!current()) return;
+          if (imageUploadInFlight.current || registrationReviewOpen.current) { deferredGalleryDraft.current = updateDraft; return; }
+          deferredGalleryDraft.current = null;
+          setRegistrationDraft(draft => current() && draft && sameEdition(draft)
+            ? appendCuritibaGalleryToDraft(draft,images) : draft);
+        };
+        updateDraft();
+      });
 
       if (enrichedBook) {
 
@@ -520,6 +555,9 @@ export default function App() {
   // Prepara interface para o próximo livro
   const handleProcessNextBook = () => {
     if (imageUploadInFlight.current) return;
+    galleryGeneration.current++;
+    galleryRequest.current?.abort();
+    deferredGalleryDraft.current = null;
     setFoundBook(null);
     setRegistrationDraft(null);
     registrationCompleted.current = false;
@@ -785,7 +823,8 @@ export default function App() {
                 simulationService={magazordMockService}
                 originalBook={foundBook}
                 imageUser={currentUser}
-                onImageUploadBusyChange={busy => { imageUploadInFlight.current = busy; }}
+                onImageUploadBusyChange={busy => { imageUploadInFlight.current = busy; if (!busy) deferredGalleryDraft.current?.(); }}
+                onReviewStateChange={reviewing => { registrationReviewOpen.current = reviewing; if (!reviewing) deferredGalleryDraft.current?.(); }}
                 onUpdateDraft={(updates) =>
                   setRegistrationDraft((prev) => (prev ? updateDraftWithMetaDescription(prev, updates) : null))
                 }

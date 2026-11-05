@@ -23,8 +23,8 @@ window.fetch=async(url,init)=>{const target=String(url);window.__calls.push(targ
  if(target.includes('/auth/loginAcessoPublico'))return Response.json({cdSistema:50});
  if(target.includes('/findAllByExampleByPages'))return Response.json(detail);
  if(target.includes('/findProdutoByPrimaryKey'))return Response.json(detail);
- if(target===detail.urlFoto){if(init.method!=='GET'||init.mode!=='cors'||init.redirect!=='error')throw Error('Unsafe gallery request');
-   if(window.__failIndex)throw new TypeError('CORS denied');return new Response(html,{headers:{'Content-Type':'text/html'}});}
+ if(target.startsWith('/api/curitiba/gallery?')){if(init.method!=='GET'||init.redirect!=='error')throw Error('Unsafe gallery request');
+   return new Promise(resolve=>{window.__releaseGallery=()=>resolve(window.__failIndex?new Response('unavailable',{status:503}):Response.json(images));});}
  if(target.startsWith('/api/amazon/spapi/catalog?'))return Response.json({isbn:detail.nuCdBarras,items:[]});
  if(target==='/api/amazon?acao=search')return Response.json({status:'interrompida',status_http:503});
  throw Error('External/persistence request forbidden: '+target);
@@ -40,23 +40,61 @@ function assertImages(expected,label){const rendered=new Set([...document.queryS
  const productImages=[...rendered].filter(src=>images.includes(src));check(productImages.length===expected.length,label+' distinct images '+productImages.length);}
 const root=createRoot(document.getElementById('root'));
 async function run(){
- for(const scenario of ['novo','menu','usado','cors-failure']){
-  root.render(null);await pause();window.__failIndex=scenario==='cors-failure';
+ const scenarios=['novo','menu','usado','http-failure','manual-fields','manual-images','review','new-search','image-failure'];
+ let extraSearches=0;
+ for(const scenario of scenarios){
+  root.render(null);await pause();window.__releaseGallery=null;window.__failIndex=scenario==='http-failure';
   root.render(<React.StrictMode><App key={scenario}/></React.StrictMode>);
   await wait(()=>document.querySelector('input[placeholder*="ISBN"]'),'search input');
   edit(document.querySelector('input[placeholder*="ISBN"]'),detail.nuCdBarras);await pause();document.getElementById('search-submit-button').click();
-  await wait(()=>document.getElementById('btn-open-magazord-registration'),'Consulta');
-  const expected=window.__failIndex?images.slice(0,1):images;
-  assertImages(expected,'Consulta '+scenario);
+  await wait(()=>document.getElementById('btn-open-magazord-registration'),'Consulta must not await gallery');
+  check(typeof window.__releaseGallery==='function','one pending gallery request');
+  assertImages(images.slice(0,1),'immediate Consulta '+scenario);
+  if(scenario==='new-search'){
+   const previousRelease=window.__releaseGallery;
+   document.getElementById('search-submit-button').click();extraSearches++;
+   await wait(()=>window.__releaseGallery!==previousRelease&&document.getElementById('btn-open-magazord-registration'),'second search ready');
+   previousRelease();await pause();await pause();
+   assertImages(images.slice(0,1),'stale response must not affect newer search');
+  }
   if(scenario==='usado')clickText('Usado');else if(scenario==='menu')clickText('Cadastro');else document.getElementById('btn-open-magazord-registration').click();
-  await wait(()=>document.querySelector('[data-registration-field="title"]'),'Cadastro');
-  check(document.querySelector('[data-registration-field="title"]').value===detail.dsProduto,'title transfer');
+  await wait(()=>document.querySelector('[data-registration-field="title"]'),'Cadastro before gallery completion');
+  const field=key=>document.querySelector('[data-registration-field="'+key+'"]');
+  check(field('title').value===detail.dsProduto,'title transfer');
+  if(scenario==='manual-fields'){
+   edit(field('title'),'Titulo manual preservado');await pause();edit(field('parentCode'),'CODIGO-MANUAL');await pause();
+   edit(field('price'),'2550');await pause();
+  }
+  if(scenario==='manual-images'){const remove=document.querySelector('button[title="Remover capa principal"]');check(remove,'remove cover');remove.click();await pause();}
+  if(scenario==='review'){
+   edit(field('parentCode'),'REVIEW-P');await pause();edit(field('price'),'2550');await pause();
+   document.getElementById('btn-submit-magazord-registration').click();
+   await wait(()=>document.querySelector('[data-registration-field="review"]'),'review before gallery');
+  }
+  window.__releaseGallery();await pause();await pause();
+  const expected=['http-failure','review'].includes(scenario)?images.slice(0,1):scenario==='manual-images'?[]:images;
+  if(expected.length===5)await wait(()=>document.querySelectorAll('[data-registration-field="additionalImageUrls"] img').length===4,'late additions');
   assertImages(expected,'Cadastro '+scenario);
-  window.__completed.push({scenario,cover:expected[0],additional:expected.length-1});
+  if(scenario==='review'){
+   document.getElementById('btn-return-to-registration').click();
+   await wait(()=>document.querySelectorAll('[data-registration-field="additionalImageUrls"] img').length===4,'deferred images after returning from review');
+   assertImages(images,'review closed');
+  }
+  if(scenario==='image-failure'){
+   document.querySelector('img[src="'+images[2]+'"]').dispatchEvent(new Event('error'));
+   await pause();
+   assertImages(images.filter(url=>url!==images[2]),'one failed image');
+   check(document.querySelector('[data-registration-field="additionalImageUrls"]').textContent.includes('(4)'),'failed URL remains selected');
+   check(document.getElementById('root').textContent.includes('Uma imagem não carregou'),'existing image error message');
+  }
+  if(scenario==='manual-fields'){check(field('title').value==='Titulo manual preservado','manual title');check(field('parentCode').value==='CODIGO-MANUAL','manual code');check(field('price').value==='25,50','manual price');}
+  // No submit, upload, product registration or stock operation occurs.
+  window.__completed.push({scenario,cover:expected[0]||null,additional:Math.max(0,expected.length-1)});
  }
- check(window.__calls.filter(u=>u===detail.urlFoto).length===4,'one index GET per search');
- check(window.__calls.length===24,'four API flows, no probes/retries');
- check(window.__auditDenied===4,'all automatic writes refused');check(!window.__errors.length,'page errors '+window.__errors.join(';'));
+ check(window.__calls.filter(u=>u.startsWith('/api/curitiba/gallery?')).length===scenarios.length+extraSearches,'one Function GET per search');
+ check(!window.__calls.some(u=>u===detail.urlFoto),'browser never reads public index');
+ check(window.__calls.length===6*(scenarios.length+extraSearches),'no probes/retries or extra bibliographic searches');
+ check(window.__auditDenied===scenarios.length+extraSearches,'automatic writes refused');check(!window.__errors.length,'page errors '+window.__errors.join(';'));
  return {ok:true,completed:window.__completed,mockedCalls:window.__calls.length,persistenceDenied:window.__auditDenied,externalRequests:0,pageErrors:window.__errors};
 }
 run().then(result=>document.getElementById('result').textContent=JSON.stringify(result)).catch(error=>document.getElementById('result').textContent=JSON.stringify({ok:false,message:error.message,completed:window.__completed,calls:window.__calls,errors:window.__errors}));
