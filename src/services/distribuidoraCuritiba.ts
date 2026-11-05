@@ -1,5 +1,5 @@
 import { BookInfo } from '../types';
-import { isImageReference } from '../utils/imageUrls';
+import { imageReferences, isImageReference } from '../utils/imageUrls';
 
 const BASE_URL = 'https://distribuidoracuritiba.com.br/up-server/public/service';
 const SEARCH_URL = `${BASE_URL}/produto/findProdutoList/produtoController/findAllByExampleByPages`;
@@ -30,6 +30,7 @@ export interface DistribuidoraDiagnostic {
   responseTimeMs: number;
   state: 'success' | 'not_found' | 'unavailable';
   errorMessage?: string;
+  gallery?: { state: 'loaded' | 'empty' | 'unavailable' | 'not_applicable'; images: number; status?: number | 'NETWORK_OR_CORS' | 'TIMEOUT' | 'LIMIT' | 'INVALID_RESPONSE' };
 }
 
 export interface DistribuidoraSearchResult {
@@ -127,6 +128,104 @@ function unavailableResult(startTime: number, status: number | string, errorMess
   };
 }
 
+const GALLERY_ORIGIN = 'https://conteudo.livrariascuritiba.com.br';
+const GALLERY_MAX_BYTES = 64 * 1024;
+const GALLERY_MAX_IMAGES = 32;
+const GALLERY_TIMEOUT_MS = 4000;
+type GalleryDiagnostic = NonNullable<DistribuidoraDiagnostic['gallery']>;
+
+function productImageCode(value: unknown): string | undefined {
+  const code = asText(value)?.toLowerCase();
+  return code && /^(?:lv)?[0-9]+$/.test(code) ? `lv${code.replace(/^lv/, '')}` : undefined;
+}
+
+/** Only the product directory explicitly supplied by this product's detail is eligible. */
+function galleryLocation(detail: JsonRecord, selected: JsonRecord): URL | undefined {
+  const code = productImageCode(selected.cdProduto);
+  if (!code || productImageCode(detail.cdProduto) !== code || typeof detail.urlFoto !== 'string') return;
+  try {
+    const url = new URL(detail.urlFoto);
+    if (url.origin === GALLERY_ORIGIN && !url.username && !url.password && !url.search && !url.hash
+      && url.pathname === `/images/lv/lvndd/${code}/`) return url;
+  } catch { /* Retain direct image references when the directory is not eligible. */ }
+}
+
+function galleryImage(value: string, directory: URL): string | undefined {
+  if (/[\\%]/.test(value)) return;
+  try {
+    const url = new URL(value, directory);
+    const code = directory.pathname.split('/').filter(Boolean).at(-1)!;
+    const filename = url.pathname.slice(directory.pathname.length);
+    if (url.origin === directory.origin && !url.username && !url.password && !url.search && !url.hash
+      && url.pathname.startsWith(directory.pathname)
+      && new RegExp(`^${code}(?:[_-][a-z0-9_-]+)?\\.(?:jpe?g|png|webp)$`, 'i').test(filename)) return url.href;
+  } catch { /* Links outside the exact product directory are never followed. */ }
+}
+
+function decodeIndexAttribute(value: string): string {
+  return value.replace(/&(?:amp|quot|apos|#(\d+)|#x([a-f0-9]+));/gi, (entity, decimal, hex) => {
+    if (decimal || hex) {
+      const point = parseInt(decimal || hex, hex ? 16 : 10);
+      return point > 0 && point <= 0x10ffff && !(point >= 0xd800 && point <= 0xdfff) ? String.fromCodePoint(point) : '';
+    }
+    return ({ '&amp;': '&', '&quot;': '"', '&apos;': "'" } as Record<string, string>)[entity.toLowerCase()] || entity;
+  });
+}
+
+/** Read attributes only: no DOM insertion, script evaluation, resource loads or filename probing. */
+function imagesFromIndex(html: string, directory: URL): string[] {
+  const inert = html.replace(/<!--[\s\S]*?(?:-->|$)|<(script|style)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/gi, '');
+  const images = new Set<string>();
+  const tags = /<(a|img)\b((?:[^>"']|"[^"]*"|'[^']*')*)>/gi;
+  for (const tag of inert.matchAll(tags)) {
+    const wanted = tag[1].toLowerCase() === 'a' ? 'href' : 'src';
+    for (const attr of tag[2].matchAll(/([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g)) {
+      if (attr[1].toLowerCase() !== wanted) continue;
+      const image = galleryImage(decodeIndexAttribute(attr[2] ?? attr[3] ?? attr[4] ?? ''), directory);
+      if (image) images.add(image);
+      if (images.size >= GALLERY_MAX_IMAGES) return [...images];
+    }
+  }
+  return [...images];
+}
+
+async function readProductGallery(directory?: URL): Promise<{ images: string[]; diagnostic: GalleryDiagnostic }> {
+  if (!directory) return { images: [], diagnostic: { state: 'not_applicable', images: 0 } };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), GALLERY_TIMEOUT_MS);
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  try {
+    // Native browser CORS is mandatory. No proxy, no-cors, credentials, redirect or retry.
+    const response = await fetch(directory.href, { method: 'GET', mode: 'cors', credentials: 'omit', redirect: 'error',
+      referrerPolicy: 'no-referrer', headers: { Accept: 'text/html' }, signal: controller.signal });
+    if (!response.ok) return { images: [], diagnostic: { state: 'unavailable', images: 0, status: response.status } };
+    if (response.redirected || response.type === 'opaque' || response.type === 'opaqueredirect'
+      || (response.url && response.url !== directory.href) || !/^text\/html(?:;|$)/i.test(response.headers.get('content-type') || '')
+      || !response.body) return { images: [], diagnostic: { state: 'unavailable', images: 0, status: 'INVALID_RESPONSE' } };
+    if (Number(response.headers.get('content-length')) > GALLERY_MAX_BYTES)
+      return { images: [], diagnostic: { state: 'unavailable', images: 0, status: 'LIMIT' } };
+    reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let bytes = 0, html = '';
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      bytes += chunk.value.byteLength;
+      if (bytes > GALLERY_MAX_BYTES) return { images: [], diagnostic: { state: 'unavailable', images: 0, status: 'LIMIT' } };
+      html += decoder.decode(chunk.value, { stream: true });
+    }
+    html += decoder.decode();
+    const images = imagesFromIndex(html, directory);
+    return { images, diagnostic: { state: images.length ? 'loaded' : 'empty', images: images.length, status: response.status } };
+  } catch {
+    return { images: [], diagnostic: { state: 'unavailable', images: 0, status: controller.signal.aborted ? 'TIMEOUT' : 'NETWORK_OR_CORS' } };
+  } finally {
+    clearTimeout(timer);
+    if (reader) void reader.cancel().catch(() => {});
+    else controller.abort();
+  }
+}
+
 export async function searchBookByIsbnDistribuidoraCuritiba(isbn: string): Promise<DistribuidoraSearchResult> {
   const startTime = performance.now();
   const sanitizedIsbn = isbn.replace(/[\s-]/g, '').trim();
@@ -210,7 +309,11 @@ export async function searchBookByIsbnDistribuidoraCuritiba(isbn: string): Promi
 
     const fields = getDynamicFields(detail.data);
     const detailProduct = findProduct(detail.data) || product;
-    const imageUrls = findImageUrls(detail.data);
+    const directory = galleryLocation(detailProduct, product);
+    const gallery = await readProductGallery(directory);
+    const preferredCover = directory && typeof detailProduct.urlFotoMiniatura === 'string'
+      ? galleryImage(detailProduct.urlFotoMiniatura, directory) : undefined;
+    const imageUrls = imageReferences([preferredCover, ...findImageUrls(detail.data), ...gallery.images]);
     const publisher = firstText(fields, ['AD_DSEDITORA']);
     const author = firstText(fields, ['AD_DSAUTOR']);
     const format = firstText(fields, ['AD_DSFORMATO']);
@@ -270,6 +373,7 @@ export async function searchBookByIsbnDistribuidoraCuritiba(isbn: string): Promi
         status: detail.response.status,
         responseTimeMs: Math.round(performance.now() - startTime),
         state: 'success',
+        gallery: gallery.diagnostic,
       },
     };
   } catch {
@@ -292,13 +396,23 @@ function findImageUrls(value: unknown): string[] {
 export function mergeBookWithDistribuidora(base: BookInfo, enrichment: Partial<BookInfo>): BookInfo {
   const merged: BookInfo = { ...base };
   const fillableKeys: Array<keyof BookInfo> = [
-    'subtitle', 'publisher', 'authors', 'year', 'pageCount', 'language', 'synopsis', 'description', 'coverUrl', 'thumbnailUrl', 'additionalImages', 'title', 'department', 'productCategory',
+    'subtitle', 'publisher', 'authors', 'year', 'pageCount', 'language', 'synopsis', 'description', 'title', 'department', 'productCategory',
   ];
 
   fillableKeys.forEach((key) => {
     const value = enrichment[key];
     if (isMeaningful(value) && !isMeaningful(merged[key])) merged[key] = value as never;
   });
+
+  const existing = imageReferences([base.coverUrl, base.thumbnailUrl, ...(base.additionalImages || [])]);
+  const incoming = imageReferences([enrichment.coverUrl, enrichment.thumbnailUrl, ...(enrichment.additionalImages || [])]);
+  const cover = isImageReference(base.coverUrl) ? base.coverUrl : isImageReference(base.thumbnailUrl) ? base.thumbnailUrl : incoming[0] || existing[0];
+  if (cover) {
+    merged.coverUrl = cover;
+    merged.thumbnailUrl = isImageReference(base.thumbnailUrl) && cover === base.coverUrl ? base.thumbnailUrl : cover;
+    const covers = new Set(imageReferences([merged.coverUrl, merged.thumbnailUrl]));
+    merged.additionalImages = imageReferences([...existing, ...incoming]).filter(url => !covers.has(url));
+  }
 
   (['isbn10', 'format', 'edition', 'origin', 'reference', 'weight', 'width', 'height', 'depth', 'weightUnit', 'dimensionsUnit', 'enrichmentSource', 'provenance'] as Array<keyof BookInfo>).forEach((key) => {
     const value = enrichment[key];
