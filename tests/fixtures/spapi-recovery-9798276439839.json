@@ -1,0 +1,213 @@
+{
+  "evidence": {
+    "source": "Owner-provided restricted Preview diagnostic",
+    "originalAttachmentSha256": "d4d5bb55222a729e71f6e697db094fe7956fcd96e262e82806d076161b5eef7a",
+    "scope": "Decoded factual allowlist only, not the full raw Amazon payload. Identifier group in tests is reconstructed from the confirmed ISBN.",
+    "diagnosticMatchingCount": 1
+  },
+  "isbn": "9798276439839",
+  "asin": "B0G4CS2PMG",
+  "attributes": {
+    "item_name": [
+      {
+        "language_tag": "pt_BR",
+        "value": "O Rei de Amarelo",
+        "marketplace_id": "A2Q3Y263D00KWC"
+      }
+    ],
+    "author": [
+      {
+        "value": "W. Chambers, Robert",
+        "language_tag": "pt_BR",
+        "marketplace_id": "A2Q3Y263D00KWC"
+      }
+    ],
+    "publication_date": [
+      {
+        "value": "2025-11-27T00:00:01Z",
+        "marketplace_id": "A2Q3Y263D00KWC"
+      }
+    ],
+    "language": [
+      {
+        "type": "published",
+        "value": "portuguese",
+        "marketplace_id": "A2Q3Y263D00KWC"
+      },
+      {
+        "type": "original",
+        "value": "portuguese",
+        "marketplace_id": "A2Q3Y263D00KWC"
+      },
+      {
+        "type": "unknown",
+        "value": "portuguese",
+        "marketplace_id": "A2Q3Y263D00KWC"
+      }
+    ],
+    "binding": [
+      {
+        "value": "paperback",
+        "marketplace_id": "A2Q3Y263D00KWC"
+      }
+    ],
+    "pages": [
+      {
+        "value": 143,
+        "marketplace_id": "A2Q3Y263D00KWC"
+      }
+    ],
+    "item_dimensions": [
+      {
+        "width": {
+          "unit": "inches",
+          "value": 0.33
+        },
+        "length": {
+          "unit": "inches",
+          "value": 6
+        },
+        "height": {
+          "unit": "inches",
+          "value": 9
+        },
+        "marketplace_id": "A2Q3Y263D00KWC"
+      }
+    ],
+    "item_package_dimensions": [
+      {
+        "length": {
+          "unit": "inches",
+          "value": 6
+        },
+        "width": {
+          "unit": "inches",
+          "value": 0.33
+        },
+        "height": {
+          "unit": "inches",
+          "value": 9
+        },
+        "marketplace_id": "A2Q3Y263D00KWC"
+      }
+    ],
+    "item_package_weight": [
+      {
+        "unit": "pounds",
+        "value": 0.6,
+        "marketplace_id": "A2Q3Y263D00KWC"
+      }
+    ]
+  },
+  "absentAttributes": [
+    "subtitle",
+    "book_subtitle",
+    "authors",
+    "publisher",
+    "publisher_name",
+    "street_date",
+    "book_publication_date",
+    "edition",
+    "edition_number",
+    "book_edition",
+    "book_binding",
+    "number_of_pages",
+    "print_length",
+    "item_weight"
+  ],
+  "summary": {
+    "marketplaceId": "A2Q3Y263D00KWC",
+    "contributors": [
+      {
+        "role": {
+          "value": "author"
+        },
+        "value": "W. Chambers, Robert"
+      }
+    ],
+    "itemName": "O Rei de Amarelo"
+  },
+  "dimensions": [
+    {
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "item": {
+        "height": {
+          "unit": "inches",
+          "value": 9
+        },
+        "length": {
+          "unit": "inches",
+          "value": 6
+        },
+        "width": {
+          "unit": "inches",
+          "value": 0.33
+        }
+      },
+      "package": {
+        "height": {
+          "unit": "inches",
+          "value": 0.33
+        },
+        "length": {
+          "unit": "inches",
+          "value": 9
+        },
+        "weight": {
+          "unit": "pounds",
+          "value": 0.6
+        },
+        "width": {
+          "unit": "inches",
+          "value": 6
+        }
+      }
+    }
+  ],
+  "processedBefore": {
+    "title": "O Rei de Amarelo",
+    "authors": [
+      "W. Chambers, Robert"
+    ],
+    "publisher": null,
+    "publicationDate": "2025-11-27",
+    "edition": null,
+    "language": "portuguese",
+    "binding": "paperback",
+    "pageCount": null,
+    "physical": {
+      "item": {
+        "height": {
+          "value": 9,
+          "unit": "inches"
+        },
+        "width": {
+          "value": 0.33,
+          "unit": "inches"
+        },
+        "length": {
+          "value": 6,
+          "unit": "inches"
+        }
+      },
+      "package": {
+        "height": {
+          "value": 0.33,
+          "unit": "inches"
+        },
+        "width": {
+          "value": 6,
+          "unit": "inches"
+        },
+        "length": {
+          "value": 9,
+          "unit": "inches"
+        },
+        "weight": {
+          "value": 0.6,
+          "unit": "pounds"
+        }
+      }
+    }
+  }
+}

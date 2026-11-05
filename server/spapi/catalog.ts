@@ -102,7 +102,8 @@ export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, f
       publicationDate: normalizePublicationDate(value('publication_date')) || normalizePublicationDate(value('street_date')) || null,
       language: text(language?.value), binding: value('binding'),
       edition: value('edition') || (positiveInteger(attr('edition')[0]?.value)?.toString() ?? null),
-      pageCount: attr('number_of_pages').map((a: any) => positiveInteger(a.value)).find((n: number | null) => n !== null) ?? null,
+      pageCount: ['number_of_pages', 'pages'].flatMap(name => attr(name))
+        .map((a: any) => positiveInteger(a.value)).find((n: number | null) => n !== null) ?? null,
       identifiers: [...new Map(identifiers.map(id => [id.identifier, id])).values()],
       isbn10: identifiers.find(id => id.type === 'ISBN_10')?.identifier || null,
       isbn13: identifiers.find(id => id.type === 'ISBN_13')?.identifier || null,

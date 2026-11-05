@@ -160,6 +160,35 @@ const recoveryIsbn = '9798276439839';
 const recoveryQuery = { isbn: recoveryIsbn, diagnostic: 'bibliography' };
 const recoveryItem = () => ({ ...structuredClone(item), asin: 'B0G4CS2PMG', identifiers: [{ marketplaceId: api.MARKETPLACE,
   identifiers: [{ identifierType: 'ISBN', identifier: recoveryIsbn }] }] });
+test('observed pages attribute recovers 143 without changing the other factual projections', async () => {
+  const factual = JSON.parse(await readFile(new URL('./fixtures/spapi-recovery-9798276439839.json', import.meta.url), 'utf8'));
+  assert.equal(factual.processedBefore.pageCount, null); assert.ok(factual.absentAttributes.includes('number_of_pages'));
+  const original = { ...recoveryItem(), attributes: factual.attributes, summaries: [factual.summary], dimensions: factual.dimensions };
+  const h = harness({ catalog: { numberOfResults: 1, items: [original] } });
+  const response = await h.handler('catalog')(h.request('catalog', { isbn: factual.isbn }));
+  assert.equal(response.status, 200); const body = await response.json();
+  const expected = { ...factual.processedBefore, pageCount: 143 };
+  for (const key of Object.keys(expected)) assert.deepEqual(body.items[0][key], expected[key], key);
+  assert.equal(body.items[0].asin, factual.asin); assert.equal(body.items[0].isbn13, factual.isbn);
+  assert.equal(body.items[0].synopsis, null); assert.equal(body.diagnostics, undefined);
+  assert.equal(h.calls.filter(c => c.url.includes('/catalog/')).length, 1); assert.equal(h.saved.length, 0);
+});
+test('pages fallback preserves number_of_pages priority, marketplace filtering and existing positive-integer validation', async () => {
+  for (const [primary, fallback, expected, marketplace = api.MARKETPLACE] of [
+    [211, 143, 211], [null, 143, 143], [null, '143', 143], [0, 143, 143],
+    [undefined, -1, null], [undefined, 143.5, null], [undefined, '143 pages', null],
+    [undefined, {}, null], [undefined, 143, null, 'OTHER_MARKET'], [undefined, undefined, null],
+  ]) {
+    const original = recoveryItem();
+    delete original.attributes.number_of_pages;
+    if (primary !== undefined) original.attributes.number_of_pages = [{ value: primary, marketplace_id: api.MARKETPLACE }];
+    if (fallback !== undefined) original.attributes.pages = [{ value: fallback, marketplace_id: marketplace }];
+    const h = harness({ catalog: { numberOfResults: 1, items: [original] } });
+    const body = await (await h.handler('catalog')(h.request('catalog', { isbn: recoveryIsbn }))).json();
+    assert.equal(body.items[0].pageCount, expected);
+    assert.equal(h.calls.filter(c => c.url.includes('/catalog/')).length, 1);
+  }
+});
 test('Preview diagnostic observes factual structures and projected values in the same single official GET', async () => {
   const original = recoveryItem();
   original.attributes.edition = [{ value: 2, marketplace_id: api.MARKETPLACE }];
