@@ -18,6 +18,8 @@ export interface LabResult {
   status: 'concluida' | 'interrompida';
   modo: LabMode;
   isbn_pesquisado: string;
+  asin_pesquisado?: string;
+  asin_correspondencia?: 'corresponde' | 'divergente' | 'nao_verificavel';
   duracao_ms: number;
   status_http: number | null;
   mensagem?: string;
@@ -94,5 +96,5 @@ async function request<T>(path: string, signal: AbortSignal, body?: object, expe
 }
 
 export const getAmazonLabHealth = (signal: AbortSignal) => request<LabHealth>('health', signal);
-export const searchAmazonLab = (isbn: string, modo: LabMode, signal: AbortSignal, expectedUserId?: string, storeId?: string) =>
-  request<LabResult>('search', signal, { isbn, modo }, expectedUserId, storeId);
+export const searchAmazonLab = (isbn: string, modo: LabMode, signal: AbortSignal, expectedUserId?: string, storeId?: string, asin?: string) =>
+  request<LabResult>('search', signal, { isbn, modo, ...(asin ? { asin } : {}) }, expectedUserId, storeId);

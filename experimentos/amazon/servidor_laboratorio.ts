@@ -18,7 +18,7 @@ export class Laboratory {
   private busy = false;
   constructor(private dependencies = { readHtml: (file: string) => readFile(file, 'utf8'), fetchHtml }) {}
   async search(payload: unknown) {
-    const { isbn, canonical, mode } = validateAmazonQuery(payload);
+    const { isbn, canonical, mode, asin } = validateAmazonQuery(payload);
     if (this.busy) throw new LabError(409, 'Há uma pesquisa em andamento. Aguarde sua conclusão; não há fila.');
     this.busy = true;
     const started = performance.now();
@@ -28,10 +28,10 @@ export class Laboratory {
         const file = FIXTURES[canonical];
         if (!file) throw new LabError(404, 'Fixture não disponível. Use 9788535914849, 9788584390670 ou 9788501014863.');
         html = await this.dependencies.readHtml(file);
-      } else ({ html, ...metadata } = await this.dependencies.fetchHtml(isbn));
+      } else ({ html, ...metadata } = await this.dependencies.fetchHtml(isbn, undefined, asin));
       const duration = () => Math.round((performance.now() - started) * 100) / 100;
       if (html === null) return { modo: mode, isbn_pesquisado: isbn, total_campos: 9, ...metadata, status: 'interrompida', duracao_ms: duration() };
-      const parsed = parseAmazonHtml(html, isbn, 'memoria', mode === 'fixture' ? 'real_html_sanitizado' : 'http_local_experimental');
+      const parsed = parseAmazonHtml(html, isbn, 'memoria', mode === 'fixture' ? 'real_html_sanitizado' : 'http_local_experimental', asin);
       return { ...toLabResult(parsed, mode, duration(), metadata.status_http), ...metadata };
     } finally { this.busy = false; }
   }

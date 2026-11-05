@@ -194,6 +194,7 @@ test('Amazon timestamp for reported ISBN becomes year 2013 through the official 
   assert.equal(merged.year, '2013'); assert.equal(api.createRegistrationDraft(merged).year, '2013');
   const priority = { id: 'priority', title: 'Priority title', isbn13: reportedIsbn, publishedDate: '1998-03-02', year: '1998' };
   assert.deepEqual(client.complementWithAmazon(priority, result.book), { ...priority, authors: ['Synthetic Author'], publisher: 'Synthetic Publisher',
+    amazonCatalogReference: { asin: 'SYNTHETIC1', isbn: reportedIsbn, marketplaceId: api.MARKETPLACE },
     rawIdentifiers: [{ type: 'ISBN_13', identifier: reportedIsbn }], provenance: { authors: 'amazon_spapi_catalog_2022-04-01', publisher: 'amazon_spapi_catalog_2022-04-01', rawIdentifiers: 'amazon_spapi_catalog_2022-04-01' } });
   const noYear = { ...priority, year: undefined };
   assert.equal(client.complementWithAmazon(noYear, result.book).publishedDate, '1998-03-02');
@@ -460,9 +461,10 @@ test('9781419762109: two distinct MAIN references trigger one real laboratory cl
     assert.equal(url, '/api/amazon?acao=search'); assert.equal(init.method, 'POST');
     assert.equal(init.headers.Authorization, 'Bearer synthetic-session'); assert.equal(init.credentials, 'same-origin');
     assert.equal(init.redirect, 'error'); assert.equal(init.cache, 'no-store');
-    assert.deepEqual(JSON.parse(init.body), { isbn: query, modo: 'http' });
+    assert.deepEqual(JSON.parse(init.body), { isbn: query, modo: 'http', asin: 'SYNTHETIC1' });
     const payload = labImages([cdn('BATMANLABCOVER'), cover, alternate, inside, inside.replace('.jpg', '._SX75_.jpg'), detail]);
     payload.isbn_pesquisado = query; payload.isbn_encontrado = { isbn13: { valor: query, valido: true } };
+    payload.asin_pesquisado = 'SYNTHETIC1'; payload.asin_correspondencia = 'corresponde';
     return Response.json(payload);
   });
   for (const primary of [null, { id: 'primary', title: 'Priority title', isbn13: query,
