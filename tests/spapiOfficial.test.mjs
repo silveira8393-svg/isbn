@@ -155,6 +155,77 @@ test('catalog returns projected bibliographic fields only, filters ISBN mismatch
   assert.equal(result.requiresReview, true); assert.doesNotMatch(JSON.stringify(result), /synthetic-access|refresh_token|list_price|inventory/);
   assert.equal(h.saved.length, 1); assert.equal(h.calls.at(-2).init.body.get('grant_type'), 'refresh_token');
 });
+
+const recoveryIsbn = '9798276439839';
+const recoveryQuery = { isbn: recoveryIsbn, diagnostic: 'bibliography' };
+const recoveryItem = () => ({ ...structuredClone(item), asin: 'B0G4CS2PMG', identifiers: [{ marketplaceId: api.MARKETPLACE,
+  identifiers: [{ identifierType: 'ISBN', identifier: recoveryIsbn }] }] });
+test('Preview diagnostic observes factual structures and projected values in the same single official GET', async () => {
+  const original = recoveryItem();
+  original.attributes.edition = [{ value: 2, marketplace_id: api.MARKETPLACE }];
+  original.attributes.print_length = [{ value: 211, unit: 'pages', marketplace_id: api.MARKETPLACE }];
+  original.attributes.product_description = [{ value: 'Must not return protected description' }];
+  original.attributes.seller_token = [{ value: 'Must not return credential' }];
+  original.attributes.author[0].session = 'Must not return session';
+  original.offers = [{ price: 'Must not return offer' }];
+  const h = harness({ env: { VERCEL_ENV: 'preview' }, catalog: { numberOfResults: 1, items: [original] } });
+  const response = await h.handler('catalog')(h.request('catalog', recoveryQuery));
+  assert.equal(response.status, 200); const body = await response.json();
+  const diagnostic = body.diagnostics.items[0];
+  assert.equal(diagnostic.attributes.edition.entries[0].fields.value.value, 2);
+  assert.equal(diagnostic.attributes.print_length.entries[0].fields.value.value, 211);
+  assert.equal(diagnostic.parser.pageCount, 300); // Existing parser still ignores print_length; no speculative fix.
+  assert.equal(diagnostic.parser.edition, '2');
+  assert.equal(diagnostic.attributes.book_subtitle.type, 'absent');
+  assert.equal(body.contentPolicy, 'synopsis_omitted'); assert.equal(body.items[0].synopsis, null);
+  assert.doesNotMatch(JSON.stringify(body), /Must not return|synthetic-access|refresh_token|seller_token|product_description/);
+  assert.equal(h.calls.filter(c => c.url.includes('/catalog/')).length, 1);
+  assert.equal(h.saved.length, 0); assert.equal(h.states.size, 0);
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+});
+test('diagnostic is absent from ordinary catalog responses, including Preview', async () => {
+  const h = harness({ env: { VERCEL_ENV: 'preview' } });
+  const body = await (await h.handler('catalog')(h.request('catalog', { isbn }))).json();
+  assert.equal(body.diagnostics, undefined);
+});
+test('diagnostic rejects Production, Development, other ISBNs and duplicate/unknown modes before Amazon', async () => {
+  for (const setting of [{ env: { VERCEL_ENV: 'production' }, query: recoveryQuery },
+    { env: { VERCEL_ENV: 'development' }, query: recoveryQuery }, { env: {}, query: recoveryQuery },
+    { env: { VERCEL_ENV: 'preview' }, query: { isbn, diagnostic: 'bibliography' } },
+    { env: { VERCEL_ENV: 'preview' }, query: { ...recoveryQuery, diagnostic: 'raw' } }]) {
+    const h = harness({ env: setting.env });
+    assert.equal((await h.handler('catalog')(h.request('catalog', setting.query))).status, 400);
+    assert.equal(h.calls.length, 0);
+  }
+  const h = harness({ env: { VERCEL_ENV: 'preview' } });
+  const duplicate = new Request(h.request('catalog', recoveryQuery).url + '&diagnostic=bibliography');
+  assert.equal((await h.handler('catalog')(duplicate)).status, 400); assert.equal(h.calls.length, 0);
+});
+test('diagnostic reuses real authorization and cannot query Amazon anonymously or after membership removal', async () => {
+  const h = harness({ env: { VERCEL_ENV: 'preview' } });
+  assert.equal((await h.handler('catalog')(h.request('catalog', recoveryQuery, { headers: { authorization: '' } }))).status, 401);
+  h.revoke();
+  assert.equal((await h.handler('catalog')(h.request('catalog', recoveryQuery))).status, 403);
+  assert.equal(h.calls.filter(c => /amazon\.com/.test(c.url)).length, 0);
+});
+test('diagnostic redacts unsafe strings and bounds nested arrays and total size', async () => {
+  const original = recoveryItem(); original.attributes.book_subtitle = [{ value: '<script>raw</script>' }];
+  original.attributes.edition_number = Array.from({ length: 10 }, () => ({ value: 'Bearer credential-marker' }));
+  const h = harness({ env: { VERCEL_ENV: 'preview' }, catalog: { numberOfResults: 1, items: [original] } });
+  const body = await (await h.handler('catalog')(h.request('catalog', recoveryQuery))).json();
+  assert.equal(body.diagnostics.items[0].attributes.book_subtitle.entries[0].fields.value.omitted, true);
+  assert.equal(body.diagnostics.items[0].attributes.edition_number.entries.length, 4);
+  assert.equal(body.diagnostics.items[0].attributes.edition_number.truncated, true);
+  assert.doesNotMatch(JSON.stringify(body.diagnostics), /<script>|credential-marker/);
+  const large = recoveryItem();
+  for (const key of ['item_name','subtitle','book_subtitle','author','authors','publisher','publisher_name','publication_date',
+    'street_date','book_publication_date','edition','edition_number','book_edition','language','binding','book_binding',
+    'number_of_pages','print_length','pages','item_dimensions','item_weight','item_package_dimensions','item_package_weight'])
+    large.attributes[key] = Array.from({length:4}, () => ({value:'x'.repeat(512)}));
+  const bounded = harness({env:{VERCEL_ENV:'preview'},catalog:{numberOfResults:1,items:[large]}});
+  const limited = await (await bounded.handler('catalog')(bounded.request('catalog', recoveryQuery))).json();
+  assert.equal(limited.diagnostics.items[0].reason, 'diagnostic_size_limit');
+});
 test('ISBN-13 query accepts equivalent ISBN-10 identifiers returned by Amazon', async () => {
   const h = harness({ catalog: { numberOfResults: 1, items: [{ ...item, identifiers: [{ marketplaceId: api.MARKETPLACE,
     identifiers: [{ identifierType: 'ISBN', identifier: '8535914846' }] }] }] } });
