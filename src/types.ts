@@ -8,6 +8,13 @@ export interface BookIdentifier {
   identifier: string;
 }
 
+export interface BookSourceLink {
+  source: 'google_books' | 'curitiba' | 'amazon';
+  kind: 'info' | 'preview';
+  url: string;
+  isbn: string;
+}
+
 export interface BookInfo {
   id: string;
   title: string;
@@ -56,6 +63,9 @@ export interface BookInfo {
   provider?: string;
   coverUrl?: string;
   synopsis?: string;
+  sourceLinks?: BookSourceLink[];
+  googleBooksReference?: { volumeId: string; isbn: string; infoLink?: string; previewLink?: string;
+    coverUrl?: string; descriptionAvailable: boolean; contentReviewRequired: true };
 }
 
 export type BookCondition = 'novo' | 'usado';
@@ -66,6 +76,8 @@ export type RegistrationMode =
   | 'new_used_from_known_edition';
 
 export interface RegistrationDraft {
+  // Internal source references, not commercial content or registration export fields.
+  sourceLinks?: BookSourceLink[];
   // Identificação e códigos
   condition: BookCondition;
   registrationMode?: RegistrationMode;

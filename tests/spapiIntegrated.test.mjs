@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
-const serverBuild = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts', contents: `export {createAmazonFunction} from './server/amazonFunction'; export {parseAmazonHtml,toLabResult} from './experimentos/amazon/extrator_amazon'; export {isbn10For} from './experimentos/amazon/consulta_amazon'; export * from './server/spapi/core'; export * from './server/spapi/handler'; export * from './shared/publicationDate'; export {createRegistrationDraft} from './src/utils/draft'; export * from './src/utils/imageUrls';` },
+const serverBuild = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts', contents: `export {createAmazonFunction} from './server/amazonFunction'; export {parseAmazonHtml,toLabResult} from './experimentos/amazon/extrator_amazon'; export {isbn10For} from './experimentos/amazon/consulta_amazon'; export * from './server/spapi/core'; export * from './server/spapi/handler'; export * from './shared/publicationDate'; export {createRegistrationDraft} from './src/utils/draft'; export * from './src/utils/imageUrls'; export {complementWithGoogleBooks} from './src/services/googleBooks'; export {mapGoogleBooksResponse} from './shared/googleBooks';` },
   bundle: true, write: false, platform: 'node', format: 'esm' });
 const api = await import('data:text/javascript;base64,' + Buffer.from(serverBuild.outputFiles[0].text).toString('base64'));
 const uid = '11111111-1111-4111-8111-111111111111', sid = api.PRIVATE_STORE_ID, isbn = '9788535914849';
@@ -116,6 +116,7 @@ const appMocks = [
   [/\/hooks\/useOperationAudit$/, 'exports.useOperationAudit=()=>({saveOperation:deps.audit,pending:[],retry:()=>{}})'],
   [/\/hooks\/useLocalHistory$/, 'exports.useLocalHistory=()=>({history:[],setHistory:()=>{},clearHistory:()=>{}})'],
   [/\/services\/brasilApi$/, 'exports.searchBookByIsbnBrasilApi=async()=>deps.brasil'],
+  [/\/services\/googleBooks$/, 'exports.searchGoogleBooks=async()=>deps.googleBooks||({status:"not_found",book:null,diagnostic:{code:"offline"}});exports.complementWithGoogleBooks=deps.googleMerge||((base)=>base)'],
   [/\/services\/distribuidoraCuritiba$/, 'exports.searchBookByIsbnDistribuidoraCuritiba=async()=>deps.curitiba;exports.mergeBookWithDistribuidora=(a,b)=>({...a,...b})'],
   [/\/lib\/supabase(?:\.js)?$/, 'exports.supabase={auth:{getSession:async()=>({data:{session:{user:{id:deps.user.currentUser.id},access_token:"synthetic-session"}}})}}'],
   [/(?:^|\/)amazonLabClient$/, 'exports.searchAmazonLab=(...args)=>deps.lab(...args)'],
@@ -166,6 +167,34 @@ test('late Amazon result is discarded after role/store change during the normal 
   await new Promise(resolve => setImmediate(resolve));
   view.deps.user.currentUser = { ...view.deps.user.currentUser, storeId: uid }; view.render(); release(); await work; view.render();
   assert.equal(view.find('BookDetailsCard').props.book.publisher, undefined);
+});
+
+const googleFixture = target => api.mapGoogleBooksResponse({kind:'books#volumes',totalItems:1,items:[{
+  id:'synthetic_google',volumeInfo:{title:'Google synthetic title',publisher:'Google synthetic publisher',pageCount:123,
+    industryIdentifiers:[{type:'ISBN_13',identifier:target}],infoLink:'https://books.google.com/books?id=synthetic_google'}
+}]},target);
+test('Google fourth-source omission fill reaches the existing form; higher-priority/manual fields and images survive',async t=>{
+  t.mock.method(globalThis,'fetch',async()=>Response.json({isbn,items:[]}));
+  const view=mountApp({googleBooks:googleFixture(isbn),googleMerge:api.complementWithGoogleBooks});
+  await view.search();view.render(); const book=view.find('BookDetailsCard').props.book;
+  assert.equal(book.title,'Existing title');assert.equal(book.publisher,'Google synthetic publisher');assert.equal(book.pageCount,123);
+  assert.equal(book.provenance.publisher,'Google Books');
+  view.find('Header').props.onTabChange('cadastro');view.render();
+  const draft=view.find('ProductRegistrationForm').props.draft;assert.equal(draft.publisher,'Google synthetic publisher');assert.equal(draft.sourceLinks.length,1);
+});
+test('Google may find an edition missed by prior sources; unavailability preserves a primary result',async t=>{
+  t.mock.method(globalThis,'fetch',async()=>Response.json({isbn,items:[]}));
+  const view=mountApp({brasil:{book:null,diagnostic:{status:404}},googleBooks:googleFixture(isbn),googleMerge:api.complementWithGoogleBooks});
+  await view.search();view.render();assert.equal(view.find('BookDetailsCard').props.book.title,'Google synthetic title');
+  const failure=mountApp({googleBooks:{status:'unavailable',book:null,diagnostic:{code:'upstream_http'}},googleMerge:api.complementWithGoogleBooks});
+  await failure.search();failure.render();assert.equal(failure.find('BookDetailsCard').props.book.title,'Existing title');
+});
+test('a late Google response cannot complement a changed account/store',async t=>{
+  t.mock.method(globalThis,'fetch',async()=>Response.json({isbn,items:[]}));
+  let release;const pending=new Promise(resolve=>{release=resolve;});
+  const view=mountApp({googleBooks:pending,googleMerge:api.complementWithGoogleBooks}),work=view.search();
+  await new Promise(resolve=>setImmediate(resolve));view.deps.user.currentUser={...view.deps.user.currentUser,storeId:uid};view.render();
+  release(googleFixture(isbn));await work;view.render();assert.equal(view.find('BookDetailsCard').props.book.publisher,undefined);
 });
 
 test('ISO publication dates normalize without timezone shifts and invalid dates cannot enter the year field', () => {

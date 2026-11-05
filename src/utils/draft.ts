@@ -103,6 +103,7 @@ export function createRegistrationDraft(
     typeof book.depth === 'number' && Number.isFinite(book.depth) ? roundPhysicalMeasurement(book.depth) : undefined;
 
   const draft: RegistrationDraft = {
+    ...(book.sourceLinks?.length ? { sourceLinks: book.sourceLinks.map(link => ({ ...link })) } : {}),
     condition: initialCondition,
     registrationMode: registrationModeForCondition(initialCondition, registrationMode),
     parentCode: '', // Sempre manual (etiqueta física da loja, ex: LV26579-P)
