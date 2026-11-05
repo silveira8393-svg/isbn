@@ -1,0 +1,53 @@
+{
+  "isbn": "9798276439839",
+  "items": [
+    {
+      "asin": "B0G4CS2PMG",
+      "isbn": "9798276439839",
+      "title": "O Rei de Amarelo",
+      "authors": ["W. Chambers, Robert"],
+      "publisher": null,
+      "publicationDate": "2025-11-27",
+      "language": "portuguese",
+      "binding": "paperback",
+      "edition": null,
+      "pageCount": null,
+      "identifiers": [{ "type": "ISBN_13", "identifier": "9798276439839" }],
+      "isbn10": null,
+      "isbn13": "9798276439839",
+      "physical": {
+        "item": {
+          "height": { "value": 9, "unit": "inches" },
+          "width": { "value": 0.33, "unit": "inches" },
+          "length": { "value": 6, "unit": "inches" }
+        },
+        "package": {
+          "height": { "value": 0.33, "unit": "inches" },
+          "width": { "value": 6, "unit": "inches" },
+          "length": { "value": 9, "unit": "inches" },
+          "weight": { "value": 0.6, "unit": "pounds" }
+        }
+      },
+      "imageMetadata": {
+        "datasetReturned": true,
+        "count": 3,
+        "entries": [
+          { "variant": "MAIN", "width": 1000, "height": 1499, "hasUrl": true },
+          { "variant": "MAIN", "width": 334, "height": 500, "hasUrl": true },
+          { "variant": "MAIN", "width": 50, "height": 75, "hasUrl": true }
+        ]
+      },
+      "synopsis": null,
+      "images": [
+        { "variant": "MAIN", "link": "https://m.media-amazon.com/images/I/61CCHBDemtL.jpg", "width": 1000, "height": 1499 },
+        { "variant": "MAIN", "link": "https://m.media-amazon.com/images/I/41pRDvm1NLL.jpg", "width": 334, "height": 500 },
+        { "variant": "MAIN", "link": "https://m.media-amazon.com/images/I/41pRDvm1NLL._SL75_.jpg", "width": 50, "height": 75 }
+      ],
+      "source": "amazon_spapi_catalog_2022-04-01",
+      "marketplaceId": "A2Q3Y263D00KWC"
+    }
+  ],
+  "hasMore": false,
+  "requiresReview": true,
+  "contentPolicy": "synopsis_omitted"
+}

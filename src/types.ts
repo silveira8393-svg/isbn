@@ -49,6 +49,8 @@ export interface BookInfo {
   amazonImages?: { variant: string; link: string }[];
   // Internal edition reference from a matching official catalog result; never a replacement ISBN.
   amazonCatalogReference?: { asin: string; isbn: string; marketplaceId: string };
+  // Field names/reasons only; source values remain available in the laboratory for review.
+  bibliographicWarnings?: string[];
   enrichmentSource?: string;
   provenance?: Record<string, string>;
   provider?: string;

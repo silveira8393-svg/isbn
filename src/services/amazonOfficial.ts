@@ -2,8 +2,8 @@ import type { BookInfo, User } from '../types';
 import { cleanIsbn } from '../utils/isbn';
 import { normalizePublicationDate, publicationYear } from '../../shared/publicationDate';
 import { imageIdentity, imageReferences, isImageReference } from '../utils/imageUrls';
-import { canonicalBookIsbn } from '../utils/bibliographicEvaluation';
-import { searchAmazonLab } from './amazonLabClient';
+import { canonicalBookIsbn, evaluateBook } from '../utils/bibliographicEvaluation';
+import { searchAmazonLab, type LabQuality, type LabResult } from './amazonLabClient';
 import { roundPhysicalMeasurement } from '../utils/bibliographicNormalization';
 
 export const canUseAmazonOfficial = (user: Pick<User, 'active' | 'role' | 'storeId'>) =>
@@ -92,12 +92,77 @@ function catalogImages(images: CatalogItem['images']) {
   return { coverUrl: cover, additionalImages: additional, amazonImages: ranked.map(({ variant, link }) => ({ variant, link })) };
 }
 
-/** Complete even partial source galleries with one bounded laboratory lookup per ISBN search. */
+/** Complement only validated factual fields. Description, commercial brand and unlabeled axes are excluded. */
+function complementLaboratoryFields(base: BookInfo, result: LabResult, isbn: string): BookInfo {
+  const current = evaluateBook(base, 'Fonte selecionada', isbn);
+  const merged: BookInfo = { ...base, provenance: { ...base.provenance } };
+  const warnings = new Set(base.bibliographicWarnings || []);
+  const fields = { titulo: 'title', subtitulo: 'subtitle', autores: 'authors', editora: 'publisher', ano: 'year', edicao: 'edition',
+    idioma: 'language', formato: 'format', paginas: 'pageCount', data_publicacao: 'publishedDate',
+    peso: 'weight', largura: 'width', altura: 'height', profundidade: 'depth' } as const;
+  const qualities: Record<string, LabQuality | undefined> = { ...result.campos, ...result.complementares };
+  if (qualities.dimensoes?.estado === 'inconsistente' && qualities.dimensoes.valor !== null)
+    warnings.add('Dimensões Amazon sem eixos inequívocos ou conflitantes; medidas selecionadas preservadas para revisão.');
+  const labEdition = qualities.edicao;
+  if (current.fields.edition.state === 'valid' && labEdition?.estado === 'valido' && !labEdition.revisao_humana
+    && current.book.edition !== labEdition.valor) {
+    warnings.add('Edição divergente no Laboratório Amazon; complemento bibliográfico não incorporado.');
+  } else for (const [labField, target] of Object.entries(fields)) {
+    let quality = qualities[labField];
+    const compound = qualities.dimensoes;
+    if (['width', 'height', 'depth'].includes(target) && (!quality || quality.estado === 'ausente')
+      && compound?.valor && typeof compound.valor === 'object' && !Array.isArray(compound.valor)
+      && result.book_info?.[target as 'width' | 'height' | 'depth'] === compound.valor[target]) {
+      quality = { ...compound, valor: compound.valor[target] };
+    }
+    if (quality?.estado === 'inconsistente' && quality.valor !== null)
+      warnings.add(`${labField}: candidato inconsistente no Laboratório Amazon; requer revisão, sem preenchimento automático.`);
+    if (!quality || quality.estado !== 'valido' || quality.revisao_humana || !quality.origens?.length) continue;
+    const value = quality.valor;
+    // Numeric units and axes must already have been explicitly recognized by the extractor.
+    if (target === 'weight' && result.book_info?.weightUnit !== 'g') continue;
+    if (['width', 'height', 'depth'].includes(target) && result.book_info?.dimensionsUnit !== 'cm') continue;
+    const candidate = evaluateBook({ id: base.id, title: '', [target]: value,
+      ...(target === 'weight' ? { weightUnit: 'g' } : {}),
+      ...(['width', 'height', 'depth'].includes(target) ? { dimensionsUnit: 'cm' } : {}) }, 'Amazon (laboratório)', isbn);
+    if (candidate.fields[target]?.state !== 'valid') continue;
+    if ((target === 'year' && current.fields.publishedDate?.state === 'valid' && String(value) !== String(base.publishedDate).slice(0, 4))
+      || (target === 'publishedDate' && current.fields.year.state === 'valid' && String(value).slice(0, 4) !== String(base.year))) {
+      warnings.add(`${labField}: ano e data divergentes no Laboratório Amazon; fonte selecionada preservada.`);
+      continue;
+    }
+    if (current.fields[target]?.state === 'valid') {
+      if (JSON.stringify(current.book[target as keyof BookInfo]) !== JSON.stringify(candidate.book[target as keyof BookInfo]))
+        warnings.add(`${labField}: divergência no Laboratório Amazon; fonte selecionada preservada.`);
+      continue;
+    }
+    // An unknown binding/language/edition or missing unit is uncertainty, not proof that the selected value is wrong.
+    const prior = base[target as keyof BookInfo];
+    const numeric = typeof prior === 'number' ? prior : target === 'year' && typeof prior === 'string' && /^\d+$/.test(prior) ? Number(prior) : undefined;
+    const invalidNumber = numeric !== undefined && ['pageCount', 'year', 'weight', 'width', 'height', 'depth'].includes(target)
+      && (!Number.isFinite(numeric) || numeric <= 0 || (target === 'pageCount' && (!Number.isInteger(numeric) || numeric > 20000))
+        || (target === 'year' && (!Number.isInteger(numeric) || numeric < 1450 || numeric > new Date().getFullYear() + 1)));
+    if (current.fields[target]?.state === 'inconsistent' && !invalidNumber) {
+      warnings.add(`${labField}: valor selecionado ambíguo ou unidade não identificada; preservado para revisão.`);
+      continue;
+    }
+    if (['width', 'height', 'depth'].includes(target) && base.dimensionsUnit !== undefined && base.dimensionsUnit !== 'cm') continue;
+    merged[target as keyof BookInfo] = structuredClone(candidate.book[target as keyof BookInfo]) as never;
+    merged.provenance![target] = 'amazon_lab_verified: ' + quality.origens.join('; ');
+    if (target === 'weight') { merged.weightUnit = 'g'; merged.provenance!.weightUnit = merged.provenance!.weight; }
+    if (['width', 'height', 'depth'].includes(target)) merged.dimensionsUnit = 'cm';
+  }
+  if (warnings.size) merged.bibliographicWarnings = [...warnings];
+  return JSON.stringify(merged) === JSON.stringify({ ...base, provenance: { ...base.provenance } }) ? base : merged;
+}
+
+/** Reuse one bounded laboratory lookup for factual bibliography and the existing image complement. */
 export async function complementAmazonImages(book: BookInfo | null, isbn: string, user: User, signal?: AbortSignal): Promise<BookInfo | null> {
   const existing = imageReferences([book?.coverUrl, book?.thumbnailUrl, ...(book?.additionalImages || [])]);
   const coverIdentities = new Set(imageReferences([book?.coverUrl, book?.thumbnailUrl,
     ...(book?.amazonImages || []).filter(image => image.variant === 'MAIN').map(image => image.link)]).map(imageIdentity));
   const canonical = canonicalBookIsbn(isbn);
+  if ([book?.isbn10, book?.isbn13].some(id => id && canonicalBookIsbn(id) !== canonical)) return book;
   const reference = book?.amazonCatalogReference;
   const asin = reference && /^[A-Z0-9]{10}$/.test(reference.asin) && reference.isbn === canonical
     && reference.marketplaceId === 'A2Q3Y263D00KWC' ? reference.asin : undefined;
@@ -110,7 +175,9 @@ export async function complementAmazonImages(book: BookInfo | null, isbn: string
       || canonicalBookIsbn(result.isbn_pesquisado) !== canonical
       || (asin && (result.asin_pesquisado !== asin || result.asin_correspondencia !== 'corresponde'))
       || !identifiers.length || identifiers.some(id => typeof id.valor !== 'string' || canonicalBookIsbn(id.valor) !== canonical)) return book;
-    // Bibliography, synopsis and raw HTML from the laboratory never enter the registration flow.
+    const base = book || { id: `isbn-${cleanIsbn(isbn)}`, title: '', ...(cleanIsbn(isbn).length === 13 ? { isbn13: cleanIsbn(isbn) } : { isbn10: cleanIsbn(isbn) }) };
+    const enriched = complementLaboratoryFields(base, result, isbn);
+    // Synopsis, raw HTML and commercial brand never enter the automatic registration flow.
     const candidates = (Array.isArray(result.imagens?.itens) ? result.imagens.itens : [])
       .filter(image => image && ['principal', 'adicional'].includes(image.papel) && publicAmazonImage(image.referencia))
       .sort((a, b) => Number(b.papel === 'principal') - Number(a.papel === 'principal'));
@@ -119,9 +186,12 @@ export async function complementAmazonImages(book: BookInfo | null, isbn: string
     const additions = candidates.filter(image => image.papel === 'adicional' && !coverIdentities.has(imageIdentity(image.referencia)));
     const images = imageReferences([...existing, ...(existing.length ? [] : laboratoryCovers.map(image => image.referencia).slice(0, 1)),
       ...additions.map(image => image.referencia)]);
-    if (images.length === existing.length) return book;
-    const base = book || { id: `isbn-${cleanIsbn(isbn)}`, title: '', ...(cleanIsbn(isbn).length === 13 ? { isbn13: cleanIsbn(isbn) } : { isbn10: cleanIsbn(isbn) }) };
-    return { ...base, coverUrl: existing[0] || images[0], additionalImages: images.slice(1) };
+    if (images.length === existing.length) {
+      // Review notices alone do not turn an empty search into a bibliographic match.
+      if (!book && !Object.values(enriched.provenance || {}).some(source => source.startsWith('amazon_lab_verified:'))) return null;
+      return enriched === base ? book : enriched;
+    }
+    return { ...enriched, coverUrl: existing[0] || images[0], additionalImages: images.slice(1) };
   } catch { return book; } // No retries or bypass when the existing extractor is unavailable or blocked.
 }
 export type AmazonOfficialResult = { book: BookInfo | null; status: 'success' | 'not_found' | 'ambiguous' | 'unavailable' | 'skipped' };

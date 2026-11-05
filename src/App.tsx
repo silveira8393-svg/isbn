@@ -349,16 +349,18 @@ export default function App() {
       condition ||
       visibleMagazordCheck?.existingCondition ||
       'novo';
-    const draft = createRegistrationDraft(foundBook, targetCondition);
-    // Preserve image decisions during ordinary navigation; general draft recovery is a later stage.
-    if (registrationDraft && registrationDraft.condition === targetCondition && !registrationCompleted.current) {
-      draft.mainImageUrl = registrationDraft.mainImageUrl;
-      draft.additionalImageUrls = [...registrationDraft.additionalImageUrls];
-      draft.imageSelectionManual = registrationDraft.imageSelectionManual;
-      draft.language = registrationDraft.language;
-      draft.fiscalBenefitCode = registrationDraft.fiscalBenefitCode;
+    // Ordinary navigation must not recreate the same edition/condition and discard manual edits.
+    const sameEdition = registrationDraft && cleanIsbn(registrationDraft.isbn13 || registrationDraft.isbn10)
+      === cleanIsbn(foundBook.isbn13 || foundBook.isbn10 || '');
+    let draft = sameEdition && registrationDraft.condition === targetCondition && !registrationCompleted.current
+      ? registrationDraft : createRegistrationDraft(foundBook, targetCondition);
+    // Bibliographic corrections describe the edition. Commercial codes, stock and copy photographs do not.
+    if (sameEdition && registrationDraft.condition !== targetCondition && !registrationCompleted.current) {
+      const { title, subtitle, authors, publisher, year, edition, language, format, pageCount,
+        weight, weightUnit, width, height, depth, synopsis, description } = registrationDraft;
+      draft = updateDraftWithMetaDescription(draft, { title, subtitle, authors: [...authors], publisher, year, edition,
+        language, format, pageCount, weight, weightUnit, width, height, depth, synopsis, description });
     }
-    draft.format = foundBook.format || '';
     setRegistrationDraft(draft);
     registrationCompleted.current = false;
     setActiveTab('cadastro');

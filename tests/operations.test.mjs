@@ -185,7 +185,7 @@ test('Real App search and registration opening retain normalized language instea
       view.find(n => n.type === 'Header').props.onTabChange('consultar'); await flush();
       view.find(n => n.type === 'MagazordStatusCard').props.onOpenRegistration(condition); await flush();
       const formProps = view.find(n => n.type === 'ProductRegistrationForm').props;
-      assert.equal(formProps.draft.language, expected, 'explicit registration opening');
+      assert.equal(formProps.draft.language, condition === 'novo' ? expected : 'Idioma manual', 'initial source normalization; edition correction survives condition change');
       formProps.onUpdateDraft({ language: 'Idioma manual', fiscalBenefitCode: '', price: '50,50', parentCode: 'P', childCode: 'C' }); await flush();
       view.find(n => n.type === 'Header').props.onTabChange('consultar'); await flush();
       view.find(n => n.type === 'MagazordStatusCard').props.onOpenRegistration(condition); await flush();
