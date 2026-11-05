@@ -302,6 +302,14 @@ export default function BookDetailsCard({ book }: BookDetailsCardProps) {
             {Object.values(book.provenance || {}).includes('amazon_spapi_catalog_2022-04-01') && (
               <p className="text-xs text-slate-500">Fonte complementar: Amazon SP-API.</p>
             )}
+            {Object.values(book.provenance || {}).some(source => source.startsWith('amazon_lab_verified:')) && (
+              <p className="text-xs text-slate-500">Fonte complementar: Amazon (edição verificada no laboratório).</p>
+            )}
+            {!!book.bibliographicWarnings?.length && (
+              <ul role="status" className="text-xs text-amber-800 list-disc pl-4">
+                {book.bibliographicWarnings.map(warning => <li key={warning}>{warning}</li>)}
+              </ul>
+            )}
 
             {hasValue(book.subtitle) && (
               <p className="text-base text-slate-600 font-normal mt-1 leading-normal">

@@ -72,7 +72,8 @@ export function extractAmazon(html: string, expectedAsin?: string): Candidates {
     label = key(label).replace(/[ :]+$/, '');
     const field = LABELS[label];
     if (!field) return;
-    add(field, field === 'autores' ? [value] : value, source, field === 'sinopse' ? 'sinopse_explicita' : 'bibliografico');
+    add(field, field === 'autores' ? [value] : value, source, field === 'sinopse' ? 'sinopse_explicita'
+      : field === 'peso' && ['peso do produto', 'item weight'].includes(label) ? 'peso_produto' : 'bibliografico');
     if (field === 'ano' && ['data da publicacao', 'publication date'].includes(label)) add('data_publicacao', value, source);
     if (['capa comum', 'capa dura', 'paperback', 'hardcover'].includes(label)) add('formato', label, source + ' (encadernação)');
   }
@@ -296,6 +297,7 @@ function issue(field: string, value: Value, candidate: Candidate): string | unde
   if (field === 'paginas' && (!Number.isInteger(value) || Number(value) < 1 || Number(value) > 20000)) return 'Número de páginas inválido, ambíguo ou fora da faixa experimental.';
   if (field === 'data_publicacao' && !publicationDate(text)) return 'Data completa inválida ou não informada; não inventar dia e mês.';
   if (['peso', 'largura', 'altura', 'profundidade'].includes(field) && typeof value !== 'number') return 'Medida inválida ou sem unidade explícita.';
+  if (field === 'peso' && candidate.tipo !== 'peso_produto') return 'Peso sem identificação explícita de produto; não usar embalagem ou envio como exemplar.';
   if (field === 'dimensoes' && (typeof value !== 'object' || Array.isArray(value))) return 'Ordem dos eixos ou unidade não identificada; medidas brutas preservadas sem atribuição.';
   if (field === 'sinopse') {
     if (text.length < 80 || COMMERCIAL.test(normalized) || /classico contemporaneo|transformando a vida de milhoes|[”"]\s*[–-]/.test(normalized)) return 'Descrição curta/comercial ou mista; não comprova sinopse.';

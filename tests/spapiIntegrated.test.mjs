@@ -400,6 +400,40 @@ const labImages = (images = [cdn('MAIN'), cdn('BACK'), cdn('INSIDE')]) => ({
   imagens: { itens: images.map((referencia, i) => ({ referencia, papel: i ? 'adicional' : 'principal' })), download_realizado: false },
 });
 
+test('bibliographic manual edits and deliberate clearing survive same-edition/condition reopening for NOVO and USADO', async t => {
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ isbn, items: [] }));
+  for (const condition of ['novo', 'usado']) {
+    const view = mountApp({ lab: async () => ({ status: 'interrompida' }) });
+    await view.search(); view.render();
+    const original = structuredClone(view.find('BookDetailsCard').props.book);
+    view.find('MagazordStatusCard').props.onOpenRegistration(condition); view.render();
+    const edits = { title: 'Título manual', authors: ['Autor manual'], publisher: 'Editora manual', year: '1998',
+      edition: '4ª', language: 'Inglês', format: 'CD - Capa Dura', pageCount: 421, weight: 413.5, weightUnit: 'g',
+      width: 13, height: 22, depth: 3, synopsis: 'Sinopse manual', description: 'Sinopse manual', brand: 'Marca manual',
+      mainImageUrl: cdn('MANUAL'), additionalImageUrls: [cdn('BACKMANUAL')], fiscalBenefitCode: '' };
+    view.find('ProductRegistrationForm').props.onUpdateDraft(edits); view.render();
+    view.find('Header').props.onTabChange('consultar'); view.render();
+    assert.deepEqual(view.find('BookDetailsCard').props.book, original);
+    view.find('MagazordStatusCard').props.onOpenRegistration(condition); view.render();
+    for (const [field, value] of Object.entries(edits)) assert.deepEqual(view.find('ProductRegistrationForm').props.draft[field], value, `${condition}: ${field}`);
+    view.find('ProductRegistrationForm').props.onUpdateDraft({ publisher: '', pageCount: undefined, format: '' }); view.render();
+    view.find('Header').props.onTabChange('consultar'); view.render();
+    view.find('MagazordStatusCard').props.onOpenRegistration(condition); view.render();
+    assert.equal(view.find('ProductRegistrationForm').props.draft.publisher, '');
+    assert.equal(view.find('ProductRegistrationForm').props.draft.pageCount, undefined);
+    assert.equal(view.find('ProductRegistrationForm').props.draft.format, '');
+    view.find('ProductRegistrationForm').props.onUpdateDraft({ parentCode: 'COPY-P', childCode: 'COPY-F', price: '99', quantity: 5 }); view.render();
+    view.find('Header').props.onTabChange('consultar'); view.render();
+    const otherCondition = condition === 'novo' ? 'usado' : 'novo';
+    view.find('MagazordStatusCard').props.onOpenRegistration(otherCondition); view.render();
+    const otherDraft = view.find('ProductRegistrationForm').props.draft;
+    assert.equal(otherDraft.title, edits.title); assert.equal(otherDraft.publisher, ''); assert.equal(otherDraft.pageCount, undefined);
+    assert.equal(otherDraft.parentCode, ''); assert.equal(otherDraft.price, ''); assert.equal(otherDraft.quantity, 1);
+    assert.equal(otherDraft.childCode, otherCondition === 'novo' ? isbn : '');
+    assert.notEqual(otherDraft.mainImageUrl, edits.mainImageUrl, 'copy-specific photographs are not edition bibliography');
+  }
+});
+
 test('image identity collapses known CDN resizes and normalized URLs, retaining distinct assets, variants and unknown URL transformations', () => {
   const cover = cdn('MAIN'), back = cdn('BACK');
   assert.deepEqual(api.imageReferences([cover, cover.replace('.jpg', '._AC_SL1500_.jpg'),

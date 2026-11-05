@@ -90,9 +90,9 @@ export function createRegistrationDraft(
   const availableCategories = CATEGORIES_BY_CONDITION[initialCondition];
   const initialCategory = availableCategories[0];
 
-  // Marca sugerida a partir da editora
+  // Publisher is a bibliographic fact; it does not identify the store's commercial brand.
   const publisher = book.publisher ? book.publisher.trim() : '';
-  const brand = publisher;
+  const brand = '';
 
   // Dimensões exatas (NÃO acrescentar 1 cm!)
   const width =
