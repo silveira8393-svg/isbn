@@ -15,6 +15,7 @@ const html = (rows = '', target = isbn) => `<link rel="canonical" href="https://
   <table id="productDetails_detailBullets_sections1">${row('ISBN-13', target)}${rows}</table>
   <img id="landingImage" src="${cover}"><div id="altImages"><li class="imageThumbnail"><img src="${back}"></li></div>`;
 const fullRows = row('Editora', 'Selo de ensaio') + row('Número de páginas', '211 páginas') + row('Peso do produto', '0,3195 kg')
+  + row('Subtítulo', 'Caderno de ensaio')
   + row('Data da publicação', '15/03/2024') + row('Idioma', 'Português') + row('Formato', 'Capa comum') + row('Edição', '2ª edição')
   + row('Dimensões do produto', '140 x 210 x 20 mm (L x A x P)');
 const output = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts', contents: `
@@ -55,7 +56,8 @@ function formValues(book, condition) {
   const markup = api.renderToStaticMarkup(api.createElement(api.Form, { draft, originalBook: book, onUpdateDraft() {},
     onBackToSearch() {}, onSuccessRegistration() {}, onProcessNextBook() {} }));
   const nodes = [...api.parseHtml(markup).root.walk()];
-  const inputs = field => nodes.filter(n => n.attrs['data-registration-field'] === field);
+  const inputs = field => nodes.filter(n => n.attrs['data-registration-field'] === field
+    || (field === 'subtitle' && n.tag === 'input' && n.attrs.placeholder === 'Ex: Uma reflexão...'));
   const value = field => { const node = inputs(field)[0]; if (!node) return undefined;
     return node.tag === 'select' ? [...node.walk()].find(n => Object.hasOwn(n.attrs, 'selected'))?.attrs.value : node.attrs.value ?? node.text(); };
   return { draft, nodes, value, inputs, markup };
@@ -73,7 +75,7 @@ test('979: factual extraction and one existing Lab call reach actual NOVO/USADO 
   assert.match(card, /Selo de ensaio/); assert.match(card, /211/); assert.match(card, /320 g/); // Existing Consulta presentation rounds grams; input retains 319.5.
   for (const condition of ['novo', 'usado']) {
     const form = formValues(book, condition);
-    for (const [field, expected] of Object.entries({ title: original.title, publisher: 'Selo de ensaio', year: '2024',
+    for (const [field, expected] of Object.entries({ title: original.title, subtitle: 'Caderno de ensaio', publisher: 'Selo de ensaio', year: '2024',
       pageCount: '211', weight: '319.5', width: '14', height: '21', depth: '2', language: 'Português', edition: '2ª' }))
       assert.equal(form.value(field), expected, `${condition} actual input ${field}`);
     assert.equal(form.inputs('authors')[0].attrs.value, 'Autor de ensaio');
@@ -101,6 +103,15 @@ test('partial factual fields complement even when no image is added; invalid exi
   const book = await api.complementAmazonImages(base({ pageCount: -1, additionalImages: [back] }), isbn, user);
   assert.equal(book.pageCount, 211); assert.equal(book.publisher, undefined); assert.equal(book.weight, undefined);
   assert.equal(book.synopsis, undefined); assert.equal(api.createRegistrationDraft(book).brand, '');
+});
+
+test('unknown language, binding, edition, publisher text or measurement units require review rather than automatic replacement', async t => {
+  setup(t); const original=base({language:'Idioma composto',format:'Formato especial',edition:'Reimpressão',publisher:'Oferta editorial',
+    weight:45,width:12,height:20,depth:3});
+  const book=await api.complementAmazonImages(original,isbn,user);
+  for(const key of ['language','format','edition','publisher','weight','width','height','depth'])assert.equal(book[key],original[key],key);
+  assert.equal(book.weightUnit,undefined);assert.equal(book.dimensionsUnit,undefined);
+  assert.ok(book.bibliographicWarnings.some(w=>w.includes('ambíguo ou unidade não identificada')));
 });
 
 test('generic/package/shipping weight and unlabeled dimension triples never become item measurements', async t => {

@@ -97,7 +97,7 @@ function complementLaboratoryFields(base: BookInfo, result: LabResult, isbn: str
   const current = evaluateBook(base, 'Fonte selecionada', isbn);
   const merged: BookInfo = { ...base, provenance: { ...base.provenance } };
   const warnings = new Set(base.bibliographicWarnings || []);
-  const fields = { titulo: 'title', autores: 'authors', editora: 'publisher', ano: 'year', edicao: 'edition',
+  const fields = { titulo: 'title', subtitulo: 'subtitle', autores: 'authors', editora: 'publisher', ano: 'year', edicao: 'edition',
     idioma: 'language', formato: 'format', paginas: 'pageCount', data_publicacao: 'publishedDate',
     peso: 'weight', largura: 'width', altura: 'height', profundidade: 'depth' } as const;
   const qualities: Record<string, LabQuality | undefined> = { ...result.campos, ...result.complementares };
@@ -134,6 +134,16 @@ function complementLaboratoryFields(base: BookInfo, result: LabResult, isbn: str
     if (current.fields[target]?.state === 'valid') {
       if (JSON.stringify(current.book[target as keyof BookInfo]) !== JSON.stringify(candidate.book[target as keyof BookInfo]))
         warnings.add(`${labField}: divergência no Laboratório Amazon; fonte selecionada preservada.`);
+      continue;
+    }
+    // An unknown binding/language/edition or missing unit is uncertainty, not proof that the selected value is wrong.
+    const prior = base[target as keyof BookInfo];
+    const numeric = typeof prior === 'number' ? prior : target === 'year' && typeof prior === 'string' && /^\d+$/.test(prior) ? Number(prior) : undefined;
+    const invalidNumber = numeric !== undefined && ['pageCount', 'year', 'weight', 'width', 'height', 'depth'].includes(target)
+      && (!Number.isFinite(numeric) || numeric <= 0 || (target === 'pageCount' && (!Number.isInteger(numeric) || numeric > 20000))
+        || (target === 'year' && (!Number.isInteger(numeric) || numeric < 1450 || numeric > new Date().getFullYear() + 1)));
+    if (current.fields[target]?.state === 'inconsistent' && !invalidNumber) {
+      warnings.add(`${labField}: valor selecionado ambíguo ou unidade não identificada; preservado para revisão.`);
       continue;
     }
     if (['width', 'height', 'depth'].includes(target) && base.dimensionsUnit !== undefined && base.dimensionsUnit !== 'cm') continue;

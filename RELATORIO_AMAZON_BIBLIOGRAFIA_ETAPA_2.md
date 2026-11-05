@@ -5,7 +5,7 @@ Implementada a complementação factual pela chamada já existente ao Laboratór
 ## Isolamento e homologação anterior
 
 - Branch nova: `feat/amazon-bibliographic-complement`, criada de `83209ed98b2586cbf21a56e79da8a81dc00ba925`.
-- Implementação: commit `70b5947075f227e157145a11ce2ef49a7ff70651`; o commit posterior acrescenta este relatório, sem alterar código.
+- Implementação inicial: commit `70b5947075f227e157145a11ce2ef49a7ff70651`; documentação em `5e57a78`; revisão final inclui também o subtítulo explícito validado na mesma whitelist. O SHA final é confirmado na descrição da PR e na entrega.
 - [PR #6 em rascunho](https://github.com/silveira8393-svg/isbn/pull/6), empilhada sobre `fix/amazon-lab-asin`. O diff da Etapa 2 não inclui a implementação anterior.
 - O responsável declarou a **Etapa 1 homologada funcionalmente**, sem merge: capa e uma adicional chegaram ao Cadastro para `9798276439839` / `B0G4CS2PMG`. Declaração registrada também em [comentário na PR #5](https://github.com/silveira8393-svg/isbn/pull/5#issuecomment-6647859094). Isso documenta o teste do responsável; não equivale a aprovação de segurança do domínio.
 - Base homologada de produção: `93ff20473ca68b50d42d075276e07c624772c9e0`. Tag protegida: `isbn-amazon-galeria-homologada-2026-11-04`. PR #4/branch visual preservada em `2dfa369`.
@@ -17,11 +17,13 @@ O extrator TypeScript já reconhecia título, autores com papel de autor, editor
 
 O ponto de descarte era `complementAmazonImages`: mesmo recebendo `book_info` e as avaliações por campo, consumia somente `imagens.itens`. Agora a mesma chamada também alimenta uma lista fechada de campos factuais, sem buscar novamente a SP-API, chamar `getCatalogItem`, adicionar botão ou exigir outra pesquisa.
 
+Subtítulo explícito validado também pode preencher a lacuna e chega ao input existente. Categorias comerciais da loja não são inferidas a partir de assuntos/categorias Amazon; permanecem sob as regras existentes de NOVO/USADO.
+
 Regras efetivas:
 
 1. Mantidos os gates de usuário/loja, ISBN, ASIN quando fornecido e correspondência dos identificadores da Etapa 1. Um livro-base de outro ISBN não recebe o complemento.
 2. Campo entrante exige `estado=valido`, `revisao_humana=false`, origem identificada e aprovação pelo avaliador bibliográfico existente. Valor ausente/inconsistente não substitui informação válida.
-3. Fonte válida existente vence. Campo ausente ou comprovadamente inválido pode ser preenchido. Data e ano incompatíveis não se misturam; divergência explícita de edição impede a incorporação bibliográfica.
+3. Fonte válida existente vence. Campo ausente ou erro numérico demonstrável (por exemplo, páginas negativas, não inteiras ou fora da faixa) pode ser preenchido. Idioma, formato, edição ou unidade apenas ambíguos não são prova de erro: preserva-se o valor selecionado com aviso de revisão. Data e ano incompatíveis não se misturam; divergência explícita de edição impede a incorporação bibliográfica.
 4. Proveniência de cada preenchimento é registrada em `BookInfo.provenance` com prefixo `amazon_lab_verified:`. Divergências/inconsistências geram avisos com campo e motivo, exibidos na Consulta. São metadados em memória; não foi criada tabela nem alterado contrato de persistência.
 5. Peso exige rótulo explícito **Peso do produto** ou **Item weight**, valor positivo e unidade reconhecida. O rótulo genérico “Peso” agora exige revisão. Embalagem e envio não viram exemplar; nenhuma inferência pelo peso parecido da SP-API.
 6. Medidas compostas só fornecem eixos explicitamente identificados e coerentes com a projeção do extrator. Medidas existentes são preservadas; a ordem de um trio sem rótulos não é inferida.
@@ -93,8 +95,8 @@ As [políticas e acordos oficiais da SP-API](https://developer-docs.amazon/sp-ap
 | TypeScript (`npm run typecheck`) | Aprovado |
 | Lint (`npm run lint`, TypeScript neste projeto) | Aprovado |
 | Build (`npm run build`) | Aprovado; avisos existentes de bundle e importação estática/dinâmica do Supabase |
-| Nove testes novos de bibliografia | 9/9 aprovados |
-| Suíte final `npm test` | **718 testes: 715 aprovados e 3 falhas preexistentes** |
+| Dez testes novos de bibliografia | 10/10 aprovados |
+| Suíte final `npm test` | **719 testes: 716 aprovados e 3 falhas preexistentes** |
 | React real StrictMode + Edge headless local | Quatro cenários 978/979 × NOVO/USADO aprovados |
 | `git diff --check` | Aprovado |
 
