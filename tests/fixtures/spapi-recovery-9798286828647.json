@@ -1,0 +1,226 @@
+{
+  "evidence": {
+    "source": "Owner-provided restricted Preview diagnostic in chat, 2026-11-05",
+    "scope": "Decoded factual allowlist only, not the full raw Amazon payload. Identifier group in tests is reconstructed from the confirmed ISBN.",
+    "diagnosticMatchingCount": 1
+  },
+  "isbn": "9798286828647",
+  "asin": "B0FDX22ZWC",
+  "attributes": {
+    "item_name": [
+      {
+        "language_tag": "pt_BR",
+        "value": "Desperte sua For?a Interior: 365 Mensagens para inspirar e transformar sua jornada pessoal (Portuguese Edition)",
+        "marketplace_id": "A2Q3Y263D00KWC"
+      }
+    ],
+    "author": [
+      {
+        "value": "Pierce, Lysandra",
+        "language_tag": "pt_BR",
+        "marketplace_id": "A2Q3Y263D00KWC"
+      }
+    ],
+    "publication_date": [
+      {
+        "value": "2025-06-17T00:00:01Z",
+        "marketplace_id": "A2Q3Y263D00KWC"
+      }
+    ],
+    "language": [
+      {
+        "type": "published",
+        "value": "portuguese",
+        "marketplace_id": "A2Q3Y263D00KWC"
+      },
+      {
+        "type": "original",
+        "value": "portuguese",
+        "marketplace_id": "A2Q3Y263D00KWC"
+      },
+      {
+        "type": "unknown",
+        "value": "portuguese",
+        "marketplace_id": "A2Q3Y263D00KWC"
+      }
+    ],
+    "binding": [
+      {
+        "value": "paperback",
+        "marketplace_id": "A2Q3Y263D00KWC"
+      }
+    ],
+    "pages": [
+      {
+        "value": 193,
+        "marketplace_id": "A2Q3Y263D00KWC"
+      }
+    ],
+    "item_dimensions": [
+      {
+        "width": {
+          "unit": "inches",
+          "value": 0.44
+        },
+        "length": {
+          "unit": "inches",
+          "value": 6
+        },
+        "height": {
+          "unit": "inches",
+          "value": 9
+        },
+        "marketplace_id": "A2Q3Y263D00KWC"
+      }
+    ],
+    "item_package_dimensions": [
+      {
+        "length": {
+          "unit": "inches",
+          "value": 6
+        },
+        "width": {
+          "unit": "inches",
+          "value": 0.44
+        },
+        "height": {
+          "unit": "inches",
+          "value": 9
+        },
+        "marketplace_id": "A2Q3Y263D00KWC"
+      }
+    ],
+    "item_package_weight": [
+      {
+        "unit": "pounds",
+        "value": 0.78,
+        "marketplace_id": "A2Q3Y263D00KWC"
+      }
+    ],
+    "item_weight": [
+      {
+        "unit": "pounds",
+        "value": 0.78,
+        "marketplace_id": "A2Q3Y263D00KWC"
+      }
+    ]
+  },
+  "absentAttributes": [
+    "subtitle",
+    "book_subtitle",
+    "authors",
+    "publisher",
+    "publisher_name",
+    "street_date",
+    "book_publication_date",
+    "edition",
+    "edition_number",
+    "book_edition",
+    "book_binding",
+    "number_of_pages",
+    "print_length"
+  ],
+  "summary": {
+    "marketplaceId": "A2Q3Y263D00KWC",
+    "contributors": [
+      {
+        "role": {
+          "value": "author"
+        },
+        "value": "Pierce, Lysandra"
+      }
+    ],
+    "itemName": "Desperte sua For?a Interior: 365 Mensagens para inspirar e transformar sua jornada pessoal (Portuguese Edition)"
+  },
+  "dimensions": [
+    {
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "item": {
+        "height": {
+          "unit": "inches",
+          "value": 9
+        },
+        "length": {
+          "unit": "inches",
+          "value": 6
+        },
+        "width": {
+          "unit": "inches",
+          "value": 0.44
+        },
+        "weight": {
+          "unit": "pounds",
+          "value": 0.78
+        }
+      },
+      "package": {
+        "height": {
+          "unit": "inches",
+          "value": 0.44
+        },
+        "length": {
+          "unit": "inches",
+          "value": 9
+        },
+        "weight": {
+          "unit": "pounds",
+          "value": 0.78
+        },
+        "width": {
+          "unit": "inches",
+          "value": 6
+        }
+      }
+    }
+  ],
+  "processedBefore": {
+    "title": "Desperte sua For?a Interior: 365 Mensagens para inspirar e transformar sua jornada pessoal (Portuguese Edition)",
+    "authors": [
+      "Pierce, Lysandra"
+    ],
+    "publisher": null,
+    "publicationDate": "2025-06-17",
+    "edition": null,
+    "language": "portuguese",
+    "binding": "paperback",
+    "pageCount": null,
+    "physical": {
+      "item": {
+        "height": {
+          "value": 9,
+          "unit": "inches"
+        },
+        "width": {
+          "value": 0.44,
+          "unit": "inches"
+        },
+        "length": {
+          "value": 6,
+          "unit": "inches"
+        },
+        "weight": {
+          "value": 0.78,
+          "unit": "pounds"
+        }
+      },
+      "package": {
+        "height": {
+          "value": 0.44,
+          "unit": "inches"
+        },
+        "width": {
+          "value": 6,
+          "unit": "inches"
+        },
+        "length": {
+          "value": 9,
+          "unit": "inches"
+        },
+        "weight": {
+          "value": 0.78,
+          "unit": "pounds"
+        }
+      }
+    }
+  }
+}

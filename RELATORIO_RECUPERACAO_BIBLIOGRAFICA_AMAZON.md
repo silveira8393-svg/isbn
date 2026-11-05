@@ -1,45 +1,45 @@
-# Recupera??o bibliogr?fica Amazon ? resultado parcial comprovado
+# Amazon SP-API ? recupera??o bibliogr?fica comprovada
 
-05/11/2026. Branch isolada `fix/amazon-bibliographic-recovery`, criada de `76261ae0b7270812c3545bba2c18075a16b5a9d9`. Tag 1.1, produ??o, outras branches e arquivos pendentes preservados.
+05/11/2026. Branch `fix/amazon-bibliographic-recovery`, baseada em `76261ae0b7270812c3545bba2c18075a16b5a9d9`. Marco 1.1, produ??o, demais branches e pend?ncias locais preservados.
 
-## Ambiente e consultas
+## Ambiente e evid?ncia
 
-Metadados oficiais Vercel confirmaram os nomes necess?rios em Preview e Production e sua aus?ncia em Development. Foram lidos somente presen?a, escopo e tipo; nenhum segredo foi recuperado, copiado ou modificado. Usado o Preview do projeto ISBN `prj_pvcmEP52OoMKQhhvb5FJRWrGZv1e`, equipe `silveira8393-svgs-projects`.
+Projeto Vercel ISBN `prj_pvcmEP52OoMKQhhvb5FJRWrGZv1e`, equipe `silveira8393-svgs-projects`. Metadados confirmaram configura??es necess?rias em Preview e Production e aus?ncia em Development. Somente presen?a/escopo/tipo foram lidos; nenhum segredo foi recuperado, copiado ou modificado. Production n?o foi utilizado.
 
-Preview inicial de diagn?stico: https://isbn-pw79nj55v-silveira8393-svgs-projects.vercel.app ? READY/Preview, `dpl_GRyCHapkpeuCp5pbbW73bKFLnbwa`, commit `6b64d9f1b9ce902fcdf737115840aeb8efa84727`. O respons?vel confirmou autentica??o Desenvolvimento sem pesquisa operacional e forneceu a resposta diagn?stica do primeiro ISBN. O anexo n?o cont?m status HTTP, hor?rio ou o envelope da coleta dupla. N?o se afirma que a segunda consulta ocorreu. Nenhuma consulta adicional foi executada pelo agente.
+O respons?vel autenticou-se como Desenvolvimento no Preview de diagn?stico `6b64d9f`, READY/Preview, https://isbn-pw79nj55v-silveira8393-svgs-projects.vercel.app e forneceu um retorno por ISBN. S?o observa??es factuais restritas dos atributos originais e da proje??o, n?o payloads brutos completos. Primeiro anexo: SHA-256 dos bytes `d4d5bb55222a729e71f6e697db094fe7956fcd96e262e82806d076161b5eef7a`; segundo retorno recebido no chat. Ambos confirmam um item correspondente, marketplace Brasil e aus?ncia de pagina??o.
 
-Limite permanece um GET por ISBN e intervalo m?nimo de 15 s. Foi solicitado apenas o resultado j? existente de `window.__isbnSpapiRecovery` ou do segundo ISBN; n?o repetir a coleta. A ferramenta de abas continua indispon?vel. N?o houve `handleSearch`, cadastro, escrita Supabase ou GET ao site comercial nesta etapa.
+As duas respostas autorizadas foram recebidas, sem consulta adicional pelo agente. O procedimento assistido previa dois GETs sequenciais com 15 s de intervalo; os corpos fornecidos n?o cont?m hor?rios ou status HTTP, portanto esses metadados n?o foram auditados independentemente. Nenhum Buscar/handleSearch, cadastro, escrita Supabase ou acesso comercial Amazon foi executado pelo agente.
 
-## Evid?ncia e causa
+## Compara??o factual
 
-Anexo fornecido pelo respons?vel: SHA-256 dos bytes `d4d5bb55222a729e71f6e697db094fe7956fcd96e262e82806d076161b5eef7a`. ? uma observa??o factual restrita da resposta original e da proje??o, n?o um payload bruto completo da Amazon.
-
-| ISBN | Campo | Original observado | Parser anterior ? corrigido | Lab | Causa |
+| ISBN | Campo | SP-API original observado | Parser antes ? depois | Lab | Resultado / causa |
 |---|---|---|---|---|---|
-| 9798276439839 | P?ginas | `attributes.pages[0].value=143`, marketplace Brasil; `number_of_pages` ausente | null ? 143 | Desnecess?rio para este campo | Parser ignorava o atributo pages: falha comprovada |
-| 9798276439839 | Editora / edi??o | Ausentes nos nomes observados | null ? null | Obten??o factual real n?o confirmada | N?o preencher por infer?ncia; outros nomes n?o observados permanecem desconhecidos |
-| 9798276439839 | Peso do produto | item_weight e dimensions.item.weight ausentes; embalagem 0,6 lb | Exemplar vazio, embalagem separada | 503 anterior antes da extra??o | Peso de embalagem n?o ? peso do exemplar |
-| 9798276439839 | Dimens?es | Item A9 / L0,33 / P6 inches | Mesmos eixos; Cadastro A22,86 / L0,84 / P15,24 cm | Sem consulta nova | Aproveitamento correto; sem trocar eixos por suposi??o |
-| 9798276439839 | T?tulo / autor / data / idioma / formato | O Rei de Amarelo / W. Chambers, Robert / 2025-11-27T00:00:01Z / portuguese / paperback | Preservados; data normalizada; ano 2025 no Cadastro | Sem consulta nova | Correto |
-| 9798276439839 | Subt?tulo | subtitle e book_subtitle ausentes | N?o inventado | Sem consulta nova | Sem evid?ncia de recupera??o poss?vel |
-| 9798286828647 | Campos bibliogr?ficos factuais | Resposta diagn?stica ainda n?o fornecida | N?o verificado nesta coleta | Sem consulta nova | Disponibilidade desconhecida; aguardar resultado existente |
+| 9798276439839 | P?ginas | pages=143; number_of_pages ausente | null ? 143 | N?o necess?rio | Atributo ignorado: corrigido |
+| 9798286828647 | P?ginas | pages=193; number_of_pages ausente | null ? 193 | N?o necess?rio | Mesmo defeito confirmado, independentemente, no segundo retorno |
+| 9798276439839 | Editora / edi??o | Nomes inspecionados ausentes | null ? null | 503 hist?rico antes da extra??o | N?o inventar; eventual informa??o fora da allowlist permanece desconhecida |
+| 9798286828647 | Editora / edi??o | Nomes inspecionados ausentes | null ? null | N?o consultado nesta etapa | N?o h? evid?ncia para preencher |
+| 9798276439839 | Peso do produto | Item sem peso; embalagem 0,6 lb | Exemplar vazio; embalagem separada | Sem consulta nova | Aus?ncia na observa??o, n?o perda na transfer?ncia |
+| 9798286828647 | Peso do produto | item_weight e dimensions.item.weight=0,78 lb | Produto 353,8 g preservado | Desnecess?rio | J? corretamente aproveitado, independentemente de a embalagem ter igual peso |
+| 9798276439839 | Dimens?es | Item A9 / L0,33 / P6 inches | A22,86 / L0,84 / P15,24 cm | Desnecess?rio | Eixos preservados literalmente |
+| 9798286828647 | Dimens?es | Item A9 / L0,44 / P6 inches | A22,86 / L1,12 / P15,24 cm | Desnecess?rio | Eixos preservados literalmente |
+| Ambos | T?tulo / autores / data / idioma / formato | Presentes | Preservados; data normalizada, ano 2025, Portugu?s, Capa comum | Desnecess?rio | Correto; sem reordenar autores nem retirar sufixos do t?tulo |
+| Ambos | Subt?tulo | subtitle e book_subtitle ausentes | N?o inferido | Sem consulta nova | T?tulo completo preservado |
+| Ambos | Sinopse | Conte?do n?o inspecionado por esta coleta | Omitida por pol?tica | N?o incorporada automaticamente | Sem altera??o de pol?tica ou alega??o de aus?ncia na Amazon |
 
-Identidade do primeiro retorno: ASIN B0G4CS2PMG / ISBN 9798276439839 / marketplace A2Q3Y263D00KWC; um item correspondente, sem pagina??o. Sinopse continua omitida pela pol?tica existente. Os registros anteriores j? demonstram 503 remoto antes do parser do Lab, sem prova de causa remota espec?fica; essa auditoria n?o foi repetida.
+Identidades confirmadas: O Rei de Amarelo ? ISBN 9798276439839 / ASIN B0G4CS2PMG / data 2025-11-27; Desperte sua For?a Interior ? ISBN 9798286828647 / ASIN B0FDX22ZWC / data 2025-06-17. A verifica??o dos campos ausentes limita-se aos nomes observados; os dados descartados pela allowlist n?o s?o tratados como integralmente conhecidos.
 
-## Corre??o e testes
+## Corre??o m?nima e valida??o
 
-?nica mudan?a de recupera??o: `server/spapi/catalog.ts` passa a aceitar `pages` como fallback de `number_of_pages`, com a mesma filtragem de marketplace e valida??o de inteiro positivo. Campo anterior v?lido mant?m prioridade. N?o se acrescenta chamada externa, lat?ncia de rede ou infer?ncia. Nenhum c?digo de Consulta, Cadastro, proveni?ncia, imagens, Curitiba, Lab, layout, autentica??o ou persist?ncia foi alterado.
+?nico arquivo de execu??o diferente do marco 1.1: `server/spapi/catalog.ts`, que aceita `pages` como fallback de `number_of_pages`, com a mesma prioridade, filtragem de marketplace e valida??o de inteiro positivo. Nenhuma chamada extra, retry ou lat?ncia de rede foi adicionada. N?o se usa embalagem para preencher exemplar.
 
-Fixture `tests/fixtures/spapi-recovery-9798276439839.json`: somente fatos decodificados da allowlist do diagn?stico e proje??o anterior; n?o cont?m credenciais nem resposta bruta completa. O grupo de identificadores do replay ? reconstru?do do ISBN confirmado, explicitamente documentado. Tr?s testes novos cobrem a resposta observada, preced?ncia/valores inv?lidos/marketplace e parser ? cliente ? proveni?ncia ? Consulta ? inputs reais NOVO/USADO. As demais proje??es factuais permanecem iguais.
+Duas fixtures em `tests/fixtures/spapi-recovery-<ISBN>.json` preservam somente fatos sanitizados e proje??es anteriores. O envelope de replay e grupo de identificadores s?o reconstru?dos dos ISBNs confirmados, explicitamente documentados; n?o representam resposta bruta completa. Tr?s testes direcionados em `spapiOfficial.test.mjs` e `amazonBibliography.test.mjs` cobrem ambos os livros, prioridades/valores inv?lidos/marketplace e parser ? cliente ? proveni?ncia ? Consulta ? inputs reais NOVO/USADO. P?ginas previamente selecionadas continuam tendo prioridade.
 
-Valida??o final: 42/42 testes focados; TypeScript, lint e build aprovados; su?te geral 769 testes, 766 aprovados e tr?s falhas preexistentes do mock React.lazy em infrastructureUi.test.mjs. Casos existentes de bibliografia, Cadastro e Curitiba aprovados. Testes inteiramente controlados, sem rede externa ou persist?ncia. Log local ignorado: recovery-validation.log.
+Valida??o final: 37/37 testes focados; TypeScript, lint, build e diff --check aprovados. Su?te geral: 764 testes, 761 aprovados, tr?s falhas preexistentes do mock React.lazy em infrastructureUi.test.mjs. Os testes de bibliografia, Cadastro e Curitiba passaram. N?o se repetiu pesquisa real no Preview corrigido para homologar a mudan?a: a comprova??o usa replays controlados das duas evid?ncias reais, sem persist?ncia ou rede externa. Log local ignorado: recovery-validation.log.
 
-## Observabilidade tempor?ria e pend?ncia
+## Entrega e limites
 
-O diagn?stico permanece restrito ao GET existente, runtime Preview, dois ISBNs e mesma autoriza??o real Desenvolvimento/loja. A resposta comum n?o inclui observabilidade. N?o exp?e payload bruto completo ou logs, limita tipos/valores/amostras e tamanho, exclui sinopse, ofertas, estoque e dados privados. Mantido temporariamente porque falta a segunda evid?ncia autorizada; remover ap?s completar a coleta, antes de considerar entrega definitiva, salvo justificativa expressa.
+O diagn?stico tempor?rio e o script de coleta foram removidos do estado final da branch; `server/spapi/handler.ts` voltou exatamente ? base. A rota normal n?o exporta atributos brutos nem diagn?stico. Os commits anteriores de diagn?stico permanecem no hist?rico, sem reescrita. N?o reutilizar os Previews hist?ricos para repetir chamadas.
 
-`scripts/collect-spapi-bibliography-console.js` ? o procedimento assistido, n?o um fluxo operacional ou recurso de interface. Usa a sess?o apenas dentro da p?gina, impede repeti??o nessa p?gina, separa GETs por 15 s e interrompe em erro, sem retry. O respons?vel n?o deve execut?-lo novamente se a coleta j? foi iniciada.
+A abertura autom?tica da PR em rascunho sobre fix/curitiba-product-gallery recebeu HTTP 403 do conector GitHub (Resource not accessible by integration). Compara??o manual: https://github.com/silveira8393-svg/isbn/compare/fix/curitiba-product-gallery...fix/amazon-bibliographic-recovery?expand=1 . Commit e Preview finais s?o confirmados na entrega.
 
-A CLI criou um v?nculo local ao verificar uma URL; os dois arquivos gerados foram removidos e o .gitignore restaurado ao hash anterior. A verifica??o retornou origin_denied e n?o chegou ? Amazon; n?o ? usada como prova de funcionamento autenticado. Nenhuma configura??o remota foi alterada.
-
-Publicar apenas Preview da corre??o comprovada. N?o h? autoriza??o para merge ou produ??o. O diagn?stico de Desperte sua For?a Interior permanece pendente do resultado j? existente, sem nova consulta.
+N?o foram alterados imagens, Curitiba, App/React/layout, Lab, Magazord, autentica??o/perfis, esquema, pre?os, estoque ou configura??es sens?veis. Os logs anteriores j? demonstraram 503 externo antes do parser do Lab; sua causa remota espec?fica continua n?o comprovada. Editora/edi??o permanecem lacunas da observa??o; n?o houve corre??o especulativa, merge ou publica??o em produ??o.

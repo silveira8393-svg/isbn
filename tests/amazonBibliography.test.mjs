@@ -181,8 +181,9 @@ test('actual previously supplied SP-API JSON retains its known facts in form inp
   }
 });
 
-test('observed SP-API pages flows through real parser, client, provenance, Consulta and NOVO/USADO inputs', async t => {
-  const factual = JSON.parse(await readFile(new URL('./fixtures/spapi-recovery-9798276439839.json', import.meta.url), 'utf8'));
+test('both observed SP-API page counts flow through real parser, client, provenance, Consulta and NOVO/USADO inputs', async t => {
+  for(const [targetIsbn,count,expectedWeight,expectedWidth] of [['9798276439839',143,'','0.84'],['9798286828647',193,'353.8','1.12']]) {
+  const factual = JSON.parse(await readFile(new URL(`./fixtures/spapi-recovery-${targetIsbn}.json`, import.meta.url), 'utf8'));
   const original = { asin: factual.asin, attributes: factual.attributes, summaries: [factual.summary], dimensions: factual.dimensions,
     identifiers: [{ marketplaceId, identifiers: [{ identifierType: 'ISBN', identifier: factual.isbn }] }] };
   let upstreamCalls = 0;
@@ -198,20 +199,24 @@ test('observed SP-API pages flows through real parser, client, provenance, Consu
   });
   const official = await api.searchAmazonOfficial(factual.isbn,user);
   const book = api.complementWithAmazon(null,official.book);
-  assert.equal(book.pageCount,143); assert.equal(book.provenance.pageCount,'amazon_spapi_catalog_2022-04-01');
+  assert.equal(book.pageCount,count); assert.equal(book.provenance.pageCount,'amazon_spapi_catalog_2022-04-01');
   assert.equal(book.amazonCatalogReference.asin,factual.asin); assert.equal(book.isbn13,factual.isbn);
-  assert.equal(book.publisher,undefined); assert.equal(book.edition,undefined); assert.equal(book.weight,undefined);
-  assert.equal(book.synopsis,undefined); assert.equal(book.amazonPhysical.package.weight.value,.6);
-  assert.match(api.renderToStaticMarkup(api.createElement(api.Card,{book})),/143/);
+  assert.equal(book.publisher,undefined); assert.equal(book.edition,undefined);
+  assert.equal(book.weight,expectedWeight ? Number(expectedWeight) : undefined);
+  assert.equal(book.synopsis,undefined); assert.equal(book.amazonPhysical.package.weight.value,factual.processedBefore.physical.package.weight.value);
+  assert.match(api.renderToStaticMarkup(api.createElement(api.Card,{book})),new RegExp(String(count)));
   for(const condition of ['novo','usado']){
-    const form = formValues(book,condition); assert.equal(form.value('pageCount'),'143');
-    assert.equal(form.value('title'),'O Rei de Amarelo'); assert.equal(form.value('year'),'2025');
-    assert.equal(form.value('language'),'Português'); assert.equal(form.value('publisher'),''); assert.equal(form.value('weight'),'');
+    const form = formValues(book,condition); assert.equal(form.value('pageCount'),String(count));
+    assert.equal(form.value('title'),factual.processedBefore.title); assert.equal(form.value('year'),'2025');
+    assert.equal(form.value('language'),'Português'); assert.equal(form.value('publisher'),''); assert.equal(form.value('weight'),expectedWeight);
+    assert.equal(form.value('width'),expectedWidth); assert.equal(form.value('height'),'22.86'); assert.equal(form.value('depth'),'15.24');
+    assert.equal(form.inputs('authors')[0].attrs.value,factual.processedBefore.authors[0]);
   }
-  const selected = base({pageCount:300,provenance:{pageCount:'source-selected'}});
+  const selected = base({isbn13:targetIsbn,pageCount:300,provenance:{pageCount:'source-selected'}});
   const preserved = api.complementWithAmazon(selected,official.book);
   assert.equal(preserved.pageCount,300); assert.equal(preserved.provenance.pageCount,'source-selected');
   assert.equal(upstreamCalls,1); assert.equal(clientCalls,1);
+  }
 });
 
 test('an empty laboratory book with only review warnings does not become a false bibliographic match', async t => {

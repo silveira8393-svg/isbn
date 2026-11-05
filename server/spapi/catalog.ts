@@ -1,6 +1,5 @@
 import { type Config, MARKETPLACE, fail, jsonRequest } from './core.js';
 import { normalizePublicationDate } from '../../shared/publicationDate.js';
-import { catalogDiagnostics } from './catalogDiagnostics.js';
 
 export function normalizeIsbn(input: string) {
   if (input.length > 32 || !/^[0-9Xx\s-]+$/.test(input)) return fail(422, 'invalid_isbn');
@@ -43,7 +42,7 @@ function physicalDimensions(value: any): PhysicalDimensions {
   return result;
 }
 // Strict projection: never return raw attributes, seller information, offers, prices or inventory.
-export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, fetcher: typeof fetch, isbn: string, access: string, diagnose = false) {
+export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, fetcher: typeof fetch, isbn: string, access: string) {
   const url = new URL('https://sellingpartnerapi-na.amazon.com/catalog/2022-04-01/items');
   url.search = new URLSearchParams({ identifiers: isbn, identifiersType: 'ISBN', marketplaceIds: MARKETPLACE,
     includedData: 'summaries,attributes,identifiers,dimensions,images', pageSize: '20' }).toString();
@@ -117,8 +116,5 @@ export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, f
         .map((image: any) => ({ variant: image.variant, link: imageUrl(image.link), width: pixels(image.width), height: pixels(image.height) }))
         .filter((image: any) => image.link), source: 'amazon_spapi_catalog_2022-04-01', marketplaceId: MARKETPLACE };
   });
-  const diagnostics = diagnose ? { items: matching.slice(0, 3).map((item: any, index: number) => catalogDiagnostics(item, items[index], MARKETPLACE)),
-    matchingCount: matching.length, truncated: matching.length > 3 } : undefined;
-  return { isbn, items, hasMore: Boolean(data.pagination?.nextToken), requiresReview: true,
-    ...(diagnostics ? { diagnostics } : {}) };
+  return { isbn, items, hasMore: Boolean(data.pagination?.nextToken), requiresReview: true };
 }

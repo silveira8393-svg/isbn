@@ -97,20 +97,14 @@ function createCatalogHandler(options: { env?: NodeJS.ProcessEnv; fetcher?: type
       const url = new URL(request.url);
       if (url.pathname !== '/api/amazon/spapi/catalog') fail(404, 'not_found');
       if (request.method !== 'GET') { headers.Allow = 'GET'; return reply({ code: 'method_not_allowed' }, 405); }
-      const env = options.env || process.env;
-      const diagnose = url.searchParams.has('diagnostic');
-      if (url.search.length > 100 || [...url.searchParams.keys()].some(k => k !== 'isbn' && k !== 'diagnostic')
-        || url.searchParams.getAll('isbn').length !== 1
-        || (diagnose && (env.VERCEL_ENV !== 'preview' || url.searchParams.getAll('diagnostic').length !== 1
-          || url.searchParams.get('diagnostic') !== 'bibliography'
-          || !['9798276439839', '9798286828647'].includes(url.searchParams.get('isbn') || '')))) fail(400, 'invalid_parameters');
-      const fetcher = options.fetcher || fetch, config = catalogConfiguration(env, request);
+      if (url.search.length > 100 || [...url.searchParams.keys()].some(k => k !== 'isbn') || url.searchParams.getAll('isbn').length !== 1) fail(400, 'invalid_parameters');
+      const env = options.env || process.env, fetcher = options.fetcher || fetch, config = catalogConfiguration(env, request);
       const origin = request.headers.get('origin');
       if ((origin && origin !== config.origin) || request.headers.get('sec-fetch-site') === 'cross-site') fail(403, 'origin_denied');
       await authorizeCatalog(request, config, fetcher);
       const isbn = normalizeIsbn(url.searchParams.get('isbn') || '');
       const token = await lwa(config, fetcher, { grant_type: 'refresh_token', refresh_token: config.refresh });
-      return reply({ ...await searchCatalog(config, fetcher, isbn, token.access_token, diagnose), contentPolicy: 'synopsis_omitted' });
+      return reply({ ...await searchCatalog(config, fetcher, isbn, token.access_token), contentPolicy: 'synopsis_omitted' });
     } catch (error) {
       const safe = error instanceof SpapiError ? error : new SpapiError(503, 'spapi_unavailable');
       if (safe.status === 429) headers['Retry-After'] = '2';
