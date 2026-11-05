@@ -47,6 +47,8 @@ export interface BookInfo {
   };
   // Public SP-API image roles, retained for fallback decisions; not part of the registration export.
   amazonImages?: { variant: string; link: string }[];
+  // Internal edition reference from a matching official catalog result; never a replacement ISBN.
+  amazonCatalogReference?: { asin: string; isbn: string; marketplaceId: string };
   enrichmentSource?: string;
   provenance?: Record<string, string>;
   provider?: string;

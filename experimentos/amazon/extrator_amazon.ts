@@ -27,6 +27,8 @@ export interface AmazonReport {
   preenchidos: number; validos_locais: number; total_campos: number; percentual_preenchimento: number;
   percentual_validos_locais: number; atribuicao_ao_isbn_autorizada: false; alertas: string[]; edicao_verificacao: string;
   imagens: { itens: Image[]; download_realizado: false; carregamento_remoto_permitido: false }; book_info: BookInfo;
+  asin_pesquisado?: string;
+  asin_correspondencia?: 'corresponde' | 'divergente' | 'nao_verificavel';
 }
 const unique = <T>(values: T[]) => [...new Set(values)];
 const LABELS: Record<string, string> = {
@@ -45,7 +47,7 @@ const RPI = { publisher: 'editora', edition: 'edicao', publication_date: 'ano', 
   print_length: 'paginas', binding: 'formato', isbn10: 'isbn10', isbn13: 'isbn13' };
 const isValidId = (value: string, field: string) => cleanIsbn(value).length === (field === 'isbn10' ? 10 : 13) && !!canonicalBookIsbn(value);
 
-export function extractAmazon(html: string): Candidates {
+export function extractAmazon(html: string, expectedAsin?: string): Candidates {
   const doc = parseHtml(html);
   const candidates: Candidates = Object.fromEntries([...FIELDS, 'isbn10', 'isbn13', ...EXTRA_FIELDS].map(field => [field, []]));
   function add(field: string, value: string | string[], source: string, kind = 'bibliografico', metadata = {}) {
@@ -102,7 +104,7 @@ export function extractAmazon(html: string): Candidates {
   }
   for (const node of doc.byId('bookDescription_feature_div')) add('sinopse', node.text(), '#bookDescription_feature_div', 'descricao_comercial');
   for (const node of doc.byId('productSubtitle')) if (COVER_FORMATS.includes(normalizeCoverFormat(node.text()) as typeof COVER_FORMATS[number])) add('formato', node.text(), '#productSubtitle');
-  for (const image of extractImages(doc, candidates)) add(image.principal ? 'capa' : 'imagens_adicionais', image.referencia,
+  for (const image of extractImages(doc, candidates, expectedAsin)) add(image.principal ? 'capa' : 'imagens_adicionais', image.referencia,
     image.origem, 'referencia_imagem', { miniatura: image.miniatura, origem_miniatura: image.origem_miniatura });
   return candidates;
 }
@@ -166,7 +168,7 @@ function jsonArray(text: string): unknown {
   }
   return null;
 }
-function extractImages(doc: ReturnType<typeof parseHtml>, candidates: Candidates) {
+function extractImages(doc: ReturnType<typeof parseHtml>, candidates: Candidates, expectedAsin?: string) {
   const images: Descriptor[] = [];
   function merge(item: Descriptor | null) {
     if (!item) return;
@@ -207,6 +209,9 @@ function extractImages(doc: ReturnType<typeof parseHtml>, candidates: Candidates
   for (const script of doc.root.walk()) {
     if (script.tag !== 'script' || script.attrs.src || !allowedImageNode(script)) continue;
     const text = script.children.filter(child => typeof child === 'string').join('');
+    const declaredAsins = new Set([...text.matchAll(/["']asin["']\s*:\s*["']([A-Z0-9]{10})["']/gi)].map(m => m[1].toUpperCase()));
+    if (expectedAsin && declaredAsins.size && [...declaredAsins].some(value => value !== expectedAsin)) continue;
+    const sameAsin = !!expectedAsin && declaredAsins.size === 1 && declaredAsins.has(expectedAsin);
     for (const match of text.matchAll(pattern)) {
       const entries = jsonArray(text.slice(match.index! + match[0].length));
       if (!Array.isArray(entries)) continue;
@@ -218,7 +223,7 @@ function extractImages(doc: ReturnType<typeof parseHtml>, candidates: Candidates
       const sameIds = declared.size === known.size && [...declared].every(id => known.has(id));
       if (known.size && declared.size && !sameIds) continue;
       const mainKeys = new Set(images.filter(image => image.principal).flatMap(image => [...image.keys]));
-      if (!gallery.some(image => intersects(mainKeys, image.keys)) && !(known.size && sameIds)) continue;
+      if (!gallery.some(image => intersects(mainKeys, image.keys)) && !(known.size && sameIds) && !sameAsin) continue;
       for (const item of gallery) if (!(item.principal && mainKeys.size && !intersects(mainKeys, item.keys))) merge(item);
     }
   }
@@ -389,8 +394,39 @@ function projectBook(report: AmazonReport): BookInfo {
   return book;
 }
 
-export function parseAmazonHtml(html: string, isbn: string, filename = 'memoria', nature = 'html_local') {
-  return validateAmazon(extractAmazon(html), isbn, filename, nature);
+/** Only primary page identity signals; recommendation data-asin attributes cannot authorize a page. */
+function pageAsinMatch(html: string, expected: string): NonNullable<AmazonReport['asin_correspondencia']> {
+  if (!/^[A-Z0-9]{10}$/.test(expected)) return 'nao_verificavel';
+  const declared = new Set<string>();
+  for (const node of parseHtml(html).root.walk()) {
+    if (node.tag === 'input' && (node.attrs.id === 'ASIN' || node.attrs.name === 'ASIN') && node.attrs.value) {
+      declared.add(node.attrs.value);
+    }
+    if (node.tag === 'link' && (node.attrs.rel || '').toLowerCase().split(/\s+/).includes('canonical')) {
+      try {
+        const url = new URL(node.attrs.href, 'https://www.amazon.com.br');
+        const asin = /\/dp\/([A-Z0-9]{10})(?:\/|$)/.exec(url.pathname)?.[1];
+        if (url.origin !== 'https://www.amazon.com.br' || url.username || url.password || !asin) declared.add('invalid');
+        else declared.add(asin);
+      } catch { declared.add('invalid'); }
+    }
+  }
+  return !declared.size ? 'nao_verificavel' : [...declared].every(value => value === expected) ? 'corresponde' : 'divergente';
+}
+
+export function parseAmazonHtml(html: string, isbn: string, filename = 'memoria', nature = 'html_local', expectedAsin?: string) {
+  const report = validateAmazon(extractAmazon(html, expectedAsin), isbn, filename, nature);
+  if (expectedAsin !== undefined) {
+    report.asin_pesquisado = expectedAsin;
+    report.asin_correspondencia = pageAsinMatch(html, expectedAsin);
+    if (report.asin_correspondencia !== 'corresponde' || report.correspondencia !== 'corresponde') {
+      if (report.asin_correspondencia !== 'corresponde') report.correspondencia = report.asin_correspondencia;
+      report.alertas.push('Página sem correspondência simultânea de ASIN e ISBN; imagens não incorporadas.');
+      report.imagens.itens = [];
+      report.book_info = { id: report.book_info.id, title: '', provenance: {} };
+    }
+  }
+  return report;
 }
 
 // Mesma sanitização do servidor de referência; URLs públicas de imagens só no canal técnico.
@@ -415,6 +451,7 @@ export function toLabResult(report: AmazonReport, mode: 'fixture' | 'http', dura
     book.provenance![field] = 'Amazon: ' + item.origem;
   }
   return { status: 'concluida', modo: mode, isbn_pesquisado: report.isbn_pesquisado, duracao_ms: duration, status_http: statusHttp,
+    ...(report.asin_pesquisado === undefined ? {} : { asin_pesquisado: report.asin_pesquisado, asin_correspondencia: report.asin_correspondencia }),
     total_campos: 9, correspondencia: report.correspondencia, preenchidos: report.preenchidos, validos_locais: report.validos_locais,
     percentual_preenchimento: report.percentual_preenchimento, percentual_validos_locais: report.percentual_validos_locais,
     alertas: safe(report.alertas), isbn_encontrado: Object.fromEntries(Object.entries(report.isbn_encontrado).map(([field, item]) => [field, { valor: safe(item.valor), valido: item.valido }])),

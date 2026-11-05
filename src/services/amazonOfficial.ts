@@ -98,13 +98,17 @@ export async function complementAmazonImages(book: BookInfo | null, isbn: string
   const coverIdentities = new Set(imageReferences([book?.coverUrl, book?.thumbnailUrl,
     ...(book?.amazonImages || []).filter(image => image.variant === 'MAIN').map(image => image.link)]).map(imageIdentity));
   const canonical = canonicalBookIsbn(isbn);
-  if (!canUseAmazonImageSource(user) || !canonical?.startsWith('978')) return book;
+  const reference = book?.amazonCatalogReference;
+  const asin = reference && /^[A-Z0-9]{10}$/.test(reference.asin) && reference.isbn === canonical
+    && reference.marketplaceId === 'A2Q3Y263D00KWC' ? reference.asin : undefined;
+  if (!canUseAmazonImageSource(user) || !canonical || (!asin && !canonical.startsWith('978'))) return book;
   try {
     const timeout = AbortSignal.timeout(10000);
-    const result = await searchAmazonLab(cleanIsbn(isbn), 'http', signal ? AbortSignal.any([signal, timeout]) : timeout, user.id, user.storeId);
+    const result = await searchAmazonLab(cleanIsbn(isbn), 'http', signal ? AbortSignal.any([signal, timeout]) : timeout, user.id, user.storeId, asin);
     const identifiers = Object.values(result.isbn_encontrado || {}).filter(id => id?.valido === true);
     if (result.status !== 'concluida' || result.modo !== 'http' || result.correspondencia !== 'corresponde'
       || canonicalBookIsbn(result.isbn_pesquisado) !== canonical
+      || (asin && (result.asin_pesquisado !== asin || result.asin_correspondencia !== 'corresponde'))
       || !identifiers.length || identifiers.some(id => typeof id.valor !== 'string' || canonicalBookIsbn(id.valor) !== canonical)) return book;
     // Bibliography, synopsis and raw HTML from the laboratory never enter the registration flow.
     const candidates = (Array.isArray(result.imagens?.itens) ? result.imagens.itens : [])
@@ -149,6 +153,7 @@ export async function searchAmazonOfficial(isbn: string, user: User, signal?: Ab
       return base + ((10 - sum % 10) % 10);
     };
     const identifiers = actualIdentifiers.filter(id => equivalent13(id.identifier) === equivalent13(cleanIsbn(isbn)));
+    const canonical = canonicalBookIsbn(isbn);
     const physical = amazonPhysical(item.physical);
     const images = catalogImages(item.images);
     const book: BookInfo = { id: `amazon-spapi-${item.asin}`, title: text(item.title) || '',
@@ -156,6 +161,8 @@ export async function searchAmazonOfficial(isbn: string, user: User, signal?: Ab
       ...(identifiers.find(id => id.type === 'ISBN_10') ? { isbn10: identifiers.find(id => id.type === 'ISBN_10')!.identifier } : {}),
       ...(identifiers.find(id => id.type === 'ISBN_13') ? { isbn13: identifiers.find(id => id.type === 'ISBN_13')!.identifier } : {}),
       ...(identifiers.length ? { rawIdentifiers: identifiers as BookInfo['rawIdentifiers'] } : {}),
+      ...(canonical && identifiers.length && /^[A-Z0-9]{10}$/.test(item.asin)
+        ? { amazonCatalogReference: { asin: item.asin, isbn: canonical, marketplaceId: item.marketplaceId } } : {}),
       authors: Array.isArray(item.authors) ? item.authors.map(text).filter((v): v is string => Boolean(v)) : undefined,
       publisher: text(item.publisher), publishedDate: normalizePublicationDate(item.publicationDate), year: publicationYear(item.publicationDate), language: amazonLanguage(item.language),
       format: amazonBinding(item.binding), edition: text(item.edition), pageCount: Number.isInteger(item.pageCount) && item.pageCount! > 0 ? item.pageCount : undefined,
@@ -199,6 +206,12 @@ export function complementWithAmazon(base: BookInfo | null, amazon: BookInfo | n
     if (!merged.dimensionsUnit && ['width', 'height', 'depth'].some(key => merged.provenance?.[key] === 'amazon_spapi_catalog_2022-04-01')) filled('dimensionsUnit', 'cm');
   }
   if (!merged.amazonPhysical && amazon.amazonPhysical) filled('amazonPhysical', amazon.amazonPhysical);
+  const reference = amazon.amazonCatalogReference;
+  if (reference && /^[A-Z0-9]{10}$/.test(reference.asin) && reference.marketplaceId === 'A2Q3Y263D00KWC'
+    && reference.isbn === canonicalBookIsbn(amazon.isbn13 || amazon.isbn10)
+    && reference.isbn === canonicalBookIsbn(merged.isbn13 || merged.isbn10)) {
+    merged.amazonCatalogReference = { ...reference };
+  }
   if (amazon.amazonImages?.length) merged.amazonImages = amazon.amazonImages.map(image => ({ ...image }));
   // Keep a valid primary-source cover; Amazon fills a missing cover and joins the existing gallery.
   const existing = imageReferences([merged.coverUrl, merged.thumbnailUrl, ...(merged.additionalImages || [])]);

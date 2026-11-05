@@ -20,8 +20,10 @@ export const HTML_STOP_REASONS = ['http_status', 'content_type_missing', 'conten
 export interface HtmlResponse { html: string | null; status_http: number | null; mensagem?: string; tamanho_bytes?: number; motivo?: typeof HTML_STOP_REASONS[number] }
 
 /** Um GET com HTTPS nativo: sem proxy, cookies, redirects, retries ou gravação de HTML. */
-export function fetchHtml(isbn: string, requestHttps: typeof httpsRequest = httpsRequest): Promise<HtmlResponse> {
-  const urlPath = '/dp/' + isbn10For(isbn);
+export function fetchHtml(isbn: string, requestHttps: typeof httpsRequest = httpsRequest, asin?: string): Promise<HtmlResponse> {
+  if (asin !== undefined && !/^[A-Z0-9]{10}$/.test(asin)) throw new LabError(422, 'ASIN inválido.');
+  if (!canonicalBookIsbn(isbn)) throw new LabError(422, 'ISBN inválido.');
+  const urlPath = '/dp/' + (asin ?? isbn10For(isbn));
   return new Promise((resolve, reject) => {
     const request = requestHttps({ hostname: 'www.amazon.com.br', path: urlPath, method: 'GET', agent: false,
       headers: { 'User-Agent': 'ProjetoISBN-Laboratorio/1.0 Agent/ProjetoISBN-Laboratorio',
@@ -66,12 +68,13 @@ export function fetchHtml(isbn: string, requestHttps: typeof httpsRequest = http
   });
 }
 
-export function validateAmazonQuery(payload: unknown, fallback: 'fixture' | 'http' = 'fixture'): { isbn: string; canonical: string; mode: 'fixture' | 'http' } {
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).some(k => !['isbn', 'modo'].includes(k))) throw new LabError(400, 'Informe somente ISBN e modo.');
-    const { isbn: raw, modo: mode = fallback } = payload as Record<string, unknown>;
+export function validateAmazonQuery(payload: unknown, fallback: 'fixture' | 'http' = 'fixture'): { isbn: string; canonical: string; mode: 'fixture' | 'http'; asin?: string } {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).some(k => !['isbn', 'modo', 'asin'].includes(k))) throw new LabError(400, 'Informe somente ISBN, modo e ASIN opcional.');
+    const { isbn: raw, modo: mode = fallback, asin } = payload as Record<string, unknown>;
     if (typeof raw !== 'string' || raw.length > 40) throw new LabError(400, 'Informe um único ISBN-10 ou ISBN-13.');
     const isbn = cleanIsbn(raw), canonical = canonicalBookIsbn(isbn);
     if (!canonical) throw new LabError(422, 'ISBN inválido: confira o formato e o dígito verificador.');
     if (mode !== 'fixture' && mode !== 'http') throw new LabError(400, 'Modo de consulta inválido.');
-    return { isbn, canonical, mode };
+    if (asin !== undefined && (typeof asin !== 'string' || !/^[A-Z0-9]{10}$/.test(asin))) throw new LabError(422, 'ASIN inválido.');
+    return { isbn, canonical, mode, ...(asin === undefined ? {} : { asin: asin as string }) };
 }

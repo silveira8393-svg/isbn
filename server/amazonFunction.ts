@@ -61,12 +61,12 @@ export function createAmazonFunction(options: {
         const limit = error instanceof Error && error.message === 'body_limit';
         return reply(limit ? 413 : 400, { mensagem: limit ? 'Solicitação acima de 1 KiB.' : 'Solicitação JSON inválida ou incompleta.' }, limit ? 'body_limit' : 'invalid_json');
       }
-      const { isbn, mode } = validateAmazonQuery(payload, 'http');
+      const { isbn, mode, asin } = validateAmazonQuery(payload, 'http');
       if (mode !== 'http') return reply(400, { mensagem: 'HTML sanitizado local está disponível somente no desenvolvimento local.' }, 'local_fixture_only');
       if (busy) return reply(409, { mensagem: 'Há uma pesquisa em andamento nesta instância. Aguarde sua conclusão; não há fila.' }, 'busy');
       busy = true;
       try {
-        const metadata = await readHtml(isbn);
+        const metadata = await readHtml(isbn, undefined, asin);
         statusHttp = metadata.status_http;
         const duration = Math.round((performance.now() - started) * 100) / 100;
         if (metadata.html === null) {
@@ -75,7 +75,7 @@ export function createAmazonFunction(options: {
           return reply(200, { modo: 'http', isbn_pesquisado: isbn, total_campos: 9, status_http: statusHttp,
             status: 'interrompida', duracao_ms: duration, mensagem: metadata.mensagem }, code);
         }
-        const result = toLabResult(parseAmazonHtml(metadata.html, isbn, 'memoria', 'http_local_experimental'), 'http', duration, statusHttp);
+        const result = toLabResult(parseAmazonHtml(metadata.html, isbn, 'memoria', 'http_local_experimental', asin), 'http', duration, statusHttp);
         imageCounts = { imagens_principais: result.imagens?.itens.filter(image => image.papel === 'principal').length || 0,
           imagens_adicionais: result.imagens?.itens.filter(image => image.papel === 'adicional').length || 0 };
         return reply(200, result, 'completed');
