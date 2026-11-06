@@ -39,6 +39,19 @@ test('Amazon product URL requires a validated ASIN/ISBN/marketplace reference',(
  for(const change of [{asin:'invalid'},{isbn},{marketplaceId:'other'}])assert.deepEqual(api.bookSourceLinks({...book,amazonCatalogReference:{...amazon,...change}}),[]);
  assert.deepEqual(api.bookSourceLinks({isbn13:isbn,amazonCatalogReference:amazon}),[]);
 });
+
+test('source cards explain skipped SP-API without counting it as queried or relabeling failures',()=>{
+ const states={brasil_api:'found',curitiba:'found',amazon:'not_consulted',google_books:'not_found'};
+ const skipped=render(api.Panel,{states});
+ assert.match(skipped,/Pesquisa concluída/);assert.match(skipped,/Fontes consultadas: 3/);
+ assert.match(skipped,/Requer perfil Desenvolvimento ativo e loja selecionada/);
+ assert.equal((skipped.match(/<svg /g)||[]).length,4);
+ for(const [state,label] of [['found','Encontrado'],['not_found','Não encontrado'],['unavailable','Indisponível']]){
+  const markup=render(api.Panel,{states:{...states,amazon:state}});
+  assert.match(markup,/Fontes consultadas: 4/);
+  assert.ok(markup.includes(label));assert.doesNotMatch(markup,/Requer perfil Desenvolvimento/);
+ }
+});
 test('Curitiba accepts only explicitly returned product URLs tied to verified identifiers; never manufactures a slug',()=>{
  assert.deepEqual(api.curitibaProductLinks({urlProduto:curitiba.url},[isbn,'8550303623'],isbn),[curitiba]);
  assert.deepEqual(api.curitibaProductLinks({dsProduto:'Gravity Falls',cdProduto:'LV434083'},[isbn],isbn),[]);

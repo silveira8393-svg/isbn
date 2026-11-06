@@ -82,7 +82,7 @@ test('automatic client uses same-origin session only for developer in the operat
   const calls = []; globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
   t.after(() => { delete globalThis.__spapiSession; });
   t.mock.method(globalThis, 'fetch', async (url, init) => { calls.push({ url, init }); return Response.json({ isbn, items: [{ isbn, asin: 'SYNTHETIC1', marketplaceId: api.MARKETPLACE, title: 'Title', publisher: 'Publisher', images: ['forbidden'], synopsis: 'forbidden' }] }); });
-  for (const other of [{ ...user, role: 'operator' }, { ...user, storeId: undefined }, { ...user, active: false }]) assert.equal((await client.searchAmazonOfficial(isbn, other)).status, 'skipped');
+  for (const other of [{ ...user, role: 'admin' }, { ...user, role: 'operator' }, { ...user, storeId: undefined }, { ...user, active: false }]) assert.equal((await client.searchAmazonOfficial(isbn, other)).status, 'skipped');
   assert.equal(calls.length, 0);
   const result = await client.searchAmazonOfficial(isbn, user); assert.equal(result.status, 'success'); assert.equal(result.book.publisher, 'Publisher');
   assert.equal(result.book.synopsis, undefined); assert.equal(result.book.coverUrl, undefined);
