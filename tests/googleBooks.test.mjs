@@ -126,6 +126,20 @@ test('client discards mismatched and aborted responses and keeps one request',as
   assert.equal((await api.searchGoogleBooks('invalid')).status,'invalid_query');assert.equal(calls,3);
 });
 
+test('Preview protection: client retains same-origin access cookies without forwarding credentials to Google',async t=>{
+  let calls=0;
+  t.mock.method(globalThis,'fetch',async(url,init)=>{
+    calls++;assert.equal(url,'/api/google-books?isbn='+isbn);
+    // A protected Preview redirects unauthenticated fetches before its Function runs.
+    if(init.credentials!=='same-origin')throw new TypeError('Preview authentication redirect rejected');
+    assert.equal(init.redirect,'error');assert.equal(init.cache,'no-store');
+    assert.deepEqual(init.headers,{Accept:'application/json'});
+    return Response.json(mapped());
+  });
+  const result=await api.searchGoogleBooks(isbn);
+  assert.equal(result.status,'success');assert.equal(result.book.isbn13,isbn);assert.equal(calls,1);
+});
+
 test('recorded real Preview responses preserve not_found distinction and exact Gravity Falls facts through consolidation and drafts',async()=>{
   const evidence=JSON.parse(await readFile(new URL('./fixtures/google-books-preview-2026-11-05.json',import.meta.url),'utf8'));
   for(const result of evidence.results.slice(0,2)){

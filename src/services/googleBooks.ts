@@ -9,7 +9,7 @@ export async function searchGoogleBooks(isbn: string, signal?: AbortSignal): Pro
     const timeout = AbortSignal.timeout(5000);
     const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
     const response = await fetch('/api/google-books?isbn=' + canonical, { method: 'GET', signal: combined,
-      credentials: 'omit', redirect: 'error', cache: 'no-store', headers: { Accept: 'application/json' } });
+      credentials: 'same-origin', redirect: 'error', cache: 'no-store', headers: { Accept: 'application/json' } });
     if (!response.ok) return { status: 'unavailable', book: null, diagnostic: { code: 'function_http', httpStatus: response.status } };
     const result = await response.json() as GoogleBooksResult;
     if (combined.aborted || !result?.diagnostic || typeof result.diagnostic.code !== 'string'
