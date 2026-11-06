@@ -25,6 +25,7 @@ import ImagesSection from './ImagesSection';
 import SynopsisSection from './SynopsisSection';
 import SeoSection from './SeoSection';
 import AdvancedFiscalSection from './AdvancedFiscalSection';
+import RegistrationSummary from './RegistrationSummary';
 import {
   ArrowLeft,
   Sparkles,
@@ -268,7 +269,7 @@ export default function ProductRegistrationForm({
     <div data-registration-form className="space-y-6 animate-fade-in w-full pb-16">
       <style>{[
         ...validFields.map(field => `[data-registration-form] [data-registration-field="${field}"] { border-color: #6ee7b7; }`),
-        ...Object.keys(errors).map(field => `[data-registration-form] [data-registration-field="${field}"] { border-color: #f87171; background-color: #fef2f2; }`),
+        ...Object.keys(errors).map(field => `[data-registration-form] [data-registration-field="${field}"] { border-color: #f87171; background-color: #361e29; }`),
       ].join('\n')}</style>
       {reviewing && <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-5 sm:p-7" aria-label="Revisão do cadastro">
         <h2 data-registration-field="review" tabIndex={-1} className="text-xl font-bold text-slate-900">Revisão do cadastro</h2>
@@ -290,7 +291,7 @@ export default function ProductRegistrationForm({
           <button type="button" id="btn-confirm-magazord-registration" disabled={isSubmitting || imageUploadBusy} onClick={handleSubmit} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-bold text-white disabled:opacity-60">{isSubmitting ? 'Confirmando cadastro...' : 'Confirmar cadastro'}</button>
         </div>
       </section>}
-      <div hidden={reviewing} className="space-y-6" onChangeCapture={event => {
+      <div hidden={reviewing} className="isbn-registration-editor space-y-6" onChangeCapture={event => {
         const field = (event.target as HTMLElement).getAttribute?.('data-registration-field'); if (field) setEditingField(field);
       }} onBlurCapture={event => {
         const field = (event?.target as HTMLElement | undefined)?.getAttribute?.('data-registration-field');
@@ -298,7 +299,7 @@ export default function ProductRegistrationForm({
         setEditingField(null);
       }}>
       {/* Barra de Navegação e Título da Tela */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="isbn-registration-heading bg-white rounded-xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -311,7 +312,7 @@ export default function ProductRegistrationForm({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-bold text-slate-900">
-                Cadastro no simulador Magazord
+                Cadastro bibliográfico
               </h2>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">
                 Pré-preenchido
@@ -352,6 +353,12 @@ export default function ProductRegistrationForm({
           </button>
         </div>
       </div>
+
+      <nav aria-label="Seções do cadastro" className="isbn-registration-sections">
+        <a href="#registration-identification">Identificação</a><a href="#registration-category">Categoria</a>
+        <a href="#registration-commercial">Preço e estoque</a><a href="#registration-images">Imagens</a>
+        <a href="#registration-description">Descrição</a><a href="#registration-seo">SEO</a>
+      </nav>
 
       {/* Banner de Erros no Envio se houver */}
       {visibleRequired.length > 0 && reviewRequested && (
@@ -397,42 +404,41 @@ export default function ProductRegistrationForm({
         </div>
       )}
 
-      {/* Seção 1: Identificação & Condição */}
+      <div className="isbn-registration-grid">
+      <div className="isbn-registration-column">
+      <BibliographicSection
+        variant="identity"
+        draft={draft}
+        onChange={onUpdateDraft}
+        errors={errors}
+      />
       <ProductIdentitySection
         draft={draft}
         onChange={onUpdateDraft}
         errors={errors}
       />
-
-      {/* Seção 2: Categorização, Marca & Editora */}
       <CategoryAndBrandSection
         draft={draft}
         onChange={onUpdateDraft}
         errors={errors}
       />
-
-      {/* Seção 3: Comercial, Estoque & Localização */}
       <CommercialSection
         draft={draft}
         onChange={onUpdateDraft}
         errors={errors}
       />
-
-      {/* Seção 4: Dados Bibliográficos da Obra */}
-      <BibliographicSection
-        draft={draft}
-        onChange={onUpdateDraft}
-        errors={errors}
-      />
-
-      {/* Seção 5: Peso & Dimensões (sem acréscimo de 1 cm) */}
+      <BibliographicSection variant="metadata" draft={draft} onChange={onUpdateDraft} errors={errors} />
       <PhysicalAttributesSection
         draft={draft}
         onChange={onUpdateDraft}
         errors={errors}
       />
-
-      {/* Seção 6: Galeria de Imagens */}
+      <AdvancedFiscalSection
+        draft={draft}
+        onChange={onUpdateDraft}
+      />
+      </div>
+      <div className="isbn-registration-column">
       <ImagesSection
         draft={draft}
         onChange={onUpdateDraft}
@@ -441,23 +447,16 @@ export default function ProductRegistrationForm({
         onPendingPhotosChange={handlePendingPhotos}
         errors={errors}
       />
-
-      {/* Seção 7: Descrição Única (Sinopse e, se Usado, Estado do Exemplar) */}
       <SynopsisSection
         draft={draft}
         onChange={onUpdateDraft}
       />
-
       <SeoSection draft={draft} onChange={onUpdateDraft} />
-
-      {/* Seção 8: Configurações Fiscais e Avançadas (Colapsável) */}
-      <AdvancedFiscalSection
-        draft={draft}
-        onChange={onUpdateDraft}
-      />
-
+      </div>
+      <aside className="isbn-registration-column isbn-registration-aside" aria-label="Resumo e acoes do cadastro">
+      <RegistrationSummary draft={draft} />
       {/* Barra de Ação Inferior Flutuante / Fixa */}
-      <div className="sticky bottom-4 z-30 bg-slate-900 text-white rounded-2xl p-4 px-6 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4 border border-slate-700/80">
+      <div className="isbn-registration-actions bg-slate-900 text-white rounded-2xl p-4 px-6 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4 border border-slate-700/80">
         <div className="flex items-center gap-3 text-xs">
           <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold">
             <Sparkles className="w-5 h-5" />
@@ -508,6 +507,8 @@ export default function ProductRegistrationForm({
             )}
           </button>
         </div>
+      </div>
+      </aside>
       </div>
       </div>
     </div>

@@ -72,6 +72,7 @@ export default function SearchForm({
             </div>
 
             <input
+              aria-label="ISBN (10 ou 13 dígitos)"
               type="text"
               id="isbn-input-field"
               value={isbnValue}
@@ -132,7 +133,7 @@ export default function SearchForm({
               ) : (
                 <>
                   <Search className="w-4 h-4 shrink-0" />
-                  <span>Buscar</span>
+                  <span>Pesquisar</span>
                 </>
               )}
             </button>

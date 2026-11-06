@@ -11,6 +11,8 @@ import {
   BarChart3,
   Settings,
   Menu,
+  Layers,
+  BookOpen,
 } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
 import UserSwitcher from './UserSwitcher';
@@ -45,7 +47,7 @@ export default function Header({
           {/* Logo / Identidade à esquerda */}
           <aside className="isbn-sidebar">
           <div className="isbn-sidebar-brand">
-            <img className="isbn-brand-logo" src="/brand/livraria-sul.svg" alt="Sebo Livraria Sul" width="220" height="82" />
+            <div className="isbn-brand-mark"><Layers className="h-9 w-9 shrink-0" aria-hidden="true" /><div><strong>Projeto ISBN</strong><small>Sebo Livraria Sul</small></div></div>
           </div>
 
           {/* Navegação centralizada e equilibrada */}
@@ -134,21 +136,22 @@ export default function Header({
               </button>
             )}
           </nav>
+          <div className="isbn-sidebar-profile"><UserSwitcher /></div>
           </aside>
 
           <div className="isbn-topbar-context min-w-0">
+            <BookOpen aria-hidden="true" />
+            <div className="min-w-0">
             <h1 className="text-lg lg:text-xl font-bold tracking-tight text-white leading-tight truncate">
-              Projeto ISBN
+              {activeTab === 'consultar' || activeTab === 'cadastro' ? 'Consulta Bibliográfica' : activeTab === 'historico' ? 'Histórico de consultas' : activeTab === 'dashboard' ? 'Dashboard' : 'Configurações'}
             </h1>
             <p className="text-xs text-blue-100 truncate">
-              Balcão · Magazord simulada
+              Pesquisa automática em múltiplas fontes
             </p>
+            </div>
           </div>
 
           {/* Coluna direita: Identificação e Seletor do Usuário */}
-          <div className="flex items-center justify-end min-w-0">
-            <UserSwitcher />
-          </div>
         </div>
 
         {/* MOBILE (menor que md): Duas linhas organizadas sem qualquer overflow */}

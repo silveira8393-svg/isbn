@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 interface BibliographicSectionProps {
+  variant?: 'identity' | 'metadata';
   draft: RegistrationDraft;
   onChange: (updates: Partial<RegistrationDraft>) => void;
   errors: Record<string, string>;
@@ -32,6 +33,7 @@ const COMMON_FORMATS = [
 ];
 
 export default function BibliographicSection({
+  variant,
   draft,
   onChange,
   errors,
@@ -59,14 +61,14 @@ export default function BibliographicSection({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-5">
+    <div id={variant === 'metadata' ? 'registration-metadata' : 'registration-identification'} className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-5">
       <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
         <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-sm">
-          4
+          <BookOpen className="h-5 w-5" aria-hidden="true" />
         </div>
         <div>
           <h3 className="text-sm sm:text-base font-bold text-slate-900">
-            Dados Bibliográficos da Obra
+            {variant === 'identity' ? 'Identificação da obra' : 'Dados bibliográficos da obra'}
           </h3>
           <p className="text-xs text-slate-500">
             Ficha técnica pré-carregada das fontes nacionais. Todos os campos são editáveis.
@@ -74,6 +76,7 @@ export default function BibliographicSection({
         </div>
       </div>
 
+      {variant !== 'metadata' && <>
       {/* Título e Subtítulo */}
       <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
         <div className="sm:col-span-8">
@@ -178,9 +181,10 @@ export default function BibliographicSection({
       </div>
 
       {errors.authors && <p className="text-xs font-medium text-red-600">{errors.authors}</p>}
+      </>}
 
       {/* Grid de Metadados: Ano, Edição, Idioma, Formato, Páginas */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1">
+      {variant !== 'identity' && <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1">
         {/* Ano */}
         <div>
           <label className="block text-xs font-bold text-slate-700 mb-1">Ano</label>
@@ -260,7 +264,7 @@ export default function BibliographicSection({
           />
           {errors.pageCount && <p className="mt-1 text-xs font-medium text-red-600">{errors.pageCount}</p>}
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

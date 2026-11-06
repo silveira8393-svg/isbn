@@ -67,7 +67,7 @@ export default function Login({ message, notice }: { message: string | null; not
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
+    <main className="isbn-login min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm bg-white border border-slate-200 rounded-xl p-8 shadow-xs">
         <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-4"><BookOpen aria-hidden="true" /></div>
         <h1 className="text-xl font-bold text-slate-900">Projeto ISBN</h1>

@@ -21,10 +21,10 @@ export default function CategoryAndBrandSection({
   const availableCategories = CATEGORIES_BY_CONDITION[draft.condition] || [];
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-5">
+    <div id="registration-category" className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-5">
       <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
         <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-sm">
-          2
+          <FolderTree className="h-5 w-5" aria-hidden="true" />
         </div>
         <div>
           <h3 className="text-sm sm:text-base font-bold text-slate-900">

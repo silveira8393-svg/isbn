@@ -200,15 +200,15 @@ export default function ImagesSection({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-5">
+    <div id="registration-images" className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-5">
       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-sm">
-            6
+            <ImageIcon className="h-5 w-5" aria-hidden="true" />
           </div>
           <div>
             <h3 className="text-sm sm:text-base font-bold text-slate-900">
-              Galeria de Imagens do Produto
+              Imagens da obra
             </h3>
             <p className="text-xs text-slate-500">
               Capa e fotos do exemplar no cadastro simulado; sem publicação de imagens
@@ -296,7 +296,7 @@ export default function ImagesSection({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-12 gap-6 items-start">
+        <div className="isbn-image-gallery grid grid-cols-1 sm:grid-cols-12 gap-6 items-start">
           {/* Imagem Principal em Destaque */}
           <div data-registration-field="mainImageUrl" tabIndex={-1} className="sm:col-span-5 flex flex-col items-center">
             {errors.mainImageUrl && <p className="mb-2 text-xs font-medium text-red-600">{errors.mainImageUrl}</p>}
@@ -339,7 +339,7 @@ export default function ImagesSection({
                 Nenhuma foto adicional no momento. O produto usará apenas a capa principal.
               </p>
             ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+              <div className="isbn-image-thumbnails grid grid-cols-3 sm:grid-cols-4 gap-3">
                 {draft.additionalImageUrls.map((imgUrl, idx) => (
                   <div
                     key={`${imgUrl}-${idx}`}

@@ -747,21 +747,21 @@ export default function App() {
           <button type="button" onClick={retryAudit} className="font-semibold underline cursor-pointer">Reenviar auditoria pendente</button>
           <details><summary className="cursor-pointer">IDs pendentes para evidência</summary><ul>{pendingAudit.map(entry => <li key={entry.input.id}>{entry.input.id} · {entry.input.operationType} · {entry.input.completedAt}</li>)}</ul></details>
         </div>}
+        {(activeTab === 'consultar' || activeTab === 'cadastro') && <div className="isbn-shared-search">
+          <SearchForm
+            onSearch={handleSearch}
+            isLoading={isLoading}
+            isbnValue={isbnValue}
+            setIsbnValue={setIsbnValue}
+            onOpenScanner={() => setIsScannerOpen(true)}
+          />
+          <ResearchSourcesPanel states={researchStates} />
+        </div>}
         {/* ABA 1: CONSULTAR */}
         {activeTab === 'consultar' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="isbn-query-layout grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* Main Area: Pesquisa e Resultado (8 cols no desktop) */}
-            <div className="space-y-6 lg:col-span-8">
-              {/* Search Input Card */}
-              <SearchForm
-                onSearch={handleSearch}
-                isLoading={isLoading}
-                isbnValue={isbnValue}
-                setIsbnValue={setIsbnValue}
-                onOpenScanner={() => setIsScannerOpen(true)}
-              />
-              <ResearchSourcesPanel states={researchStates} />
-
+            <div className="isbn-query-main space-y-6 lg:col-span-8">
               {/* Loading State */}
               {isLoading && (
                 <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-xs flex flex-col items-center justify-center min-h-[320px] animate-fade-in">
@@ -806,7 +806,7 @@ export default function App() {
 
               {/* Found Book: Status Magazord + Ficha Técnica Completa */}
               {foundBook && !isLoading && (
-                <div className="space-y-6 animate-fade-in">
+                <div className="isbn-query-result space-y-6 animate-fade-in">
                   {/* Card de Status e Ação Magazord (Regras de Novos e Usados) */}
                   <MagazordStatusCard
                     checkResult={visibleMagazordCheck}
@@ -846,7 +846,7 @@ export default function App() {
             </div>
 
             {/* Sidebar Area: Histórico Recente (4 cols no desktop) */}
-            <div className="hidden lg:block lg:col-span-4 space-y-6">
+            <div className="isbn-query-history hidden lg:block lg:col-span-4 space-y-6">
               <SearchHistoryGroup
                 items={visibleHistory}
                 onSelect={handleSelectHistoryItem}
@@ -859,7 +859,7 @@ export default function App() {
 
         {/* ABA 2: CADASTRO MAGAZORD EM TELA ÚNICA */}
         {activeTab === 'cadastro' && (
-          <div className="w-full max-w-5xl mx-auto">
+          <div className="isbn-registration-view w-full mx-auto">
             {registrationDraft && foundBook ? (
               <ProductRegistrationForm
                 draft={registrationDraft}

@@ -36,7 +36,7 @@ export default function PhysicalAttributesSection({
       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-sm">
-            5
+            <Scale className="h-5 w-5" aria-hidden="true" />
           </div>
           <div>
             <h3 className="text-sm sm:text-base font-bold text-slate-900">
