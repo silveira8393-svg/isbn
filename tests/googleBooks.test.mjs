@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
+import { readFile } from 'node:fs/promises';
 const output = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts', contents: `
   export * from './shared/googleBooks'; export * from './server/googleBooksFunction';
   export * from './src/services/googleBooks'; export {createRegistrationDraft} from './src/utils/draft';
@@ -123,4 +124,30 @@ test('client discards mismatched and aborted responses and keeps one request',as
   assert.equal((await api.searchGoogleBooks(independent)).status,'unavailable');
   const controller=new AbortController();controller.abort();assert.equal((await api.searchGoogleBooks(isbn,controller.signal)).status,'unavailable');
   assert.equal((await api.searchGoogleBooks('invalid')).status,'invalid_query');assert.equal(calls,3);
+});
+
+test('recorded real Preview responses preserve not_found distinction and exact Gravity Falls facts through consolidation and drafts',async()=>{
+  const evidence=JSON.parse(await readFile(new URL('./fixtures/google-books-preview-2026-11-05.json',import.meta.url),'utf8'));
+  for(const result of evidence.results.slice(0,2)){
+    assert.equal(result.status,200);assert.equal(result.body.status,'not_found');assert.equal(result.body.diagnostic.code,'no_results');assert.equal(result.body.book,null);
+  }
+  const real=evidence.results[2].body.book;
+  assert.equal(real.isbn13,isbn);assert.equal(real.isbn10,isbn10);assert.equal(real.title,'O diário perdido 3');
+  assert.deepEqual(real.authors,['Alex Hirsch','Robert Renzetti']);assert.equal(real.year,2018);
+  assert.equal(real.publisher,undefined);assert.equal(real.pageCount,undefined);assert.equal(real.coverUrl,undefined);
+  const base={id:'selected',isbn13:isbn,title:'O diário perdido de Gravity falls',authors:['Alex Hirsch'],publisher:'Universo dos Livros',
+    year:2020,publishedDate:'2020-01-31',pageCount:288,edition:'1ª',language:'Português',format:'CD - Capa Dura',
+    coverUrl:'https://conteudo.livrariascuritiba.com.br/images/lv/lvndd/lv434083/lv434083_1.jpg',
+    additionalImages:[2,3,4,5].map(i=>`https://conteudo.livrariascuritiba.com.br/images/lv/lvndd/lv434083/lv434083_${i}.jpg`),provenance:{year:'prior_source'}};
+  const before=structuredClone(base),merged=api.complementWithGoogleBooks(base,real,isbn);
+  for(const field of Object.keys(base))if(field!=='provenance')assert.deepEqual(merged[field],base[field]);
+  assert.equal(merged.provenance.year,'prior_source');assert.equal(merged.provenance.isbn10,'Google Books');assert.deepEqual(base,before);
+  assert.equal(merged.sourceLinks.length,2);assert.equal(merged.googleBooksReference.descriptionAvailable,true);
+  for(const condition of ['novo','usado']){
+    const draft=api.createRegistrationDraft(merged,condition);assert.equal(draft.year,'2020');assert.equal(draft.publisher,base.publisher);
+    assert.deepEqual(draft.authors,base.authors);assert.equal(draft.pageCount,288);assert.equal(draft.mainImageUrl,base.coverUrl);
+    assert.deepEqual(draft.additionalImageUrls,base.additionalImages);assert.equal(draft.sourceLinks.length,2);assert.equal(draft.synopsis,'');
+  }
+  const independent=api.complementWithGoogleBooks(null,real,isbn);assert.equal(independent.year,2018);assert.deepEqual(independent.authors,real.authors);
+  for(const condition of ['novo','usado'])assert.equal(api.createRegistrationDraft(independent,condition).year,'2018');
 });

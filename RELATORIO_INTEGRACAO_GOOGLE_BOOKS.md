@@ -2,7 +2,7 @@
 
 Data: 05/11/2026. Branch: `feat/google-books-integration`.
 
-Implementação preparada e validada com respostas controladas. **Homologação de cobertura real pendente de chave Google Books e resposta efetiva do catálogo.** Não declarar esta etapa homologada nem promover para produção.
+Implementação validada com respostas controladas e três consultas reais pelo Preview com chave de projeto. **Verificação técnica concluída; aguardar homologação do responsável antes de merge ou produção.**
 
 ## Base confirmada
 
@@ -16,11 +16,19 @@ Uma consulta diagnóstica pública sem credenciais a `volumes.list`, com `q=isbn
 
 | ISBN | Encontrado | Dados retornados | Campos complementados | Link disponível |
 |---|---|---|---|---|
-| 9798276439839 | Não verificável: HTTP 429 | Sem dados bibliográficos aproveitados | Nenhum | Não verificado |
-| 9798286828647 | Não consultado após 429 | Não verificados | Nenhum | Não verificado |
-| 9788550303628 | Não consultado após 429 | Não verificados | Nenhum | Não verificado |
+| 9798276439839 | Não, nesta consulta: HTTP 200 / `no_results` | Nenhum registro | Nenhum | Não |
+| 9798286828647 | Não, nesta consulta: HTTP 200 / `no_results` | Nenhum registro | Nenhum | Não |
+| 9788550303628 | Sim: HTTP 200 / `exact_isbn` | Título, dois autores, ano/data 2018, idioma, ISBN-10/13 e referências | ISBN-10 e referências no teste com base histórica; valores anteriores preservados | Sim, info e preview |
 
-Nenhum desses casos é classificado como obra inexistente. Nenhuma informação foi preenchida com dados de outras fontes durante essa verificação.
+O 429 acima é **histórico da tentativa sem chave**. Após o responsável ativar a Books API e configurar `GOOGLE_BOOKS_API_KEY`, confirmou-se somente o metadado da variável: tipo sensível, target `preview`, branch `feat/google-books-integration`. Seu valor não foi lido.
+
+Foi criado o deployment `dpl_9jzpsjhtjvB2bvHQx7tLLqYpp4hd`, **READY**, commit `15296168cad43c67e3389880ccba3211d57e16de`, exclusivamente Preview: [URL testada](https://isbn-cx2cwj6aq-silveira8393-svgs-projects.vercel.app). Foram executadas **exatamente três chamadas**, uma por ISBN, à nova Function, sem repetir. HTTP do Google e da Function: 200 nos três casos. Durações da rotina no servidor: **259 ms**, **162 ms** e **237 ms**, respectivamente. Não foram consultadas BrasilAPI, Curitiba, Amazon ou Supabase para compor estes resultados.
+
+O resultado Gravity Falls tem volume `moEq0gEACAAJ`, ISBN-13 `9788550303628` e ISBN-10 `8550303623`, correspondentes. Dados recuperados: **O diário perdido 3**, **Alex Hirsch e Robert Renzetti**, **2018**, **Português**. Editora, páginas, edição, formato, peso, dimensões e capa não foram recuperados nessa resposta mapeada. Há descrição disponível, mantida apenas como sinal de referência, sem armazenar o texto. [Página específica retornada](https://books.google.com/books?id=moEq0gEACAAJ&dq=isbn:9788550303628&hl=&as_pt=BOOKS&source=gbs_api).
+
+O ano 2018 e a lista de autores diferem da consulta Amazon local anterior, que retornou 2020 e Alex Hirsch. Um teste offline com a resposta real e uma base histórica conhecida confirmou que **título, autor, editora, ano/data, 288 páginas, formato, edição e galeria anteriores permanecem**, tanto no livro quanto nos drafts NOVO/USADO. Os links são acrescentados; ISBN-10 preenche a lacuna da base de teste. Sem base anterior, os fatos Google são utilizados com sua proveniência, sem inventar editora/páginas. Essa consolidação é teste offline com evidência histórica, não uma nova consulta às outras fontes nem um cadastro operacional.
+
+Os dois `no_results` significam ausência de resultado nessas consultas; não provam inexistência das obras. Respostas sanitizadas preservadas em `tests/fixtures/google-books-preview-2026-11-05.json`, sem chave, sessão, descrição integral ou HTML.
 
 ## B. Implementação
 
@@ -46,7 +54,7 @@ O recurso oficial não declara campo próprio de edição ou encadernação: nã
 
 - Nova Function `GET /api/google-books?isbn=...`, usando exclusivamente o host oficial `www.googleapis.com`.
 - `GOOGLE_BOOKS_API_KEY` somente no servidor; nunca prefixada por `VITE_`, enviada pelo cliente, registrada ou devolvida. Nenhuma variável existente foi alterada.
-- Sem chave: `unavailable/not_configured`, sem requisição ao Google. Configuração necessária somente no Preview desta branch para continuar a homologação.
+- Sem chave: `unavailable/not_configured`, sem requisição ao Google. A chave agora está configurada pelo responsável somente no Preview desta branch.
 - Um GET por pesquisa válida; sem retry, redirecionamento, paginação, cookies ou encaminhamento de sessão.
 - Prazo de 4 segundos no servidor, 5 segundos no cliente; leitura máxima de 1 MiB, inclusive sem Content-Length.
 - HTTP 400/403/404/429/5xx do serviço são indisponibilidade, não ausência de catálogo; erros externos não são devolvidos integralmente.
@@ -63,23 +71,24 @@ O recurso oficial não declara campo próprio de edição ou encadernação: nã
 - `src/types.ts`, `src/utils/draft.ts`: referências de fonte no livro/draft.
 - `vite.config.ts`, `.env.example`: desenvolvimento local e configuração documentada.
 - `tests/googleBooks.test.mjs`: casos da nova fonte.
+- `tests/fixtures/google-books-preview-2026-11-05.json`: respostas reais sanitizadas dos três ISBNs e identificação do deployment testado.
 - `tests/spapiIntegrated.test.mjs`: integração com o fluxo existente, falhas e resposta tardia.
 - `tests/history.test.mjs`, `tests/operations.test.mjs`: isolamento explícito da nova dependência nas baterias existentes.
 - Este relatório.
 
 ### Validação
 
-**214 casos relevantes aprovados**, distribuídos entre Google Books, integração SP-API/App, bibliografia Amazon, galeria Curitiba, histórico e operações. Após ajustes finais em mapeamento/referências, repetidos apenas os 67 casos Google Books/SP-API afetados, aprovados.
+**214 casos relevantes aprovados** na implementação, distribuídos entre Google Books, integração SP-API/App, bibliografia Amazon, galeria Curitiba, histórico e operações. Após ajustes finais em mapeamento/referências, repetidos apenas os 67 casos Google Books/SP-API afetados, aprovados. Nesta continuação, acrescentado um caso com as respostas reais, com **18/18 testes Google Books aprovados**; total de 215 casos relevantes distintos validados ao longo da etapa. Não se repetiu a bateria extensa sem alteração de runtime.
 
 Cobertos: ISBN-13/ISBN-10/979, inexistência, resultados semelhantes/divergentes, ausência de editora/páginas/capa, datas inválidas, referência de conteúdo, HTTP 400/403/404/429/5xx, timeout, JSON inválido, resposta grande, preservação de dados/proveniência/edições manuais, Consulta/Cadastro, NOVO/USADO, galerias Curitiba e Amazon e correção `attributes.pages` para os dois ISBNs 979 observados anteriormente.
 
-TypeScript (`npm.cmd run typecheck`), lint (`npm.cmd run lint`, também TypeScript neste repositório) e build (`npm.cmd run build`) aprovados. Build mantém avisos de tamanho de bundle e import estático/dinâmico Supabase já presentes na estrutura do projeto; nenhuma alteração Supabase foi feita. Testes Google usam dados sintéticos e não são prova de cobertura real.
+TypeScript (`npm.cmd run typecheck`), lint (`npm.cmd run lint`, também TypeScript neste repositório) e build (`npm.cmd run build`) aprovados. Build mantém avisos de tamanho de bundle e import estático/dinâmico Supabase já presentes na estrutura do projeto; nenhuma alteração Supabase foi feita. Testes sintéticos não são prova de cobertura real; o novo caso usa as três respostas do Preview registrado acima. Nenhum código de runtime foi alterado nesta continuação.
 
 ## C. Publicação e pendências
 
-Branch isolada destinada exclusivamente a commit/PR em rascunho e Preview no projeto Vercel ISBN, conta Pessoal, `prj_pvcmEP52OoMKQhhvb5FJRWrGZv1e`. Commit, PR/comparação, URL e estado final do deployment serão entregues na resposta de conclusão operacional. Produção preservada.
+Branch isolada publicada no GitHub, exclusivamente para Preview no projeto Vercel ISBN, conta Pessoal, `prj_pvcmEP52OoMKQhhvb5FJRWrGZv1e`. Commit de implementação testado: `15296168cad43c67e3389880ccba3211d57e16de`. Novo deployment com chave: `dpl_9jzpsjhtjvB2bvHQx7tLLqYpp4hd`, **READY**, URL acima. O conector GitHub retornou 403 na tentativa de criar PR; [comparação para abertura manual](https://github.com/silveira8393-svg/isbn/compare/fix/amazon-bibliographic-recovery...feat/google-books-integration?expand=1). Produção preservada.
 
-Pendências: configurar chave Google Books válida/restrita à Books API somente no Preview desta branch, retomar as consultas reais controladas dos três ISBNs e homologar a cobertura e os campos efetivamente complementados. Não houve criação de credenciais, alteração de permissões, migração, escrita de banco, merge ou modificação do Laboratório Amazon.
+Pendência: homologação do responsável e abertura manual da PR em rascunho, se desejada. A cobertura real dos três casos já foi verificada; editora/páginas dos casos 979 continuam sem complemento Google porque não houve resultados. Não houve criação de credenciais pelo agente, alteração de permissões, migração, escrita de banco, merge ou modificação do Laboratório Amazon.
 
 ## Documentação oficial consultada
 

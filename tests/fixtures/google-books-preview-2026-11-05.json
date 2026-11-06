@@ -1,0 +1,96 @@
+{
+  "description": "Sanitized real responses from the branch-scoped Google Books Preview. No API key, session data, raw description or HTML.",
+  "deploymentId": "dpl_9jzpsjhtjvB2bvHQx7tLLqYpp4hd",
+  "commit": "15296168cad43c67e3389880ccba3211d57e16de",
+  "results": [
+    {
+      "isbn": "9798276439839",
+      "status": 200,
+      "body": {
+        "status": "not_found",
+        "book": null,
+        "diagnostic": {
+          "code": "no_results",
+          "httpStatus": 200,
+          "durationMs": 259
+        }
+      }
+    },
+    {
+      "isbn": "9798286828647",
+      "status": 200,
+      "body": {
+        "status": "not_found",
+        "book": null,
+        "diagnostic": {
+          "code": "no_results",
+          "httpStatus": 200,
+          "durationMs": 162
+        }
+      }
+    },
+    {
+      "isbn": "9788550303628",
+      "status": 200,
+      "body": {
+        "status": "success",
+        "book": {
+          "id": "google-books-moEq0gEACAAJ",
+          "title": "O diário perdido 3",
+          "isbn13": "9788550303628",
+          "provider": "Google Books",
+          "provenance": {
+            "title": "Google Books",
+            "isbn13": "Google Books",
+            "isbn10": "Google Books",
+            "authors": "Google Books",
+            "publishedDate": "Google Books",
+            "year": "Google Books",
+            "language": "Google Books",
+            "googleBooksReference": "Google Books",
+            "bibliographicWarnings": "Google Books",
+            "sourceLinks": "Google Books"
+          },
+          "isbn10": "8550303623",
+          "authors": [
+            "Alex Hirsch",
+            "Robert Renzetti"
+          ],
+          "publishedDate": "2018",
+          "year": 2018,
+          "language": "Português",
+          "googleBooksReference": {
+            "volumeId": "moEq0gEACAAJ",
+            "isbn": "9788550303628",
+            "infoLink": "https://books.google.com/books?id=moEq0gEACAAJ&dq=isbn:9788550303628&hl=&as_pt=BOOKS&source=gbs_api",
+            "previewLink": "https://books.google.com/books?id=moEq0gEACAAJ&dq=isbn:9788550303628&hl=&as_pt=BOOKS&cd=1&source=gbs_api",
+            "descriptionAvailable": true,
+            "contentReviewRequired": true
+          },
+          "bibliographicWarnings": [
+            "Google Books: descrição/capa disponíveis como referência; direitos de uso comercial exigem verificação."
+          ],
+          "sourceLinks": [
+            {
+              "source": "google_books",
+              "kind": "info",
+              "url": "https://books.google.com/books?id=moEq0gEACAAJ&dq=isbn:9788550303628&hl=&as_pt=BOOKS&source=gbs_api",
+              "isbn": "9788550303628"
+            },
+            {
+              "source": "google_books",
+              "kind": "preview",
+              "url": "https://books.google.com/books?id=moEq0gEACAAJ&dq=isbn:9788550303628&hl=&as_pt=BOOKS&cd=1&source=gbs_api",
+              "isbn": "9788550303628"
+            }
+          ]
+        },
+        "diagnostic": {
+          "code": "exact_isbn",
+          "httpStatus": 200,
+          "durationMs": 237
+        }
+      }
+    }
+  ]
+}
