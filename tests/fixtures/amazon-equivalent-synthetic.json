@@ -1,0 +1,82 @@
+{
+  "isbn": "9781234567897",
+  "items": [
+    {
+      "isbn": "9781234567897",
+      "isbn10": "123456789X",
+      "isbn13": "9781234567897",
+      "identifiers": [
+        {
+          "type": "ISBN_10",
+          "identifier": "123456789X"
+        },
+        {
+          "type": "ISBN_13",
+          "identifier": "9781234567897"
+        }
+      ],
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "asin": "TESTBOOK01",
+      "title": "Atlas das marés - Edição ilustrada Exclusiva Amazon",
+      "authors": [
+        "Pessoa de Ensaio"
+      ],
+      "publicationDate": "2024-03-02",
+      "pageCount": 216,
+      "binding": "hardcover",
+      "physical": {
+        "item": {
+          "height": {
+            "value": 24,
+            "unit": "centimeters"
+          },
+          "weight": {
+            "value": 420,
+            "unit": "grams"
+          }
+        }
+      },
+      "images": [
+        {
+          "variant": "MAIN",
+          "link": "https://m.media-amazon.com/images/I/SyntheticAtlas._SL100_.jpg",
+          "width": 100,
+          "height": 150
+        },
+        {
+          "variant": "MAIN",
+          "link": "https://m.media-amazon.com/images/I/SyntheticAtlas._SL500_.jpg",
+          "width": 500,
+          "height": 750
+        },
+        {
+          "variant": "MAIN",
+          "link": "https://m.media-amazon.com/images/I/SyntheticAtlas._SL1000_.jpg",
+          "width": 1000,
+          "height": 1500
+        }
+      ]
+    },
+    {
+      "isbn": "9781234567897",
+      "isbn10": "123456789X",
+      "isbn13": "9781234567897",
+      "identifiers": [
+        {
+          "type": "ISBN_10",
+          "identifier": "123456789X"
+        },
+        {
+          "type": "ISBN_13",
+          "identifier": "9781234567897"
+        }
+      ],
+      "marketplaceId": "A2Q3Y263D00KWC",
+      "asin": "TESTBOOK02",
+      "title": "Atlas das marés - Edição ilustrada Capa Dura",
+      "publisher": "Selo de Ensaio"
+    }
+  ],
+  "hasMore": false,
+  "requiresReview": true
+}

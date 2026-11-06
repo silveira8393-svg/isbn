@@ -71,11 +71,21 @@ type CatalogItem = { isbn: string; asin: string; title?: string; authors?: strin
   isbn10?: string; isbn13?: string; identifiers?: { type: string; identifier: string }[]; physical?: AmazonPhysical;
   images?: { variant: string; link: string; width?: number; height?: number }[] };
 
-/** Fail closed: ISBN alone identifies neither a duplicate edition nor a trustworthy winner.
- * Every candidate must independently corroborate title, attribution and an edition fact.
- * No title suffix removal, fuzzy matches or inference from ASIN/image/completeness.
- * Select an existing record containing the union of facts; never splice candidates.
- */
+// Ignore only whole trailing promotional/binding phrases. Subtitles and edition
+// designations remain identity facts; unknown title differences fail closed.
+function amazonTitleIdentity(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+    .replace(/(?:\s+(?:exclusiv[ao] amazon|capa dura|capa comum|hardcover|paperback))+$/, '').trim();
+}
+function titleBinding(value?: string): string {
+  const title = value?.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() || '';
+  return /\b(capa dura|hardcover|hardback)\b/.test(title) ? 'Capa dura'
+    : /\b(capa comum|paperback)\b/.test(title) ? 'Capa comum'
+    : /\b(ebook|e-book|kindle|digital)\b/.test(title) ? 'Livro digital' : '';
+}
+/** Establish equivalence before using completeness to choose a reference. */
 export function selectEquivalentAmazonRecord(items: CatalogItem[], isbn: string): CatalogItem | undefined {
   const canonical = canonicalBookIsbn(isbn);
   const norm = (value: unknown): string => typeof value === 'string'
@@ -89,11 +99,12 @@ export function selectEquivalentAmazonRecord(items: CatalogItem[], isbn: string)
     // Other product identifiers cannot silently contradict an edition ISBN.
     if ((item.identifiers || []).some(id => /^(EAN|EAN_13|GTIN|GTIN_13|GTIN_14)$/.test(id.type)
       && canonicalBookIsbn(id.identifier.replace(/^0(?=97[89]\d{10}$)/, '')) !== canonical)) return undefined;
+    if (titleBinding(item.title) && item.binding && titleBinding(item.title) !== amazonBinding(item.binding)) return undefined;
   }
   const facts = items.map(item => ({
-    title: norm(item.title), authors: Array.isArray(item.authors) ? item.authors.map(norm).filter(Boolean).sort().join('|') : '',
+    title: amazonTitleIdentity(item.title), authors: Array.isArray(item.authors) ? item.authors.map(norm).filter(Boolean).sort().join('|') : '',
     publisher: norm(item.publisher), date: normalizePublicationDate(item.publicationDate) || norm(item.publicationDate),
-    language: norm(amazonLanguage(item.language)), binding: norm(amazonBinding(item.binding)),
+    language: norm(amazonLanguage(item.language)), binding: norm(amazonBinding(item.binding) || titleBinding(item.title)),
     edition: norm(item.edition), pages: item.pageCount == null ? '' : String(item.pageCount),
     ...Object.fromEntries(Object.entries(amazonPhysicalFields(amazonPhysical(item.physical)))
       .filter(([, value]) => value !== undefined).map(([key, value]) => [key, String(value)])),
@@ -111,13 +122,31 @@ export function selectEquivalentAmazonRecord(items: CatalogItem[], isbn: string)
     || (shared('date') && items.every(item => !!normalizePublicationDate(item.publicationDate)))
     || (shared('pages') && items.every(item => Number.isInteger(item.pageCount) && item.pageCount! > 0))
     || (shared('binding') && items.every(item => /^(Capa dura|Capa comum|Livro digital|Livro de bolso|Livro cartonado|Espiral|Folhas soltas)$/.test(amazonBinding(item.binding) || '')));
-  if (!shared('title') || !['authors', 'publisher'].some(shared)
-    || !editionAnchor) return undefined;
-  const complete = items.filter((_, index) => keys.every(key => read(index, key) || !facts.some((__, other) => read(other, key))));
-  // Bibliography is already proven equivalent. Equal facts use ASIN only as a stable tie-break;
-  // prefer a candidate with MAIN only to retain its images, never to establish identity.
-  return complete.sort((a, b) => Number(!!b.images?.some(image => image.variant === 'MAIN' && publicAmazonImage(image.link)))
-    - Number(!!a.images?.some(image => image.variant === 'MAIN' && publicAmazonImage(image.link))) || a.asin.localeCompare(b.asin))[0];
+  const explicitEditionTitle = facts.every(fact => /\bedicao (?:de luxo|especial|ilustrada|revisada|ampliada|\d+)\b/.test(fact.title));
+  const pairedIsbns = items.every(item => {
+    const ids = [item.isbn10, item.isbn13, ...(item.identifiers || [])
+      .filter(id => /^ISBN(?:_10|_13)?$/.test(id.type)).map(id => id.identifier)].filter(Boolean);
+    return ids.some(id => cleanIsbn(id!).length === 10 && canonicalBookIsbn(id!) === canonical)
+      && ids.some(id => cleanIsbn(id!).length === 13 && canonicalBookIsbn(id!) === canonical);
+  });
+  if (!shared('title') || !facts[0].title
+    || !((['authors', 'publisher'].some(shared) && editionAnchor) || (pairedIsbns && explicitEditionTitle))) return undefined;
+  // All populated facts agree. Only now may completeness choose the reference.
+  const ranked = items.map((item, index) => ({ item, count: keys.filter(key => read(index, key)).length }))
+    .sort((a, b) => b.count - a.count || a.item.asin.localeCompare(b.item.asin));
+  const merged = structuredClone(ranked[0].item);
+  for (const { item } of ranked.slice(1)) {
+    for (const key of ['authors', 'publisher', 'publicationDate', 'language', 'binding', 'edition', 'pageCount'] as const) {
+      const prior = merged[key];
+      if (prior == null || prior === '' || (Array.isArray(prior) && !prior.length)) merged[key] = structuredClone(item[key]) as never;
+    }
+    for (const scope of ['item', 'package'] as const) if (item.physical?.[scope]) {
+      merged.physical ||= {};
+      merged.physical[scope] = { ...item.physical[scope], ...merged.physical[scope] };
+    }
+  }
+  merged.images = ranked.flatMap(({ item }) => item.images || []);
+  return merged;
 }
 function publicAmazonImage(value: unknown): value is string {
   if (!isImageReference(value)) return false;
@@ -132,7 +161,7 @@ function catalogImages(images: CatalogItem['images']) {
     const url = new URL(image.link);
     const identity = imageIdentity(url.href), width = pixels(image.width), area = width * pixels(image.height), prior = best.get(identity);
     const variant = image.variant === 'MAIN' || prior?.variant === 'MAIN' ? 'MAIN' : prior?.variant || image.variant;
-    if (!prior || area > prior.area || (area === prior.area && width > prior.width)) best.set(identity, { variant, link: url.href, area, width });
+    if (!prior || area > prior.area || (area === prior.area && (width > prior.width || (width === prior.width && url.href.localeCompare(prior.link) < 0)))) best.set(identity, { variant, link: url.href, area, width });
     else prior.variant = variant;
   }
   const ranked = [...best.values()].sort((a, b) => a.variant.localeCompare(b.variant) || b.area - a.area || b.width - a.width);
@@ -243,7 +272,7 @@ export async function complementAmazonImages(book: BookInfo | null, isbn: string
     return { ...enriched, coverUrl: existing[0] || images[0], additionalImages: images.slice(1) };
   } catch { return book; } // No retries or bypass when the existing extractor is unavailable or blocked.
 }
-export type AmazonOfficialResult = { book: BookInfo | null; status: 'success' | 'not_found' | 'ambiguous' | 'unavailable' | 'skipped' };
+export type AmazonOfficialResult = { candidates?: CatalogItem[]; book: BookInfo | null; status: 'success' | 'not_found' | 'ambiguous' | 'unavailable' | 'skipped' };
 export async function searchAmazonOfficial(isbn: string, user: User, signal?: AbortSignal): Promise<AmazonOfficialResult> {
   if (!canUseAmazonOfficial(user)) return { book: null, status: 'skipped' };
   try {
@@ -257,11 +286,28 @@ export async function searchAmazonOfficial(isbn: string, user: User, signal?: Ab
     if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) { void response.body?.cancel(); return { book: null, status: 'unavailable' }; }
     const result = await response.json();
     if (result.isbn !== cleanIsbn(isbn) || !Array.isArray(result.items)) return { book: null, status: 'unavailable' };
-    const items: CatalogItem[] = result.items.filter((item: CatalogItem) => item?.isbn === cleanIsbn(isbn) && item.marketplaceId === 'A2Q3Y263D00KWC');
+    const items: CatalogItem[] = result.items.filter((item: CatalogItem) => item && typeof item === 'object' && item.marketplaceId === 'A2Q3Y263D00KWC');
     if (!items.length) return { book: null, status: 'not_found' };
-    if (result.hasMore === true) return { book: null, status: 'ambiguous' };
+    if (items.some(item => ['title', 'asin', 'isbn', 'isbn10', 'isbn13', 'publisher', 'edition', 'publicationDate', 'language', 'binding']
+      .some(key => item[key as keyof CatalogItem] != null && typeof item[key as keyof CatalogItem] !== 'string')
+      || (item.authors != null && (!Array.isArray(item.authors) || item.authors.some(author => typeof author !== 'string')))
+      || (item.images != null && !Array.isArray(item.images))
+      || (item.identifiers != null && (!Array.isArray(item.identifiers) || item.identifiers.some(id => !id || typeof id.type !== 'string' || typeof id.identifier !== 'string')))))
+      return { book: null, status: 'unavailable' };
+    // Keep only the public catalog contract, excluding unexpected upstream properties.
+    const candidates = items.map(item => Object.fromEntries(Object.entries(item).filter(([key]) =>
+      ['asin', 'isbn', 'isbn10', 'isbn13', 'identifiers', 'marketplaceId', 'title', 'authors', 'publisher', 'edition',
+        'publicationDate', 'language', 'binding', 'pageCount', 'physical', 'images'].includes(key)))) as CatalogItem[];
+    if (items.some(item => canonicalBookIsbn(item.isbn) !== canonicalBookIsbn(isbn)))
+      return { book: null, status: 'ambiguous', candidates };
+    if (result.hasMore === true) return { book: null, status: 'ambiguous', candidates };
     const item = items.length === 1 ? items[0] : selectEquivalentAmazonRecord(items, isbn);
-    if (!item) return { book: null, status: 'ambiguous' };
+    if (!item) return { book: null, status: 'ambiguous', candidates };
+    const ids = [item.isbn10, item.isbn13, ...(item.identifiers || [])
+      .filter(id => /^(ISBN(?:_10|_13)?|EAN|EAN_13|GTIN|GTIN_13|GTIN_14)$/.test(id.type)).map(id => id.identifier)].filter(Boolean);
+    if (!/^[A-Z0-9]{10}$/.test(item.asin) || !canonicalBookIsbn(isbn)
+      || ids.some(id => typeof id !== 'string' || canonicalBookIsbn(id.replace(/^0(?=97[89]\d{10}$)/, '')) !== canonicalBookIsbn(isbn)))
+      return { book: null, status: 'ambiguous', candidates };
     const text = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : undefined;
     const actualIdentifiers = Array.isArray(item.identifiers) ? item.identifiers.filter(id => id && typeof id.identifier === 'string' && (
       (id.type === 'ISBN_10' && /^\d{9}[\dX]$/.test(id.identifier)) || (id.type === 'ISBN_13' && /^97[89]\d{10}$/.test(id.identifier)))) : [];
@@ -285,7 +331,7 @@ export async function searchAmazonOfficial(isbn: string, user: User, signal?: Ab
         ? { amazonCatalogReference: { asin: item.asin, isbn: canonical, marketplaceId: item.marketplaceId } } : {}),
       authors: Array.isArray(item.authors) ? item.authors.map(text).filter((v): v is string => Boolean(v)) : undefined,
       publisher: text(item.publisher), publishedDate: normalizePublicationDate(item.publicationDate), year: publicationYear(item.publicationDate), language: amazonLanguage(item.language),
-      format: amazonBinding(item.binding), edition: text(item.edition), pageCount: Number.isInteger(item.pageCount) && item.pageCount! > 0 ? item.pageCount : undefined,
+      format: amazonBinding(item.binding), edition: text(item.edition), pageCount: Number.isInteger(item.pageCount) && item.pageCount! > 0 && item.pageCount! <= 20000 ? item.pageCount : undefined,
       ...(physical ? { amazonPhysical: physical, ...amazonPhysicalFields(physical) } : {}),
       ...(images.coverUrl ? { coverUrl: images.coverUrl } : {}),
       ...(images.additionalImages.length ? { additionalImages: images.additionalImages } : {}),
@@ -296,7 +342,7 @@ export async function searchAmazonOfficial(isbn: string, user: User, signal?: Ab
     if (!book.title && !book.authors?.length && !book.publisher && !book.publishedDate && !book.language && !book.format && !book.edition && !book.pageCount
       && !book.weight && !book.width && !book.height && !book.depth && !book.coverUrl && !book.additionalImages?.length)
       return { book: null, status: 'not_found' };
-    return { status: 'success', book };
+    return { status: 'success', book, candidates };
   } catch { return { book: null, status: 'unavailable' }; }
 }
 export function complementWithAmazon(base: BookInfo | null, amazon: BookInfo | null): BookInfo | null {
@@ -311,6 +357,11 @@ export function complementWithAmazon(base: BookInfo | null, amazon: BookInfo | n
       'Formato físico/digital divergente na Amazon; formato da fonte prioritária preservado para revisão.'])];
   }
   for (const key of ['title', 'authors', 'publisher', 'publishedDate', 'language', 'format', 'edition', 'pageCount', 'isbn10', 'isbn13', 'rawIdentifiers'] as const) {
+    if (key === 'publishedDate' && !merged.publishedDate && merged.year && amazon.publishedDate && String(merged.year) !== publicationYear(amazon.publishedDate)) {
+      merged.bibliographicWarnings = [...new Set([...(merged.bibliographicWarnings || []),
+        'Ano/data de publicação divergentes na Amazon; ano da fonte prioritária preservado.'])];
+      continue;
+    }
     const current = merged[key], value = amazon[key];
     const missing = current == null || (typeof current === 'string' && !current.trim()) || (Array.isArray(current) && !current.length)
       || (key === 'pageCount' && typeof current === 'number' && current <= 0);

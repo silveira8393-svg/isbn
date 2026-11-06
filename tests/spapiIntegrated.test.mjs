@@ -139,13 +139,14 @@ for(const [name,patch] of Object.entries({
  assert.equal(client.selectEquivalentAmazonRecord([full,{...duplicateSparse,...patch}],isbn),undefined);
 });
 
-test('ISBN/title or richer record alone cannot select; complementary facts never splice; truncated results remain ambiguous',async t=>{
+test('ISBN/title or richer record alone cannot select; proven equivalents complement gaps; truncated results remain ambiguous',async t=>{
  const noAnchors={...duplicateSparse,authors:undefined,binding:undefined};
  assert.equal(client.selectEquivalentAmazonRecord([duplicateFull,noAnchors],isbn),undefined);
  const onlyAuthor={...duplicateSparse,binding:undefined};
  assert.equal(client.selectEquivalentAmazonRecord([duplicateFull,onlyAuthor],isbn),undefined);
  const splitA={...duplicateSparse,publisher:'Editora Inventada'},splitB={...duplicateSparse,pageCount:320};
- assert.equal(client.selectEquivalentAmazonRecord([splitA,splitB],isbn),undefined);
+ const combined=client.selectEquivalentAmazonRecord([splitA,splitB],isbn);
+ assert.equal(combined.publisher,'Editora Inventada');assert.equal(combined.pageCount,320);
  globalThis.__spapiSession={data:{session:{user:{id:uid},access_token:'synthetic-session'}}};t.after(()=>delete globalThis.__spapiSession);
  t.mock.method(globalThis,'fetch',async()=>Response.json({isbn,items:[duplicateFull,duplicateSparse],hasMore:true}));
  assert.equal((await client.searchAmazonOfficial(isbn,user)).status,'ambiguous');
@@ -177,13 +178,14 @@ test('safe physical record fills gaps but preserves priority language/format, le
  const print=client.complementWithAmazon({...base,format:'CD - Capa Dura'},ebook.book);assert.equal(print.format,'CD - Capa Dura');
 });
 
-test('real reported duplicate ASINs remain ambiguous in either order; a richer record is never chosen',async t=>{
+test('reported edition-specific titles and paired ISBNs prove equivalence in either order',async t=>{
  const before=structuredClone(mitologiaFixture);
  globalThis.__spapiSession={data:{session:{user:{id:uid},access_token:'synthetic-session'}}};
  t.after(()=>delete globalThis.__spapiSession);
  for(const items of [mitologiaFixture.items,[...mitologiaFixture.items].reverse()]){
   t.mock.method(globalThis,'fetch',async()=>Response.json({...mitologiaFixture,items}));
-  assert.deepEqual(await client.searchAmazonOfficial('8551003666',user),{book:null,status:'ambiguous'});
+  const result=await client.searchAmazonOfficial('8551003666',user);
+  assert.equal(result.status,'success');assert.deepEqual(result.book.authors,['Gaiman, Neil']);assert.equal(result.book.pageCount,288);assert.equal(result.candidates.length,2);
  }
  t.mock.method(globalThis,'fetch',async()=>Response.json({...mitologiaFixture,items:[mitologiaFixture.items[0]]}));
  const single=await client.searchAmazonOfficial('8551003666',user);assert.equal(single.status,'success');
@@ -293,7 +295,7 @@ test('existing ISBN form automatically complements missing fields without replac
 
 test('duplicate Amazon response preserves primary bibliography and gallery in Consulta and NOVO/USADO; no laboratory fallback',async t=>{
  let calls=0,labCalls=0;
- t.mock.method(globalThis,'fetch',async()=>{calls++;return Response.json(mitologiaFixture);});
+ t.mock.method(globalThis,'fetch',async()=>{calls++;return Response.json({...mitologiaFixture,items:mitologiaFixture.items.map((item,i)=>i?{...item,title:'Outra obra: outro subtitulo'}:item)});});
  const primary={id:'primary',title:'Mitologia confirmada',isbn13:'9788551003664',language:'Português',publisher:'Intrínseca',coverUrl:'https://images.invalid/selected.jpg',additionalImages:['https://images.invalid/inside.jpg']};
  const view=mountApp({brasil:{book:primary,diagnostic:{status:200}},curitiba:{book:{isbn13:primary.isbn13,edition:'Edição confirmada'},diagnostic:{status:200}},lab:async()=>{labCalls++;assert.fail('No ambiguous-image fallback');}});
  await view.search('8551003666');view.render();
@@ -310,7 +312,7 @@ test('duplicate Amazon response preserves primary bibliography and gallery in Co
 });
 
 test('ambiguous Amazon without another match requests review and retains the existing manual form',async t=>{
- t.mock.method(globalThis,'fetch',async()=>Response.json(mitologiaFixture));
+ t.mock.method(globalThis,'fetch',async()=>Response.json({...mitologiaFixture,items:mitologiaFixture.items.map((item,i)=>i?{...item,title:'Outra obra: outro subtitulo'}:item)}));
  const view=mountApp({brasil:{book:null,diagnostic:{status:404}},curitiba:{book:null,diagnostic:{status:404}},lab:async()=>assert.fail('No ambiguous fallback')});
  await view.search('8551003666');view.render();
  assert.equal(view.find('ResearchSourcesPanel').props.states.amazon,'review_required');
@@ -554,12 +556,12 @@ test('attribute measurements and explicit publisher aliases supplement missing d
   assert.equal(result.items[0].publisher, null); assert.equal(result.items[0].physical, null);
 });
 
-test('package-only, invalid and unsupported measurements never masquerade as item g/cm; invalid ISBN check digits ignored', async t => {
+test('package-only, invalid and unsupported measurements never masquerade as item g/cm; server rejects invalid ISBN check digits', async t => {
   globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
   t.after(() => { delete globalThis.__spapiSession; });
   let payload, label;
   t.mock.method(globalThis, 'fetch', async () => Response.json({ isbn, items: [{ isbn, asin: 'SYNTHETIC1', marketplaceId: api.MARKETPLACE,
-    title: 'Fixture', language: label, binding: label, physical: payload, identifiers: [{ type: 'ISBN_10', identifier: '8535914847' }, { type: 'ISBN_13', identifier: '9780515154559' }, { type: 'ISBN_13', identifier: Number(isbn) }] }] }));
+    title: 'Fixture', language: label, binding: label, physical: payload }] }));
   for (const physical of [{ package: { weight: { value: 3, unit: 'kilograms' }, width: { value: 30, unit: 'centimeters' } } },
     { item: { weight: { value: 7, unit: 'unknown' }, width: { value: -1, unit: 'centimeters' }, height: { value: '20', unit: 'centimeters' } } }]) {
     payload = physical; label = physical.item ? '__proto__' : 'constructor';
@@ -1128,4 +1130,78 @@ test('CAPTCHA with a partial gallery preserves the existing two images, without 
   });
   assert.equal(await client.complementAmazonImages(base, base.isbn13, user), base);
   assert.equal(calls, 1);
+});
+
+const syntheticEquivalents=JSON.parse(await readFile('tests/fixtures/amazon-equivalent-synthetic.json','utf8'));
+function officialSession(t) {
+ globalThis.__spapiSession={data:{session:{user:{id:uid},access_token:'synthetic-session'}}};
+ t.after(()=>delete globalThis.__spapiSession);
+}
+for(const count of [1,2,3,6]) test('synthetic edition-specific equivalence with '+count+' records fills compatible gaps deterministically',async t=>{
+ officialSession(t);const fixture=syntheticEquivalents;
+ const items=count===1?[fixture.items[0]]:[...fixture.items,...Array.from({length:count-2},(_,i)=>({...fixture.items[1],asin:'EXTRA'+String(i).padStart(5,'0')}))];
+ const before=structuredClone(items);let first;
+ for(const candidates of [items,[...items].reverse()]) {
+  t.mock.method(globalThis,'fetch',async()=>Response.json({...fixture,items:candidates}));
+  const result=await client.searchAmazonOfficial(fixture.isbn,user);
+  assert.equal(result.status,'success');assert.equal(result.book.pageCount,216);assert.equal(result.book.weight,420);
+  assert.equal(result.book.coverUrl,fixture.items[0].images[2].link);assert.equal(result.book.amazonImages.length,1);
+  assert.equal(result.book.additionalImages,undefined);assert.equal(result.candidates.length,count);
+  if(count>1)assert.equal(result.book.publisher,'Selo de Ensaio');
+  if(first)assert.deepEqual(result.book,first);first=result.book;
+ }
+ assert.deepEqual(items,before);
+});
+for(const [name,patch] of Object.entries({
+ subtitle:{title:'Atlas das marés: história de outro continente - Edição ilustrada Capa Dura'},
+ editionTitle:{title:'Atlas das marés - Edição ampliada Capa Dura'},
+ formatTitle:{title:'Atlas das marés - Edição ilustrada Capa Comum'},
+ hiddenFormatConflict:{binding:'ebook'},authors:{authors:['Outra pessoa']},pages:{pageCount:999},
+ date:{publicationDate:'2025-01-01'},edition:{edition:'2'},
+ isbn:{isbn13:'9788535914849'},isbnChecksum:{isbn10:'1234567890'},
+})) test('edition-specific identity refuses '+name+' and retains both candidates',async t=>{
+ officialSession(t);const f=syntheticEquivalents;
+ const items=[{...f.items[0],edition:'1'},{...f.items[1],...patch}];
+ t.mock.method(globalThis,'fetch',async()=>Response.json({...f,items}));
+ const result=await client.searchAmazonOfficial(f.isbn,user);
+ assert.equal(result.status,'ambiguous');assert.equal(result.book,null);assert.deepEqual(result.candidates,items);
+});
+test('paired ISBNs plus plain title or commercial text alone do not establish edition identity',()=>{
+ const items=syntheticEquivalents.items.map(item=>({...item,title:'Atlas das marés',binding:undefined}));
+ assert.equal(client.selectEquivalentAmazonRecord(items,syntheticEquivalents.isbn),undefined);
+ const unsupported=syntheticEquivalents.items.map(item=>({...item,isbn10:undefined,identifiers:item.identifiers.filter(id=>id.type==='ISBN_13')}));
+ assert.equal(client.selectEquivalentAmazonRecord(unsupported,syntheticEquivalents.isbn),undefined);
+});
+test('single contradictory identifier is reviewable rather than silently discarded',async t=>{
+ officialSession(t);const f=syntheticEquivalents;
+ t.mock.method(globalThis,'fetch',async()=>Response.json({...f,items:[{...f.items[0],isbn10:'1234567890'}]}));
+ const result=await client.searchAmazonOfficial(f.isbn,user);assert.equal(result.status,'ambiguous');assert.equal(result.book,null);
+});
+test('malformed catalog, invalid JSON and HTTP failure never discard priority bibliography',async t=>{
+ officialSession(t);const base={id:'priority',title:'Confirmado',language:'Português',format:'DIGITAL'};
+ for(const response of [()=>Response.json({isbn,items:null}),()=>new Response('{',{headers:{'content-type':'application/json'}}),()=>new Response('',{status:503})]) {
+  t.mock.method(globalThis,'fetch',async()=>response());const result=await client.searchAmazonOfficial(isbn,user);
+  assert.equal(result.status,'unavailable');assert.equal(client.complementWithAmazon(base,result.book),base);
+ }
+});
+test('reported equivalent pair reaches all roles and NOVO/USADO while retaining priority DIGITAL, Portuguese and gallery',async t=>{
+ t.mock.method(globalThis,'fetch',async()=>Response.json(mitologiaFixture));
+ for(const role of ['developer','admin','operator']) {
+  const primary={id:'priority',title:'Mitologia confirmada',publisher:'Intrínseca',language:'Português',format:'DIGITAL',isbn13:'9788551003664',coverUrl:'https://example.invalid/manual.jpg',additionalImages:['https://example.invalid/inside.jpg']};
+  const view=mountApp({user:{currentUser:{...user,role},operationEnvironment:role==='developer'?'development':'production'},brasil:{book:primary,diagnostic:{status:200}}});
+  await view.search('8551003666');view.render();assert.equal(view.find('ResearchSourcesPanel').props.states.amazon,'found');
+  const book=view.find('BookDetailsCard').props.book;
+  for(const key of ['title','publisher','language','format','coverUrl','additionalImages'])assert.deepEqual(book[key],primary[key]);
+  assert.deepEqual(book.authors,['Gaiman, Neil']);assert.equal(book.pageCount,288);assert.equal(book.publishedDate,'2018-08-17');
+  assert.match(book.bibliographicWarnings.join(' '),/digital/);assert.equal(book.amazonCandidates.length,2);
+  for(const condition of ['novo','usado']) {
+   view.find('MagazordStatusCard').props.onOpenRegistration(condition);view.render();const draft=view.find('ProductRegistrationForm').props.draft;
+   assert.equal(draft.pageCount,288);assert.equal(draft.language,'Português');assert.equal(draft.condition,condition);assert.equal(draft.mainImageUrl,primary.coverUrl);
+   view.find('ProductRegistrationForm').props.onBackToSearch();view.render();
+  }
+ }
+});
+test('an existing priority year prevents importing a contradictory Amazon publication date',()=>{
+ const merged=client.complementWithAmazon({id:'priority',title:'Confirmado',year:'2020'},{id:'amazon',title:'Outro',publishedDate:'2024-01-01'});
+ assert.equal(merged.year,'2020');assert.equal(merged.publishedDate,undefined);assert.match(merged.bibliographicWarnings.join(' '),/Ano/);
 });

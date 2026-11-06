@@ -148,7 +148,12 @@ test('official references require a matching returned identifier and stay bound 
     { ...catalog.items[0], identifiers: [{ type: 'ISBN_13', identifier: '9788535914849' }] }]) {
     t.mock.method(globalThis, 'fetch', async () => Response.json({ isbn, items: [item] }));
     const result = await api.searchAmazonOfficial(isbn, user);
-    assert.equal(result.book.amazonCatalogReference, undefined);
+    assert.equal(result.book?.amazonCatalogReference, undefined);
+    if (item.asin === '../secret' || item.identifiers.some(id => id.identifier === '9788535914849')) {
+      assert.equal(result.status, 'ambiguous');
+      assert.equal(result.book, null);
+      assert.equal(result.candidates.length, 1);
+    }
   }
   const official = { id: 'official', title: 'Official', isbn13: isbn, amazonCatalogReference: { asin, isbn, marketplaceId } };
   assert.equal(api.complementWithAmazon({ id: 'other', title: 'Other', isbn13: '9788535914849' }, official).amazonCatalogReference, undefined);

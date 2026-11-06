@@ -13,6 +13,7 @@ export interface BookSourceLink {
   kind: 'info' | 'preview';
   url: string;
   isbn: string;
+  reviewRequired?: boolean;
 }
 
 export interface BookInfo {
@@ -56,6 +57,9 @@ export interface BookInfo {
   amazonImages?: { variant: string; link: string }[];
   // Internal edition reference from a matching official catalog result; never a replacement ISBN.
   amazonCatalogReference?: { asin: string; isbn: string; marketplaceId: string };
+  // Returned SP-API candidates retained for optional review, never registration fields.
+  amazonCandidates?: AmazonCatalogCandidate[];
+  amazonReviewRequired?: boolean;
   // Field names/reasons only; source values remain available in the laboratory for review.
   bibliographicWarnings?: string[];
   enrichmentSource?: string;
@@ -66,6 +70,15 @@ export interface BookInfo {
   sourceLinks?: BookSourceLink[];
   googleBooksReference?: { volumeId: string; isbn: string; infoLink?: string; previewLink?: string;
     coverUrl?: string; descriptionAvailable: boolean; contentReviewRequired: true };
+}
+
+export interface AmazonCatalogCandidate {
+  asin: string; isbn: string; marketplaceId: string;
+  isbn10?: string; isbn13?: string; identifiers?: { type: string; identifier: string }[];
+  title?: string; authors?: string[]; publisher?: string; edition?: string;
+  publicationDate?: string; language?: string; binding?: string; pageCount?: number;
+  physical?: BookInfo['amazonPhysical'];
+  images?: { variant: string; link: string; width?: number; height?: number }[];
 }
 
 export type BookCondition = 'novo' | 'usado';

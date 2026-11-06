@@ -99,3 +99,24 @@ test('Google link must match its selected volume and duplicate info/preview link
  const links=api.bookSourceLinks(book);assert.equal(links.length,2);assert.ok(links.every(link=>link.url===google));
  const html=render(api.Links,{book});assert.equal((html.match(/target="_blank"/g)||[]).length,1);
 });
+
+test('ambiguous returned Amazon ASINs render identified optional links and candidate cover without selecting a product',()=>{
+ const candidates=[{asin:'TESTBOOK01',isbn,marketplaceId:'A2Q3Y263D00KWC',title:'Primeira edição',images:[{variant:'MAIN',link:'https://m.media-amazon.com/images/I/Test._SL100_.jpg',width:100,height:150},{variant:'MAIN',link:'https://m.media-amazon.com/images/I/Test._SL1000_.jpg',width:1000,height:1500}]},{asin:'TESTBOOK02',isbn,marketplaceId:'A2Q3Y263D00KWC',title:'Outra edição'},{asin:'invalid/asin',isbn,marketplaceId:'A2Q3Y263D00KWC'}];
+ const book={id:'priority',title:'Confirmado',isbn13:isbn,amazonReviewRequired:true,amazonCandidates:candidates};
+ const before=structuredClone(book);const links=api.bookSourceLinks(book);
+ assert.equal(links.length,2);assert.ok(links.every(link=>link.reviewRequired));
+ const html=render(api.Links,{book});
+ for(const asin of ['TESTBOOK01','TESTBOOK02'])assert.ok(html.includes('https://www.amazon.com.br/dp/'+asin));
+ assert.match(html,/candidato TESTBOOK01/);assert.match(html,/Capa candidata/);assert.match(html,/_SL1000_/);assert.doesNotMatch(html,/_SL100_/);
+ assert.equal(book.amazonCatalogReference,undefined);assert.equal(book.coverUrl,undefined);assert.deepEqual(book,before);
+ for(const condition of ['novo','usado']) {
+  const draft=api.createRegistrationDraft(book,condition);const formLinks=render(api.Links,{book:draft});
+  assert.match(formLinks,/candidato TESTBOOK01/);assert.match(formLinks,/candidato TESTBOOK02/);assert.equal(draft.mainImageUrl,undefined);
+  assert.equal(api.createRegistrationSnapshot(draft,new Date().toISOString()).fields.amazonCandidates,undefined);
+ }
+});
+test('a confirmed returned reference presents its sole product link rather than ambiguous candidate links',()=>{
+ const book={isbn13:other,amazonCatalogReference:amazon,amazonReviewRequired:false,amazonCandidates:[{asin:'TESTBOOK02',isbn:other,marketplaceId:'A2Q3Y263D00KWC'}]};
+ const links=api.bookSourceLinks(book);assert.equal(links.length,1);assert.equal(links[0].url,'https://www.amazon.com.br/dp/'+amazon.asin);
+ assert.doesNotMatch(render(api.Links,{book}),/candidato/);
+});

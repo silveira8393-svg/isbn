@@ -2,7 +2,7 @@ import type { BookInfo, BookSourceLink } from '../types';
 import { canonicalBookIsbn } from './isbn.js';
 import { matchesBookIsbn } from './researchSources.js';
 
-type LinkBook = Pick<BookInfo, 'isbn13' | 'isbn10' | 'sourceLinks' | 'amazonCatalogReference' | 'googleBooksReference'>;
+type LinkBook = Pick<BookInfo, 'isbn13' | 'isbn10' | 'sourceLinks' | 'amazonCatalogReference' | 'googleBooksReference' | 'amazonCandidates' | 'amazonReviewRequired'>;
 const curitibaHosts = ['www.livrariascuritiba.com.br', 'livrariascuritiba.com.br', 'www.distribuidoracuritiba.com.br', 'distribuidoracuritiba.com.br'];
 export function validSourceLink(link: BookSourceLink, isbn: string): boolean {
   const expected = canonicalBookIsbn(isbn);
@@ -27,6 +27,10 @@ export function bookSourceLinks(book: LinkBook): BookSourceLink[] {
   if (!isbn || !matchesBookIsbn(book, isbn)) return [];
   const candidates = [...(book.sourceLinks || [])];
   const amazon = book.amazonCatalogReference;
+  if (book.amazonReviewRequired) for (const candidate of book.amazonCandidates || []) {
+    if (candidate.marketplaceId === 'A2Q3Y263D00KWC' && /^[A-Z0-9]{10}$/.test(candidate.asin))
+      candidates.push({ source: 'amazon', kind: 'info', isbn, url: `https://www.amazon.com.br/dp/${candidate.asin}`, reviewRequired: true });
+  }
   if (amazon && amazon.isbn === isbn && amazon.marketplaceId === 'A2Q3Y263D00KWC' && /^[A-Z0-9]{10}$/.test(amazon.asin))
     candidates.push({ source: 'amazon', kind: 'info', isbn, url: `https://www.amazon.com.br/dp/${amazon.asin}` });
   const google = book.googleBooksReference;

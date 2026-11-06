@@ -36,6 +36,7 @@ import { searchGoogleBooks, complementWithGoogleBooks } from './services/googleB
 import ResearchSourcesPanel from './components/ResearchSourcesPanel';
 import { initialResearchStates, researchOutcome, type ResearchSource, type ResearchState } from './utils/researchSources';
 import { attachBookSourceLinks } from './utils/bookSourceLinks';
+import BookSourceLinks from './components/BookSourceLinks';
 import { loadCuritibaProductLink, appendCuritibaProductLinks } from './services/curitibaProductLink';
 import { searchAmazonOfficial, complementWithAmazon, complementAmazonImages } from './services/amazonOfficial';
 import {
@@ -275,7 +276,10 @@ export default function App() {
       } else if (!enrichedBook) {
         setErrorText('Nenhuma das fontes bibliográficas consultadas localizou a obra. Você pode continuar com cadastro manual após a verificação do simulador abaixo.');
       }
-      const lookupBook = enrichedBook || (isValidIsbnFormat(cleaned) ? isbnBook : null);
+      const lookupBase = enrichedBook || (isValidIsbnFormat(cleaned) ? isbnBook : null);
+      const lookupBook = lookupBase && sameActor() && amazonResult.candidates?.length ? {
+        ...lookupBase, amazonCandidates: amazonResult.candidates, amazonReviewRequired: amazonResult.status === 'ambiguous',
+      } : lookupBase;
       setFoundBook(lookupBook);
       if (lookupBook) {
         const draft = createRegistrationDraft(lookupBook);
@@ -824,6 +828,7 @@ export default function App() {
 
                   {/* Ficha Bibliográfica Completa (Preservada do projeto original) */}
                   {!manualEntry && <BookDetailsCard book={foundBook} />}
+                  {manualEntry && <BookSourceLinks book={foundBook} />}
                 </div>
               )}
 
