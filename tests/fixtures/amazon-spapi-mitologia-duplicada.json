@@ -1,0 +1,22 @@
+{
+  "evidence": "User-confirmed sanitized diagnostic summary: HTTP 200 from the Preview Function. Image URLs and measurement values were not supplied and are omitted; they are not reconstructed.",
+  "http": 200,
+  "body": {
+    "isbn": "8551003666",
+    "items": [
+      {
+        "asin": "8551003666", "isbn": "8551003666", "isbn10": "8551003666", "isbn13": "9788551003664",
+        "identifiers": [{"type":"ISBN_10","identifier":"8551003666"},{"type":"ISBN_13","identifier":"9788551003664"}],
+        "marketplaceId": "A2Q3Y263D00KWC",
+        "title": "Mitologia Nórdica - Edição de Luxo Exclusiva Amazon",
+        "authors": ["Gaiman, Neil"], "publicationDate": "2018-08-17", "language": "english", "binding": "hardcover", "pageCount": 288
+      },
+      {
+        "asin": "B0CQGHT4VD", "isbn": "8551003666", "isbn10": "8551003666", "isbn13": "9788551003664",
+        "identifiers": [{"type":"ISBN_10","identifier":"8551003666"},{"type":"ISBN_13","identifier":"9788551003664"}],
+        "marketplaceId": "A2Q3Y263D00KWC", "title": "Mitologia Nórdica - Edição de Luxo Capa Dura"
+      }
+    ],
+    "hasMore": false, "requiresReview": true, "contentPolicy": "synopsis_omitted"
+  }
+}

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { build } from 'esbuild';
 const serverBuild = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts', contents: `export {createAmazonFunction} from './server/amazonFunction'; export {parseAmazonHtml,toLabResult} from './experimentos/amazon/extrator_amazon'; export {isbn10For} from './experimentos/amazon/consulta_amazon'; export * from './server/spapi/core'; export * from './server/spapi/handler'; export * from './shared/publicationDate'; export {createRegistrationDraft} from './src/utils/draft'; export * from './src/utils/imageUrls'; export {complementWithGoogleBooks} from './src/services/googleBooks'; export {mapGoogleBooksResponse} from './shared/googleBooks';` },
   bundle: true, write: false, platform: 'node', format: 'esm' });
@@ -97,6 +98,26 @@ const clientBuild = await build({ stdin: { resolveDir: process.cwd(), loader: 't
   } }] });
 const client = await import('data:text/javascript;base64,' + Buffer.from(clientBuild.outputFiles[0].text).toString('base64'));
 const user = { id: uid, storeId: '6058abd1-96e5-465b-a1df-292e5cf76de3', role: 'developer', active: true };
+const mitologiaFixture=JSON.parse(await readFile('tests/fixtures/amazon-spapi-mitologia-duplicada.json','utf8')).body;
+
+test('real reported duplicate ASINs remain ambiguous in either order; a richer record is never chosen',async t=>{
+ const before=structuredClone(mitologiaFixture);
+ globalThis.__spapiSession={data:{session:{user:{id:uid},access_token:'synthetic-session'}}};
+ t.after(()=>delete globalThis.__spapiSession);
+ for(const items of [mitologiaFixture.items,[...mitologiaFixture.items].reverse()]){
+  t.mock.method(globalThis,'fetch',async()=>Response.json({...mitologiaFixture,items}));
+  assert.deepEqual(await client.searchAmazonOfficial('8551003666',user),{book:null,status:'ambiguous'});
+ }
+ t.mock.method(globalThis,'fetch',async()=>Response.json({...mitologiaFixture,items:[mitologiaFixture.items[0]]}));
+ const single=await client.searchAmazonOfficial('8551003666',user);assert.equal(single.status,'success');
+ const base={id:'priority',title:'Título confirmado',isbn13:'9788551003664',language:'Português',publisher:'Intrínseca'};
+ assert.equal(client.complementWithAmazon(base,single.book).language,'Português');
+ assert.deepEqual(mitologiaFixture,before);assert.equal(mitologiaFixture.items[0].language,'english');
+ t.mock.method(globalThis,'fetch',async()=>Response.json({...mitologiaFixture,items:[]}));
+ assert.equal((await client.searchAmazonOfficial('8551003666',user)).status,'not_found');
+ t.mock.method(globalThis,'fetch',async()=>Response.json({...mitologiaFixture,items:mitologiaFixture.items.map(i=>({...i,isbn:'9788535914849'}))}));
+ assert.equal((await client.searchAmazonOfficial('8551003666',user)).book,null);
+});
 test('automatic client uses the authenticated same-origin session for all three active store roles', async t => {
   const calls = []; globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
   t.after(() => { delete globalThis.__spapiSession; });
@@ -176,6 +197,36 @@ test('existing ISBN form automatically complements missing fields without replac
   assert.equal(book.title, 'Existing title'); assert.equal(book.publisher, 'Amazon Publisher'); assert.equal(calls, 1);
   view.find('Header').props.onTabChange('cadastro'); view.render();
   assert.equal(view.find('ProductRegistrationForm').props.draft.publisher, 'Amazon Publisher');
+});
+
+test('duplicate Amazon response preserves primary bibliography and gallery in Consulta and NOVO/USADO; no laboratory fallback',async t=>{
+ let calls=0,labCalls=0;
+ t.mock.method(globalThis,'fetch',async()=>{calls++;return Response.json(mitologiaFixture);});
+ const primary={id:'primary',title:'Mitologia confirmada',isbn13:'9788551003664',language:'Português',publisher:'Intrínseca',coverUrl:'https://images.invalid/selected.jpg',additionalImages:['https://images.invalid/inside.jpg']};
+ const view=mountApp({brasil:{book:primary,diagnostic:{status:200}},curitiba:{book:{isbn13:primary.isbn13,edition:'Edição confirmada'},diagnostic:{status:200}},lab:async()=>{labCalls++;assert.fail('No ambiguous-image fallback');}});
+ await view.search('8551003666');view.render();
+ assert.equal(view.find('ResearchSourcesPanel').props.states.amazon,'review_required');
+ const book=view.find('BookDetailsCard').props.book;
+ for(const key of ['title','language','publisher','coverUrl','additionalImages'])assert.deepEqual(book[key],primary[key]);
+ assert.equal(book.edition,'Edição confirmada');assert.equal(book.amazonCatalogReference,undefined);
+ assert.equal(calls,1);assert.equal(labCalls,0);
+ for(const condition of ['novo','usado']){
+  view.find('MagazordStatusCard').props.onOpenRegistration(condition);view.render();const draft=view.find('ProductRegistrationForm').props.draft;
+  assert.equal(draft.language,'Português');assert.equal(draft.mainImageUrl,primary.coverUrl);assert.deepEqual(draft.additionalImageUrls,primary.additionalImages);
+  view.find('ProductRegistrationForm').props.onBackToSearch();view.render();
+ }
+});
+
+test('ambiguous Amazon without another match requests review and retains the existing manual form',async t=>{
+ t.mock.method(globalThis,'fetch',async()=>Response.json(mitologiaFixture));
+ const view=mountApp({brasil:{book:null,diagnostic:{status:404}},curitiba:{book:null,diagnostic:{status:404}},lab:async()=>assert.fail('No ambiguous fallback')});
+ await view.search('8551003666');view.render();
+ assert.equal(view.find('ResearchSourcesPanel').props.states.amazon,'review_required');
+ assert.equal(view.find('h3').props.children,'Revisão bibliográfica necessária');
+ assert.equal(view.find('MagazordStatusCard').props.manualEntry,true);
+ view.find('MagazordStatusCard').props.onOpenRegistration('usado');view.render();
+ assert.equal(view.find('ProductRegistrationForm').props.draft.isbn10,'8551003666');
+ assert.equal(view.find('ProductRegistrationForm').props.draft.quantity,1);
 });
 test('Amazon can supply a missing book and its failures preserve successful primary lookup', async t => {
   t.mock.method(globalThis, 'fetch', async () => Response.json({ isbn, items: [{ isbn, asin: 'SYNTHETIC1', marketplaceId: api.MARKETPLACE, title: 'Amazon title' }] }));

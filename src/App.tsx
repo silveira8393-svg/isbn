@@ -249,7 +249,7 @@ export default function App() {
       const googleBooksResult = await googleBooksPending;
       const googleBooksBook = sameActor() ? googleBooksResult.book : null;
       const googleComplement = complementWithGoogleBooks(bibliographicBook, googleBooksBook, cleaned);
-      const imageBook = sameActor()
+      const imageBook = sameActor() && amazonResult.status !== 'ambiguous'
         ? await complementAmazonImages(googleComplement, cleaned, searchActor) : googleComplement;
       if (galleryController.signal.aborted || galleryGeneration.current !== generation) return;
       const resolvedBook = sameActor() ? imageBook : primaryBook;
@@ -270,6 +270,8 @@ export default function App() {
         setErrorText(`Falha na consulta bibliográfica: ${sources}. Isso não confirma que a obra inexiste. ${enrichedBook
           ? 'Os dados disponíveis foram preservados; complete os campos ausentes no cadastro.'
           : 'Você pode continuar com cadastro manual após a verificação do simulador abaixo.'}`);
+      } else if (!enrichedBook && amazonResult.status === 'ambiguous') {
+        setErrorText('A Amazon SP-API retornou múltiplos registros para este ISBN. Revisão necessária: nenhum registro Amazon foi selecionado automaticamente. Você pode continuar com cadastro manual após a verificação do simulador abaixo.');
       } else if (!enrichedBook) {
         setErrorText('Nenhuma das fontes bibliográficas consultadas localizou a obra. Você pode continuar com cadastro manual após a verificação do simulador abaixo.');
       }
@@ -787,7 +789,7 @@ export default function App() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="text-base font-bold text-slate-900">
-                        {bibliographicState === 'found' ? 'Consulta bibliográfica parcial' : bibliographicState === 'not_found' ? 'Obra não localizada nas fontes consultadas' : 'Falha na consulta bibliográfica'}
+                        {bibliographicState === 'found' ? 'Consulta bibliográfica parcial' : bibliographicState === 'not_found' && researchStates.amazon === 'review_required' ? 'Revisão bibliográfica necessária' : bibliographicState === 'not_found' ? 'Obra não localizada nas fontes consultadas' : 'Falha na consulta bibliográfica'}
                       </h3>
                       <p className="text-sm text-slate-600 mt-1 leading-relaxed">
                         {errorText}

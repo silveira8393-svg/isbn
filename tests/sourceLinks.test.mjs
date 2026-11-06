@@ -27,6 +27,8 @@ test('request outcome distinguishes absence, failures, skipped sources and exact
  assert.equal(api.researchOutcome(null,isbn,'unavailable',404),'unavailable');
  assert.equal(api.researchOutcome(null,isbn,undefined,404),'not_found');
  assert.equal(api.researchOutcome(null,isbn,'not_found',200),'not_found');
+ assert.equal(api.researchOutcome(null,isbn,'ambiguous',200),'review_required');
+ assert.equal(api.researchOutcome(null,isbn,'ambiguous',503),'unavailable');
  assert.equal(api.researchOutcome(null,isbn,'skipped'),'not_consulted');
  assert.equal(api.researchOutcome(null,isbn,'unavailable',undefined,'not_configured'),'not_consulted');
  const markup=render(api.Panel,{states:{brasil_api:'found',curitiba:'not_found',amazon:'not_consulted',google_books:'unavailable'}});
@@ -46,7 +48,7 @@ test('source cards explain skipped SP-API without counting it as queried or rela
  assert.match(skipped,/Pesquisa concluída/);assert.match(skipped,/Fontes consultadas: 3/);
  assert.match(skipped,/Requer usuário autenticado, ativo e vinculado à loja/);
  assert.equal((skipped.match(/<svg /g)||[]).length,4);
- for(const [state,label] of [['found','Encontrado'],['not_found','Não encontrado'],['unavailable','Indisponível']]){
+ for(const [state,label] of [['found','Encontrado'],['not_found','Não encontrado'],['unavailable','Indisponível'],['review_required','Revisão necessária']]){
   const markup=render(api.Panel,{states:{...states,amazon:state}});
   assert.match(markup,/Fontes consultadas: 4/);
   assert.ok(markup.includes(label));assert.doesNotMatch(markup,/Requer usuário autenticado/);

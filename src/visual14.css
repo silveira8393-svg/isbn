@@ -80,7 +80,7 @@ body { margin: 0; background: #04111e; color: #f0f5ff; font: 14px/1.5 var(--font
 .isbn-source-reason { display: block; margin-top: 4px; color: #a5bad1; font-size: 11px; line-height: 1.4; }
 .isbn-sources-panel [data-state=found] .isbn-source-state { color: #58e5ab; }
 .isbn-sources-panel [data-state=not_found] .isbn-source-state { color: #ff9da6; }
-.isbn-sources-panel :is([data-state=unavailable],[data-state=not_consulted]) .isbn-source-state { color: #f4ce79; }
+.isbn-sources-panel :is([data-state=unavailable],[data-state=not_consulted],[data-state=review_required]) .isbn-source-state { color: #f4ce79; }
 .isbn-query-result { display: flex; flex-direction: column; gap: 16px; }
 .isbn-query-result > .isbn-book-details { order: 0; }
 .isbn-query-result > .isbn-integration-card { order: 1; }
