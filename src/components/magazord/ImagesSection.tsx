@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { imageIdentity, imageReferences, isImageReference, isStoredBookImage, openStoredBookImage, prepareLocalBookImage, uploadLocalBookImage, type LocalBookImage } from '../../utils/imageUrls';
 import { RegistrationDraft, User } from '../../types';
+import BookSourceLinks from '../BookSourceLinks';
 import { supabase, supabaseUrl } from '../../lib/supabase';
 import {
   ImageIcon,
@@ -224,6 +225,8 @@ export default function ImagesSection({
           <span>Adicionar URL</span>
         </button>
       </div>
+
+      <BookSourceLinks book={draft} />
 
       {/* Input para adicionar nova imagem por URL */}
       {showAddInput && (

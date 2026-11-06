@@ -8,6 +8,7 @@ import { generateMetaDescription } from './metaDescription';
 import { sanitizeSynopsis } from './sanitizer';
 import { canonicalBookIsbn, cleanIsbn } from './isbn';
 import { imageReferences, isImageReference } from './imageUrls';
+import { bookSourceLinks } from './bookSourceLinks';
 import { formatPhysicalMeasurement, normalizeLanguage, roundPhysicalMeasurement } from './bibliographicNormalization';
 
 export function registrationModeForCondition(condition: BookCondition, mode?: RegistrationMode): RegistrationMode {
@@ -103,7 +104,7 @@ export function createRegistrationDraft(
     typeof book.depth === 'number' && Number.isFinite(book.depth) ? roundPhysicalMeasurement(book.depth) : undefined;
 
   const draft: RegistrationDraft = {
-    ...(book.sourceLinks?.length ? { sourceLinks: book.sourceLinks.map(link => ({ ...link })) } : {}),
+    ...(bookSourceLinks(book).length ? { sourceLinks: bookSourceLinks(book) } : {}),
     condition: initialCondition,
     registrationMode: registrationModeForCondition(initialCondition, registrationMode),
     parentCode: '', // Sempre manual (etiqueta física da loja, ex: LV26579-P)

@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { BookInfo } from '../types';
 import { publicationYear } from '../../shared/publicationDate';
 import { imageReferences } from '../utils/imageUrls';
+import BookSourceLinks from './BookSourceLinks';
 import {
   Building2,
   Calendar,
@@ -206,14 +207,15 @@ export default function BookDetailsCard({ book }: BookDetailsCardProps) {
   const synopsisText = book.synopsis || book.description;
 
   return (
-    <div className="space-y-6 animate-fade-in w-full">
+    <div className="isbn-book-details space-y-6 animate-fade-in w-full">
       {/* ========================================================
           1. CABEÇALHO DO LIVRO & RESUMO RÁPIDO
           ======================================================== */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-7">
+      <div className="isbn-book-overview bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-7">
         <div className="flex flex-col md:flex-row gap-6 lg:gap-8 items-start">
           {/* Capa em destaque */}
           <div className="w-full md:w-52 shrink-0 flex flex-col items-center">
+            <div className="mb-3 w-full"><BookSourceLinks book={book} /></div>
             <div className="relative group w-44 md:w-48 aspect-[3/4] bg-slate-100 rounded-xl overflow-hidden border border-slate-200 shadow-sm flex items-center justify-center">
               {currentCover ? (
                 <img

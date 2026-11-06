@@ -1,4 +1,5 @@
 import { BookInfo } from '../types';
+import { curitibaProductLinks } from '../utils/bookSourceLinks';
 import { imageReferences, isImageReference } from '../utils/imageUrls';
 import { galleryLocation, galleryImage, type CuritibaGalleryRequest, type GalleryDiagnostic } from '../utils/curitibaGallery';
 
@@ -268,6 +269,10 @@ export async function searchBookByIsbnDistribuidoraCuritiba(isbn: string): Promi
       book.thumbnailUrl = imageUrls[0];
       book.additionalImages = imageUrls.slice(1);
     }
+
+    const sourceLinks = curitibaProductLinks(detailProduct,
+      [detailProduct.nuCdBarras, product.nuCdBarras, fields.AD_CDISBN].filter((id): id is string => typeof id === 'string' && !!id.trim()), sanitizedIsbn);
+    if (sourceLinks.length) book.sourceLinks = sourceLinks;
 
     return {
       book,

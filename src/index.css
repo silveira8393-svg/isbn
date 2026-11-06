@@ -4,35 +4,152 @@
 @theme {
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-blue-50: #eef5ff;
+  --color-blue-100: #e8f1ff;
+  --color-blue-200: #c5dbfc;
+  --color-blue-300: #9abff4;
+  --color-blue-400: #639bea;
+  --color-blue-500: #327ee3;
+  --color-blue-600: #1565d8;
+  --color-blue-700: #0e52bd;
+  --color-blue-800: #16458f;
+  --color-blue-900: #15366c;
+  --color-blue-950: #0d1b3d;
+  --color-slate-50: #f5f7fb;
+  --color-slate-100: #edf1f7;
+  --color-slate-200: #dce3ee;
+  --color-slate-300: #becbdc;
+  --color-slate-400: #64748b;
+  --color-slate-500: #526277;
+  --color-slate-600: #46556a;
+  --color-slate-700: #334155;
+  --color-slate-800: #27364b;
+  --color-slate-900: #1f2937;
+  --color-slate-950: #101c30;
+  /* Indigo/violet/purple eram destaques de interface, não estados de alerta. */
+  --color-indigo-50: var(--color-blue-50);
+  --color-indigo-100: var(--color-blue-100);
+  --color-indigo-200: var(--color-blue-200);
+  --color-indigo-300: var(--color-blue-300);
+  --color-indigo-400: var(--color-blue-400);
+  --color-indigo-500: var(--color-blue-500);
+  --color-indigo-600: var(--color-blue-600);
+  --color-indigo-700: var(--color-blue-700);
+  --color-indigo-800: var(--color-blue-800);
+  --color-indigo-900: var(--color-blue-900);
+  --color-indigo-950: var(--color-blue-950);
+  --color-purple-50: var(--color-blue-50);
+  --color-purple-100: var(--color-blue-100);
+  --color-purple-200: var(--color-blue-200);
+  --color-purple-500: var(--color-blue-500);
+  --color-purple-600: var(--color-blue-600);
+  --color-purple-700: var(--color-blue-700);
+  --color-purple-800: var(--color-blue-800);
+  --color-violet-50: var(--color-blue-50);
+  --color-violet-100: var(--color-blue-100);
+  --color-violet-200: var(--color-blue-200);
+  --color-violet-500: var(--color-blue-500);
+  --color-violet-600: var(--color-blue-600);
+  --color-violet-700: var(--color-blue-700);
+  --shadow-xs: 0 1px 2px rgb(13 27 61 / 0.04);
+  --shadow-sm: 0 2px 5px rgb(13 27 61 / 0.06);
+  --isbn-navy: #0d1b3d;
+  --isbn-sidebar-width: 208px;
 }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
+.animate-fade-in { animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+body { background: #f5f7fb; color: #1f2937; font: 14px/1.5 var(--font-sans); -webkit-font-smoothing: antialiased; }
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: var(--color-slate-300); border-radius: 6px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--color-slate-400); }
 
-.animate-fade-in {
-  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+/* Shell: variantes responsivas existentes, sem novos destinos ou eventos. */
+.isbn-app-shell { background: #f5f7fb; }
+.isbn-header { order: 0; position: sticky; top: 0; background: var(--isbn-navy); color: white; border-color: #1b3054; box-shadow: none; }
+.isbn-shell-container { max-width: none; padding: 0; }
+.isbn-brand-logo { display: block; width: 176px; height: auto; flex-shrink: 0; }
+.isbn-brand-logo-mobile { width: 94px; }
+.isbn-header h1 { font-size: 16px; font-weight: 650; letter-spacing: -0.025em; }
+.isbn-header p { font-size: 12px; color: #d4e3fb; }
+.isbn-header nav { border: 0; background: transparent; border-radius: 0; padding: 12px 0; gap: 4px; }
+.isbn-header nav button { min-height: 42px; border-radius: 6px; }
+.isbn-header nav button.bg-white { color: white; background: #1565d8; box-shadow: none; }
+.isbn-header nav button:not(.bg-white) { color: #e3ecfb; }
+.isbn-header nav button:hover:not(.bg-white) { background: #1b3159; }
+.isbn-header #btn-user-switcher-toggle { min-height: 40px; background: transparent; border-color: #3b5072; padding-block: 7px; }
+.isbn-header #btn-user-switcher-toggle:hover { background: #1b3159; }
+#user-account-menu { border-radius: 8px; box-shadow: 0 8px 24px rgb(13 27 61 / 0.15); }
+#user-account-menu > div:first-child { background: var(--isbn-navy); }
+.isbn-mobile-shell { padding: 10px 16px 4px; }
+.isbn-mobile-navigation summary { display: flex; align-items: center; gap: 8px; padding: 8px 0; font-size: 13px; cursor: pointer; list-style: none; }
+.isbn-mobile-navigation summary::-webkit-details-marker { display: none; }
+.isbn-mobile-navigation summary::after { content: '+'; margin-left: auto; font-size: 18px; }
+.isbn-mobile-navigation[open] summary::after { content: '\2212'; }
+.isbn-mobile-navigation nav { padding-top: 4px; }
+.isbn-mobile-navigation nav button { font-size: 12px; }
+.isbn-store-context { order: 1; background: #f5f7fb; border: 0; padding: 10px 16px 0; font-size: 12px; color: #526277; }
+.isbn-workspace { order: 2; max-width: none; padding-block: 16px; }
+.isbn-app-shell > footer { order: 3; margin-top: 24px; font-size: 12px; }
+
+/* Tipografia e controles: leitura confortável, preservando estados semânticos. */
+.isbn-workspace .text-xs { font-size: 13px; line-height: 1.45; }
+.isbn-workspace :is(.text-\[10px\], .text-\[11px\]) { font-size: 12px; line-height: 1.4; }
+.isbn-workspace :is(h2, h3) { letter-spacing: -0.025em; }
+.isbn-workspace :is(h2.text-lg, h2.text-xl) { font-size: 22px; line-height: 1.3; }
+.isbn-workspace :is(input:not([type='checkbox']):not([type='radio']):not([type='file']), select, textarea),
+.isbn-login-form input { min-height: 38px; border-radius: 6px; font-size: 14px; }
+.isbn-workspace input::placeholder { color: #64748b; }
+:is(.isbn-workspace, .isbn-login-form) :is(input, select, textarea):focus-visible { outline: 2px solid #1565d8; outline-offset: 2px; box-shadow: none; }
+:is(.isbn-app-shell, .isbn-login) :is(button, a, summary):focus-visible { outline: 2px solid #1565d8; outline-offset: 3px; }
+.isbn-header :is(button, summary):focus-visible { outline-color: #b9d6ff; }
+/* Consulta e ficha completa: sem colapsar dados ou acrescentar etapas. */
+.isbn-search-panel { padding: 18px; }
+.isbn-search-panel > div:first-child { margin-bottom: 14px; }
+.isbn-search-panel h2 { font-size: 18px; font-weight: 650; }
+.isbn-search-panel #isbn-input-field, .isbn-search-panel #search-submit-button { min-height: 42px; }
+.isbn-search-panel #isbn-input-field { background: white; font-size: 15px; }
+.isbn-search-panel #search-submit-button { padding-inline: 22px; }
+.isbn-lookup-empty { min-height: 220px; padding: 24px; background: white; }
+.isbn-lookup-empty > .bg-blue-50 { width: 44px; height: 44px; margin-bottom: 12px; border-radius: 8px; }
+.isbn-lookup-empty h3 { font-size: 18px; }
+.isbn-book-details { gap: 16px; }
+.isbn-book-overview { padding: 20px; background: white; }
+.isbn-book-overview > div { gap: 20px; }
+.isbn-book-overview h2 { font: 650 26px/1.25 var(--font-sans); letter-spacing: -0.035em; }
+.isbn-book-overview > div > div:first-child { width: 160px; }
+.isbn-book-overview .aspect-\[3\/4\] { width: 144px; border-radius: 6px; box-shadow: 0 2px 5px rgb(13 27 61 / 0.08); }
+.isbn-book-details > .grid > .bg-white, .isbn-book-details > .bg-white:not(.isbn-book-overview) { padding: 18px; border-radius: 8px; box-shadow: none; }
+.isbn-book-details h3 { font-size: 15px; text-transform: none; letter-spacing: -0.02em; }
+.isbn-book-details dl > div { gap: 8px; padding-block: 7px; }
+.isbn-integration-card > div:first-child { background: var(--isbn-navy); padding: 14px 18px; }
+
+
+@media (min-width: 768px) {
+  .isbn-header-layout { margin-left: var(--isbn-sidebar-width); height: 68px; padding: 0 24px; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; }
+  .isbn-sidebar { position: fixed; inset: 0 auto 0 0; width: var(--isbn-sidebar-width); padding: 0 12px 20px; overflow-y: auto; background: var(--isbn-navy); border-right: 1px solid #1b3054; }
+  .isbn-sidebar-brand { display: flex; align-items: center; justify-content: center; height: 68px; border-bottom: 1px solid #1b3054; }
+  .isbn-sidebar nav { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; width: 100%; padding-top: 22px; gap: 6px; }
+  .isbn-sidebar nav button { width: 100%; justify-content: flex-start; gap: 12px; padding: 12px; font-size: 14px; }
+  .isbn-sidebar nav button > svg { width: 20px; height: 20px; }
+  .isbn-workspace { width: calc(100% - var(--isbn-sidebar-width)); margin-left: var(--isbn-sidebar-width); margin-right: 0; padding: 18px 24px 24px; }
+  .isbn-store-context { width: calc(100% - var(--isbn-sidebar-width)); margin-left: var(--isbn-sidebar-width); padding: 12px 24px 0; }
+  .isbn-app-shell > footer { width: calc(100% - var(--isbn-sidebar-width)); margin-left: var(--isbn-sidebar-width); }
 }
 
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+@media (min-width: 768px) and (max-width: 1279px) {
+ .isbn-workspace .lg\:grid-cols-12 { grid-template-columns: minmax(0, 1fr); }
+ .isbn-workspace .lg\:col-span-8, .isbn-workspace .lg\:col-span-4 { grid-column: auto; }
 }
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+@media (max-width: 767px) {
+ .isbn-workspace { padding: 14px 16px; }
+ .isbn-search-panel, .isbn-book-overview { padding: 16px; }
+ .isbn-book-overview > div > div:first-child { width: 100%; }
+ .isbn-book-overview h2 { font-size: 24px; }
+ .isbn-search-panel h2 { font-size: 16px; }
 }
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #CBD5E1;
-  border-radius: 9999px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #94A3B8;
-}
-
-body {
-  background-color: #F8FAFC;
-  color: #0F172A;
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-}
+@media (prefers-reduced-motion: reduce) { .animate-fade-in { animation: none; } }

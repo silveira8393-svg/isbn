@@ -142,7 +142,7 @@ function mountApp(options = {}) {
   const module = { exports: {} }; new Function('deps', 'module', 'exports', appBundle.outputFiles[0].text)(deps, module, module.exports);
   function render() { cursor = 0; effects = []; tree = module.exports.default(); effects.forEach(fn => fn()); }
   function nodes(node) { if (!node || typeof node !== 'object') return []; if (Array.isArray(node)) return node.flatMap(n => nodes(n)); return [node, ...nodes(node.props?.children)]; }
-  const find = type => nodes(tree).find(n => n.type === type); render();
+  const find = type => nodes(tree).find(n => n.type === type || (typeof n.type === 'function' && n.type.name === type)); render();
   return { deps, render, find, search: (value = isbn) => find('SearchForm').props.onSearch(value) };
 }
 test('existing ISBN form automatically complements missing fields without replacing sources or adding operator actions', async t => {
@@ -195,6 +195,35 @@ test('a late Google response cannot complement a changed account/store',async t=
   const view=mountApp({googleBooks:pending,googleMerge:api.complementWithGoogleBooks}),work=view.search();
   await new Promise(resolve=>setImmediate(resolve));view.deps.user.currentUser={...view.deps.user.currentUser,storeId:uid};view.render();
   release(googleFixture(isbn));await work;view.render();assert.equal(view.find('BookDetailsCard').props.book.publisher,undefined);
+});
+
+test('compact panel follows independently settled parallel requests without a second source call',async t=>{
+  let release,calls=0;const gate=new Promise(resolve=>{release=resolve;});
+  t.mock.method(globalThis,'fetch',async()=>{calls++;await gate;return Response.json({isbn,items:[]});});
+  const view=mountApp({googleBooks:googleFixture(isbn),googleMerge:api.complementWithGoogleBooks});
+  assert.deepEqual(view.find('ResearchSourcesPanel').props.states,{brasil_api:'waiting',curitiba:'waiting',amazon:'waiting',google_books:'waiting'});
+  const work=view.search();await new Promise(resolve=>setImmediate(resolve));view.render();
+  assert.deepEqual(view.find('ResearchSourcesPanel').props.states,{brasil_api:'found',curitiba:'not_found',amazon:'querying',google_books:'found'});
+  release();await work;view.render();assert.equal(view.find('ResearchSourcesPanel').props.states.amazon,'not_found');assert.equal(calls,1);
+});
+test('new ISBN resets every indicator and never retains the preceding book links or status',async t=>{
+  t.mock.method(globalThis,'fetch',async(url)=>Response.json({isbn:new URL(url,'https://app.invalid').searchParams.get('isbn'),items:[]}));
+  const view=mountApp({googleBooks:googleFixture(isbn),googleMerge:api.complementWithGoogleBooks});
+  await view.search();view.render();assert.equal(view.find('ResearchSourcesPanel').props.states.google_books,'found');
+  const next='9798276439839';view.deps.brasil={book:{id:'next',title:'Next edition',isbn13:next},diagnostic:{status:200}};
+  view.deps.googleBooks={status:'not_found',book:null,diagnostic:{code:'no_results',httpStatus:200}};
+  const work=view.search(next);view.render();assert.equal(view.find('ResearchSourcesPanel').props.states.google_books,'querying');
+  assert.equal(view.find('ResearchSourcesPanel').props.states.curitiba,'waiting');await work;view.render();
+  const book=view.find('BookDetailsCard').props.book;assert.equal(book.isbn13,next);assert.equal(book.sourceLinks,undefined);
+  assert.equal(view.find('ResearchSourcesPanel').props.states.google_books,'not_found');
+});
+test('technical failures stay unavailable while a restricted SP-API remains not consulted',async t=>{
+  t.mock.method(globalThis,'fetch',async()=>{assert.fail('No SP-API request for operator');});
+  const view=mountApp({user:{currentUser:{...user,role:'operator'},operationEnvironment:'development'},
+    brasil:{book:null,diagnostic:{status:404}},curitiba:{book:null,diagnostic:{state:'unavailable',status:503}},
+    googleBooks:{status:'unavailable',book:null,diagnostic:{code:'upstream_http',httpStatus:429}}});
+  await view.search();view.render();assert.deepEqual(view.find('ResearchSourcesPanel').props.states,
+    {brasil_api:'not_found',curitiba:'unavailable',amazon:'not_consulted',google_books:'unavailable'});
 });
 
 test('ISO publication dates normalize without timezone shifts and invalid dates cannot enter the year field', () => {

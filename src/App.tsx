@@ -33,6 +33,9 @@ import {
 } from './types';
 import { searchBookByIsbnBrasilApi } from './services/brasilApi';
 import { searchGoogleBooks, complementWithGoogleBooks } from './services/googleBooks';
+import ResearchSourcesPanel from './components/ResearchSourcesPanel';
+import { initialResearchStates, researchOutcome, type ResearchSource, type ResearchState } from './utils/researchSources';
+import { attachBookSourceLinks } from './utils/bookSourceLinks';
 import { searchAmazonOfficial, complementWithAmazon, complementAmazonImages } from './services/amazonOfficial';
 import {
   mergeBookWithDistribuidora,
@@ -58,6 +61,7 @@ export default function App() {
   const [foundBook, setFoundBook] = useState<BookInfo | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [bibliographicState, setBibliographicState] = useState<'found' | 'not_found' | 'error' | null>(null);
+  const [researchStates, setResearchStates] = useState(initialResearchStates);
   const manualEntry = bibliographicState === 'not_found' || bibliographicState === 'error';
   const [searchedTerm, setSearchedTerm] = useState<string>('');
   const [rawSearchedTerm, setRawSearchedTerm] = useState<string>('');
@@ -78,6 +82,8 @@ export default function App() {
   currentUserRef.current = currentUser;
   const operationEnvironmentRef = useRef(operationEnvironment);
   operationEnvironmentRef.current = operationEnvironment;
+  useEffect(() => { setResearchStates(initialResearchStates()); },
+    [currentUser.id, currentUser.storeId, currentUser.role, currentUser.active, operationEnvironment]);
   useEffect(() => () => {
     galleryGeneration.current++;
     galleryRequest.current?.abort();
@@ -184,6 +190,7 @@ export default function App() {
     deferredGalleryDraft.current = null;
     const galleryController = new AbortController();
     galleryRequest.current = galleryController;
+    setResearchStates(initialResearchStates());
     const actionMode = captureActionMode();
     setIsLoading(true);
     setErrorText(null);
@@ -199,15 +206,31 @@ export default function App() {
 
     try {
       const searchActor = currentUserRef.current;
-      const amazonPending = searchAmazonOfficial(cleaned, searchActor);
-      const googleBooksPending = searchGoogleBooks(cleaned, galleryController.signal);
+      const sameActor = () => currentUserRef.current.id === searchActor.id && currentUserRef.current.storeId === searchActor.storeId
+        && currentUserRef.current.role === searchActor.role && currentUserRef.current.active && operationEnvironmentRef.current === operationEnvironment;
+      const showSource = (source: ResearchSource, state: ResearchState) => {
+        if (sameActor() && galleryGeneration.current === generation && !galleryController.signal.aborted)
+          setResearchStates(previous => ({ ...previous, [source]: state }));
+      };
+      showSource('amazon', 'querying');
+      const amazonPending = searchAmazonOfficial(cleaned, searchActor).then(value => {
+        showSource('amazon', researchOutcome(value.book, cleaned, value.status)); return value;
+      });
+      showSource('google_books', 'querying');
+      const googleBooksPending = searchGoogleBooks(cleaned, galleryController.signal).then(value => {
+        showSource('google_books', researchOutcome(value.book, cleaned, value.status, value.diagnostic.httpStatus, value.diagnostic.code)); return value;
+      });
+      showSource('brasil_api', 'querying');
       const result = await searchBookByIsbnBrasilApi(cleaned).catch(() => ({
         book: null, diagnostic: { status: 'FALHA_CONEXAO' },
       }));
+      showSource('brasil_api', researchOutcome(result.book, cleaned, undefined, result.diagnostic.status));
       // Preserve the source order and enrichment rules, including when BrasilAPI has no book.
+      showSource('curitiba', 'querying');
       const distribuidoraResult: DistribuidoraSearchResult = await searchBookByIsbnDistribuidoraCuritiba(cleaned).catch(() => ({
         book: null, diagnostic: { provider: 'Distribuidora Curitiba', status: 'FALHA_CONEXAO', state: 'unavailable', responseTimeMs: 0 },
       }));
+      showSource('curitiba', researchOutcome(distribuidoraResult.book, cleaned, distribuidoraResult.diagnostic.state, distribuidoraResult.diagnostic.status));
       const galleryPending = 'gallery' in distribuidoraResult && distribuidoraResult.gallery
         ? loadCuritibaGallery(distribuidoraResult.gallery, galleryController.signal) : null;
       const identifiers = cleaned.length === 13 ? { isbn13: cleaned } : { isbn10: cleaned };
@@ -218,8 +241,6 @@ export default function App() {
       } : null;
       const amazonResult = await amazonPending;
       // Never carry an account/store's supplementary data into a newer identity.
-      const sameActor = () => currentUserRef.current.id === searchActor.id && currentUserRef.current.storeId === searchActor.storeId
-        && currentUserRef.current.role === searchActor.role && currentUserRef.current.active && operationEnvironmentRef.current === operationEnvironment;
       const amazonBook = sameActor() ? amazonResult.book : null;
       const bibliographicBook = complementWithAmazon(primaryBook, amazonBook);
       const googleBooksResult = await googleBooksPending;
@@ -228,7 +249,9 @@ export default function App() {
       const imageBook = sameActor()
         ? await complementAmazonImages(googleComplement, cleaned, searchActor) : googleComplement;
       if (galleryController.signal.aborted || galleryGeneration.current !== generation) return;
-      const enrichedBook = sameActor() ? imageBook : primaryBook;
+      const resolvedBook = sameActor() ? imageBook : primaryBook;
+      const enrichedBook = resolvedBook ? attachBookSourceLinks(resolvedBook, cleaned,
+        [result.book, distribuidoraResult.book, amazonBook, googleBooksBook]) : null;
       const failedStatus = (status: number | string) => status !== 404 && !(typeof status === 'number' && status >= 200 && status < 300);
       const brasilFailure = failedStatus(result.diagnostic.status);
       const curitibaFailure = distribuidoraResult.diagnostic.state === 'unavailable' || failedStatus(distribuidoraResult.diagnostic.status);
@@ -687,9 +710,9 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col selection:bg-blue-100 selection:text-blue-800">
+    <div className="isbn-app-shell min-h-screen bg-slate-50 flex flex-col selection:bg-blue-100 selection:text-blue-800">
       {/* 1. Header azul profissional com navegação Consultar | Cadastro | Histórico */}
-      <div className="border-b bg-white px-4 py-2 text-xs text-slate-600">Loja operacional: <strong>{currentUser.storeName}</strong>
+      <div className="isbn-store-context border-b bg-white px-4 py-2 text-xs text-slate-600">Loja operacional: <strong>{currentUser.storeName}</strong>
         {magazordMockService.hasUnscopedLegacyCatalog?.() && <p>O catálogo simulado agora é separado por loja. Registros locais antigos sem identificação de loja estão preservados, sem atribuição automática.</p>}
       </div>
       <Header
@@ -703,7 +726,7 @@ export default function App() {
       />
 
       {/* 2. Main Content Viewport */}
-      <main className={`${activeTab === 'dashboard' ? 'max-w-[1440px]' : 'max-w-7xl'} mx-auto px-4 sm:px-6 py-6 flex-1 w-full`}>
+      <main className={`isbn-workspace ${activeTab === 'dashboard' ? 'max-w-[1440px]' : 'max-w-7xl'} mx-auto px-4 sm:px-6 py-6 flex-1 w-full`}>
         <p data-integration-mode={magazordPresentation.mode} className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">{magazordPresentation.notice}</p>
         {savingAudit > 0 && <p role="status" className="mb-3 text-sm text-slate-600">Confirmando auditoria de {savingAudit} operação(ões)...</p>}
         {auditConfirmation && <p role="status" className="mb-3 break-words text-xs text-slate-600">Último evento com auditoria confirmada: {auditConfirmation.eventId} · {formatStoreDateTime(auditConfirmation.at)} (São Paulo). Este registro não comprova publicação na Magazord.</p>}
@@ -727,6 +750,7 @@ export default function App() {
                 setIsbnValue={setIsbnValue}
                 onOpenScanner={() => setIsScannerOpen(true)}
               />
+              <ResearchSourcesPanel states={researchStates} />
 
               {/* Loading State */}
               {isLoading && (
