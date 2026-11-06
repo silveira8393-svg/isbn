@@ -100,6 +100,83 @@ const client = await import('data:text/javascript;base64,' + Buffer.from(clientB
 const user = { id: uid, storeId: '6058abd1-96e5-465b-a1df-292e5cf76de3', role: 'developer', active: true };
 const mitologiaFixture=JSON.parse(await readFile('tests/fixtures/amazon-spapi-mitologia-duplicada.json','utf8')).body;
 
+// Deliberately fictional metadata on a different checksum-valid ISBN. Not evidence of a real edition.
+const duplicateFull = { isbn, asin:'FICTION001', marketplaceId:api.MARKETPLACE, title:'Cartografia dos ventos',
+ identifiers:[{type:'ISBN_13',identifier:isbn},{type:'ISBN_10',identifier:'8535914846'}],
+ authors:['Autora Fictícia'], publisher:'Editora Inventada', binding:'hardcover', publicationDate:'2021-03-02',
+ language:'portuguese', pageCount:320, physical:{item:{weight:{value:500,unit:'grams'},height:{value:20,unit:'centimeters'}}},
+ images:[{variant:'MAIN',link:'https://m.media-amazon.com/images/I/FictionCover._SL100_.jpg',width:100,height:150},
+ {variant:'MAIN',link:'https://m.media-amazon.com/images/I/FictionCover._SL1000_.jpg',width:1000,height:1500},
+ {variant:'MAIN',link:'https://m.media-amazon.com/images/I/FictionCover._SL500_.jpg',width:500,height:750}] };
+const duplicateSparse={isbn,asin:'FICTION002',marketplaceId:api.MARKETPLACE,title:duplicateFull.title,
+ identifiers:duplicateFull.identifiers,authors:duplicateFull.authors,binding:'hardback'};
+
+test('generic duplicates require independent edition anchors; arbitrary candidate counts and order select one complete record',async t=>{
+ globalThis.__spapiSession={data:{session:{user:{id:uid},access_token:'synthetic-session'}}};
+ t.after(()=>delete globalThis.__spapiSession);
+ for(const size of [2,3,7]) for(const reverse of [false,true]){
+  const items=[duplicateFull,...Array.from({length:size-1},(_,i)=>({...duplicateSparse,asin:`FAKE${String(i).padStart(6,'0')}`}))];
+  if(reverse)items.reverse();
+  const before=structuredClone(items);let calls=0;
+  t.mock.method(globalThis,'fetch',async()=>{calls++;return Response.json({isbn,items});});
+  const result=await client.searchAmazonOfficial(isbn,user);
+  assert.equal(result.status,'success');assert.equal(result.book.amazonCatalogReference.asin,duplicateFull.asin);
+  assert.equal(result.book.pageCount,320);assert.equal(result.book.format,'Capa dura');assert.equal(result.book.weight,500);
+  assert.equal(result.book.coverUrl,duplicateFull.images[1].link);assert.equal(result.book.additionalImages,undefined);
+  assert.equal(result.book.amazonImages.length,1);assert.equal(calls,1);assert.deepEqual(items,before);
+ }
+});
+
+for(const [name,patch] of Object.entries({
+ title:{title:'Outra obra'},author:{authors:['Outra pessoa']},publisher:{publisher:'Outra editora'},date:{publicationDate:'2022-03-02'},
+ binding:{binding:'ebook'},edition:{edition:'2'},pages:{pageCount:321},language:{language:'english'},
+ identifier:{identifiers:[...duplicateSparse.identifiers,{type:'ISBN_13',identifier:'9788584390670'}]},
+ ean:{identifiers:[...duplicateSparse.identifiers,{type:'EAN',identifier:'9788584390670'}]},
+ dimensions:{physical:{item:{height:{value:25,unit:'centimeters'}}}},
+ package:{physical:{package:{weight:{value:600,unit:'grams'}}}},
+}))test(`generic duplicate rejects bibliographic conflict: ${name}`,()=>{
+ const full={...duplicateFull,edition:'1',physical:{...duplicateFull.physical,package:{weight:{value:550,unit:'grams'}}}};
+ assert.equal(client.selectEquivalentAmazonRecord([full,{...duplicateSparse,...patch}],isbn),undefined);
+});
+
+test('ISBN/title or richer record alone cannot select; complementary facts never splice; truncated results remain ambiguous',async t=>{
+ const noAnchors={...duplicateSparse,authors:undefined,binding:undefined};
+ assert.equal(client.selectEquivalentAmazonRecord([duplicateFull,noAnchors],isbn),undefined);
+ const onlyAuthor={...duplicateSparse,binding:undefined};
+ assert.equal(client.selectEquivalentAmazonRecord([duplicateFull,onlyAuthor],isbn),undefined);
+ const splitA={...duplicateSparse,publisher:'Editora Inventada'},splitB={...duplicateSparse,pageCount:320};
+ assert.equal(client.selectEquivalentAmazonRecord([splitA,splitB],isbn),undefined);
+ globalThis.__spapiSession={data:{session:{user:{id:uid},access_token:'synthetic-session'}}};t.after(()=>delete globalThis.__spapiSession);
+ t.mock.method(globalThis,'fetch',async()=>Response.json({isbn,items:[duplicateFull,duplicateSparse],hasMore:true}));
+ assert.equal((await client.searchAmazonOfficial(isbn,user)).status,'ambiguous');
+});
+
+test('equivalence is reusable on a second fictional ISBN and its ISBN-10; invalid checksum never selects',()=>{
+ const other='9781234567897';
+ const remap=(item)=>({...item,isbn:other,identifiers:[{type:'ISBN_13',identifier:other},{type:'ISBN_10',identifier:'123456789X'}]});
+ const items=[remap(duplicateFull),remap(duplicateSparse)];
+ assert.equal(client.selectEquivalentAmazonRecord(items,other).asin,duplicateFull.asin);
+ assert.equal(client.selectEquivalentAmazonRecord(items,'123456789X').asin,duplicateFull.asin);
+ assert.equal(client.selectEquivalentAmazonRecord(items,'9781234567898'),undefined);
+});
+
+test('safe physical record fills gaps but preserves priority language/format, legitimate ebooks and manual values',async t=>{
+ globalThis.__spapiSession={data:{session:{user:{id:uid},access_token:'synthetic-session'}}};t.after(()=>delete globalThis.__spapiSession);
+ t.mock.method(globalThis,'fetch',async()=>Response.json({isbn,items:[duplicateFull,duplicateSparse]}));
+ const {book}=await client.searchAmazonOfficial(isbn,user);
+ const base={id:'priority',title:'Título prioritário',isbn13:isbn,language:'Português',publisher:'Editora prioritária',provenance:{language:'manual'}};
+ const merged=client.complementWithAmazon(base,{...book,language:'Inglês'});
+ assert.equal(merged.language,'Português');assert.equal(merged.title,base.title);assert.equal(merged.publisher,base.publisher);
+ assert.equal(merged.provenance.language,'manual');assert.equal(merged.format,'Capa dura');assert.equal(merged.pageCount,320);
+ for(const format of ['DIGITAL','Livro digital']){
+  const digital=client.complementWithAmazon({...base,format,provenance:{format:'manual'}},book);
+  assert.equal(digital.format,format);assert.equal(digital.provenance.format,'manual');assert.ok(digital.bibliographicWarnings.length);
+ }
+ t.mock.method(globalThis,'fetch',async()=>Response.json({isbn,items:[{...duplicateFull,binding:'ebook',physical:undefined,images:undefined}]}));
+ const ebook=await client.searchAmazonOfficial(isbn,user);assert.equal(ebook.status,'success');assert.equal(ebook.book.format,'Livro digital');
+ const print=client.complementWithAmazon({...base,format:'CD - Capa Dura'},ebook.book);assert.equal(print.format,'CD - Capa Dura');
+});
+
 test('real reported duplicate ASINs remain ambiguous in either order; a richer record is never chosen',async t=>{
  const before=structuredClone(mitologiaFixture);
  globalThis.__spapiSession={data:{session:{user:{id:uid},access_token:'synthetic-session'}}};
@@ -190,6 +267,21 @@ function mountApp(options = {}) {
   const find = type => nodes(tree).find(n => n.type === type || (typeof n.type === 'function' && n.type.name === type)); render();
   return { deps, render, find, search: (value = isbn) => find('SearchForm').props.onSearch(value) };
 }
+
+test('safe generic duplicates reach Consulta and existing NOVO/USADO forms with one cover and physical facts',async t=>{
+ t.mock.method(globalThis,'fetch',async()=>Response.json({isbn,items:[duplicateFull,duplicateSparse]}));
+ const view=mountApp({lab:async()=>({status:'interrompida'})});await view.search();view.render();
+ assert.equal(view.find('ResearchSourcesPanel').props.states.amazon,'found');
+ const book=view.find('BookDetailsCard').props.book;assert.equal(book.title,'Existing title');assert.equal(book.pageCount,320);
+ assert.equal(book.format,'Capa dura');assert.equal(book.coverUrl,duplicateFull.images[1].link);
+ for(const condition of ['novo','usado']){
+  view.find('MagazordStatusCard').props.onOpenRegistration(condition);view.render();
+  const draft=view.find('ProductRegistrationForm').props.draft;
+  assert.equal(draft.condition,condition);assert.equal(draft.quantity,1);assert.equal(draft.pageCount,320);
+  assert.equal(draft.mainImageUrl,book.coverUrl);assert.equal(draft.additionalImageUrls.length,0);
+  view.find('ProductRegistrationForm').props.onBackToSearch();view.render();
+ }
+});
 test('existing ISBN form automatically complements missing fields without replacing sources or adding operator actions', async t => {
   let calls = 0; t.mock.method(globalThis, 'fetch', async () => { calls++; return Response.json({ isbn, items: [{ isbn, asin: 'SYNTHETIC1', marketplaceId: api.MARKETPLACE, title: 'Amazon title', publisher: 'Amazon Publisher' }] }); });
   const view = mountApp(); await view.search(); view.render();
