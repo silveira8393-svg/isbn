@@ -4,7 +4,8 @@ import { imageReferences } from './imageUrls';
 export const registrationFields = {
   condition: 'Condição', registrationMode: 'Modo de cadastro', parentCode: 'Código Pai', childCode: 'Código Filho',
   ean: 'EAN', isbn13: 'ISBN-13', isbn10: 'ISBN-10', title: 'Título', subtitle: 'Subtítulo', authors: 'Autores',
-  publisher: 'Editora', brand: 'Marca', category: 'Categoria', year: 'Ano', edition: 'Edição', language: 'Idioma',
+  publisher: 'Editora', brand: 'Marca', category: 'Categoria', magazordCategoryId: 'ID real da categoria Magazord',
+  magazordCategoryStoreId: 'Loja da categoria Magazord', categorySource: 'Origem da categoria', year: 'Ano', edition: 'Edição', language: 'Idioma',
   pageCount: 'Páginas', format: 'Formato', weight: 'Peso', weightUnit: 'Unidade de peso', width: 'Largura (cm)',
   height: 'Altura (cm)', depth: 'Espessura (cm)', synopsis: 'Sinopse', usedBookConditionNotes: 'Observações do exemplar usado',
   usedConditionTemplateId: 'Modelo de conservação selecionado (ID)', metaDescription: 'Meta Description',

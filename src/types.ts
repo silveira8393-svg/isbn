@@ -104,6 +104,9 @@ export interface RegistrationDraft {
 
   // Categorização e Marcas
   category: string;
+  magazordCategoryId?: number;
+  magazordCategoryStoreId?: string;
+  categorySource?: 'magazord';
   brand: string; // Marca (ex.: Pão Diário)
   publisher: string; // Editora (ex.: Publicações Pão Diário)
 

@@ -18,6 +18,7 @@ import RegistrationImage from '../dashboard/RegistrationImage';
 import { imageReferences } from '../../utils/imageUrls';
 import ProductIdentitySection from './ProductIdentitySection';
 import CategoryAndBrandSection from './CategoryAndBrandSection';
+import { useMagazordCategories } from '../../hooks/useMagazordCategories';
 import CommercialSection from './CommercialSection';
 import BibliographicSection from './BibliographicSection';
 import PhysicalAttributesSection from './PhysicalAttributesSection';
@@ -67,6 +68,15 @@ export default function ProductRegistrationForm({
   onReviewStateChange,
 }: ProductRegistrationFormProps) {
   const magazordMockService = simulationService;
+  const categories = useMagazordCategories(imageUser);
+  const validateDraft = (value: RegistrationDraft) => {
+    const result = validateRegistrationDraft(value, originalBook);
+    if (value.categorySource !== 'magazord' || !Number.isSafeInteger(value.magazordCategoryId) || value.magazordCategoryId! <= 0
+      || !imageUser?.storeId || value.magazordCategoryStoreId !== imageUser.storeId
+      || (categories.catalog && !categories.catalog.categories.some(category => category.id === value.magazordCategoryId)))
+      result.errors.category = 'Selecione uma categoria real da loja antes de concluir o cadastro simulado.';
+    return result;
+  };
   const [reviewing, setReviewing] = useState(false);
   const [reviewRequested, setReviewRequested] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -95,7 +105,7 @@ export default function ProductRegistrationForm({
     pendingPhotos.current = count; setPendingPhotoCount(count);
     if (!count) setPendingAttention(false);
   };
-  const validation = validateRegistrationDraft(draft, originalBook);
+  const validation = validateDraft(draft);
   const visibleRequired = Object.entries(validation.errors).filter(([field]) => field !== editingField);
   const errors = Object.fromEntries(Object.entries({ ...validation.warnings, ...validation.errors }).filter(([field]) => field !== editingField
     && !(validation.errors[field] && ['parentCode', 'childCode'].includes(field) && !reviewRequested && !touchedCodes[field] && !draft[field as 'parentCode' | 'childCode']?.trim())));
@@ -111,7 +121,7 @@ export default function ProductRegistrationForm({
   const requestReview = () => {
     if (reviewOpen.current || submissionInFlight.current || submissionCompleted.current || imageUploadInFlight.current) return;
     setEditingField(null); setReviewRequested(true); setSubmitError(null);
-    const result = validateRegistrationDraft(currentDraft.current, originalBook);
+    const result = validateDraft(currentDraft.current);
     const firstError = Object.keys(result.errors)[0];
     if (firstError) { setFocusField(firstError); return; }
     if (pendingPhotos.current) { setPendingAttention(true); setFocusField('pendingPhotos'); return; }
@@ -122,7 +132,7 @@ export default function ProductRegistrationForm({
     if (!reviewOpen.current || submissionInFlight.current || submissionCompleted.current || successResult || imageUploadInFlight.current) return;
     setSubmitError(null);
     const draft = currentDraft.current;
-    const firstError = Object.keys(validateRegistrationDraft(draft, originalBook).errors)[0];
+    const firstError = Object.keys(validateDraft(draft).errors)[0];
     if (firstError || pendingPhotos.current) {
       reviewOpen.current = false; onReviewStateChange?.(false); setReviewing(false); setEditingField(null); setReviewRequested(true);
       setPendingAttention(Boolean(pendingPhotos.current)); setFocusField(firstError || 'pendingPhotos'); return;
@@ -427,6 +437,7 @@ export default function ProductRegistrationForm({
         errors={errors}
       />
       <CategoryAndBrandSection
+        categories={categories}
         draft={draft}
         onChange={onUpdateDraft}
         errors={errors}

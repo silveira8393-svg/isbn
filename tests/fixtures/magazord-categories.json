@@ -1,0 +1,7 @@
+[
+  { "id": 10, "nome": "Livros", "pai": null },
+  { "id": 20, "nome": "Literatura", "pai": 10 },
+  { "id": 30, "nome": "História", "pai": 10 },
+  { "id": 40, "nome": "Estudos", "pai": null },
+  { "id": 50, "nome": "História", "pai": 40 }
+]

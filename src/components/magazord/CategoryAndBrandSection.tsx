@@ -4,21 +4,24 @@
  */
 
 import { RegistrationDraft } from '../../types';
-import { CATEGORIES_BY_CONDITION } from '../../utils/draft';
+import MagazordCategoryPicker from './MagazordCategoryPicker';
+import type { useMagazordCategories } from '../../hooks/useMagazordCategories';
 import { FolderTree, Building2, Bookmark, Check } from 'lucide-react';
 
 interface CategoryAndBrandSectionProps {
   draft: RegistrationDraft;
+  categories: ReturnType<typeof useMagazordCategories>;
   onChange: (updates: Partial<RegistrationDraft>) => void;
   errors: Record<string, string>;
 }
 
 export default function CategoryAndBrandSection({
   draft,
+  categories,
   onChange,
   errors,
 }: CategoryAndBrandSectionProps) {
-  const availableCategories = CATEGORIES_BY_CONDITION[draft.condition] || [];
+
 
   return (
     <div id="registration-category" className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-5">
@@ -36,43 +39,7 @@ export default function CategoryAndBrandSection({
         </div>
       </div>
 
-      {/* 1. SELEÇÃO DE CATEGORIA FILTRADA PELA CONDIÇÃO */}
-      <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-            <FolderTree className="w-4 h-4 text-blue-600" />
-            <span>Categoria Magazord</span>
-            <span className="text-red-500">*</span>
-          </label>
-          <span className="text-[11px] text-slate-400">
-            Filtrada para livros <strong>{draft.condition === 'novo' ? 'Novos' : 'Usados'}</strong>
-          </span>
-        </div>
-
-        <select
-          value={draft.category}
-          data-registration-field="category"
-          onChange={(e) => onChange({ category: e.target.value })}
-          className={`w-full px-3.5 py-2.5 rounded-lg border text-sm font-medium transition-colors bg-white focus:outline-none focus:ring-2 cursor-pointer ${
-            errors.category
-              ? 'border-red-300 bg-red-50/40 text-red-900 focus:ring-red-200 focus:border-red-500'
-              : 'border-slate-300 text-slate-900 focus:ring-blue-100 focus:border-blue-600'
-          }`}
-        >
-          {availableCategories.map((cat) => (
-            <option key={cat} value={cat}>
-              {cat}
-            </option>
-          ))}
-        </select>
-        {errors.category ? (
-          <p className="text-xs text-red-600 font-medium mt-1">{errors.category}</p>
-        ) : (
-          <p className="text-[11px] text-slate-500 mt-1">
-            Categoria inicial sugerida pelo sistema; confira a seleção. Futuramente mapeada com a árvore oficial Magazord.
-          </p>
-        )}
-      </div>
+      <MagazordCategoryPicker draft={draft} onChange={onChange} categories={categories} error={errors.category} />
 
       {/* 2. CAMPOS SEPARADOS: MARCA e EDITORA */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">

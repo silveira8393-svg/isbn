@@ -24,7 +24,7 @@ export function registrationConditionUpdates(draft: RegistrationDraft, condition
     ? isbnCode || draft.childCode
     : draft.childCode === isbnCode ? '' : draft.childCode);
   return { condition, registrationMode: registrationModeForCondition(condition), childCode, conditionChildCodes,
-    category: draft.category.replace(/^(Novo|Usado) >/, condition === 'novo' ? 'Novo >' : 'Usado >') };
+    category: draft.category };
 }
 
 /** Fill derived identifiers only while they remain empty or follow the previous ISBN. */
@@ -43,33 +43,6 @@ export function registrationIdentifierUpdates(draft: RegistrationDraft, field: '
     updates.conditionChildCodes = { ...draft.conditionChildCodes, novo: code };
   return updates;
 }
-
-export const CATEGORIES_BY_CONDITION: Record<BookCondition, string[]> = {
-  novo: [
-    'Novo > Literatura & Ficção',
-    'Novo > Religioso & Espiritualidade',
-    'Novo > Aventura & Ação',
-    'Novo > Infantil & Juvenil',
-    'Novo > Didático & Escolar',
-    'Novo > História & Biografias',
-    'Novo > Filosofia & Humanidades',
-    'Novo > Autoajuda & Desenvolvimento',
-    'Novo > Quadrinhos & HQs',
-    'Novo > Ciências & Tecnologia',
-  ],
-  usado: [
-    'Usado > Literatura & Ficção',
-    'Usado > Religioso & Espiritualidade',
-    'Usado > Aventura & Ação',
-    'Usado > Infantil & Juvenil',
-    'Usado > Didático & Escolar',
-    'Usado > História & Biografias',
-    'Usado > Filosofia & Humanidades',
-    'Usado > Autoajuda & Desenvolvimento',
-    'Usado > Quadrinhos & HQs',
-    'Usado > Ciências & Tecnologia',
-  ],
-};
 
 /**
  * Converte o peso da fonte em gramas numérico limpo.
@@ -116,8 +89,7 @@ export function createRegistrationDraft(
   }
 
   // Categoria inicial conforme a condição
-  const availableCategories = CATEGORIES_BY_CONDITION[initialCondition];
-  const initialCategory = availableCategories[0];
+  const initialCategory = ''; // No inference or simulated category presented as a real selection.
 
   // Publisher is a bibliographic fact; it does not identify the store's commercial brand.
   const publisher = book.publisher ? book.publisher.trim() : '';

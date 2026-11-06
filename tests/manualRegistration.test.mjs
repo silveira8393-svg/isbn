@@ -53,6 +53,7 @@ const registrationBuild = await build({ stdin: { resolveDir: process.cwd(), load
       [/^lucide-react$/, 'module.exports=new Proxy({},{get:(_,key)=>String(key)})'],
       [/\/lib\/supabase$/, 'exports.supabase={};exports.supabaseUrl="https://jcxdkrpmrfbrhzwbzhph.supabase.co"'],
       [/\/services\/magazordMockService$/, 'exports.magazordMockService=deps.service']];
+    mocks.push([/\/hooks\/useMagazordCategories$/, 'exports.useMagazordCategories=()=>({loading:false,storeId:"22222222-2222-4222-8222-222222222222",catalog:{categories:[{id:20}],invalidCount:0},reload(){}})']);
     for (const name of ['ProductIdentitySection', 'CategoryAndBrandSection', 'CommercialSection', 'BibliographicSection', 'PhysicalAttributesSection', 'SynopsisSection', 'AdvancedFiscalSection'])
       mocks.push([new RegExp(`(?:^|/)${name}$`), `module.exports=${JSON.stringify(name)}`]);
     b.onResolve({ filter: /.*/ }, args => { const mock = mocks.find(([pattern]) => pattern.test(args.path)); return mock ? { path: args.path, namespace: 'mock', pluginData: mock[1] } : undefined; });
@@ -72,6 +73,7 @@ function mountRegistration(component, initialProps, service) {
   render(); return { render, all: predicate => imageNodes(tree).filter(predicate), find: predicate => imageNodes(tree).find(predicate), text: () => imageText(tree) };
 }
 
+const selectedCategory={category:'Livros > Literatura',magazordCategoryId:20,magazordCategoryStoreId:user.storeId,categorySource:'magazord'};
 const emptyBook = { id: 'manual-entry', title: '' };
 const initial = (condition = 'novo') => api.createRegistrationDraft(emptyBook, condition);
 function setupStore(t) {
@@ -81,7 +83,7 @@ function setupStore(t) {
   return api.magazordMockService.forStore(user.storeId);
 }
 function form(draft, service, events = []) {
-  return mountRegistration('Form', { draft, originalBook: emptyBook, onUpdateDraft() {}, onBackToSearch() {},
+  return mountRegistration('Form', { draft, imageUser:user, originalBook: emptyBook, onUpdateDraft() {}, onBackToSearch() {},
     onProcessNextBook() {}, onSuccessRegistration: (...args) => events.push(args) }, service);
 }
 function openReview(view) { view.find(node => node.props.id === 'btn-submit-magazord-registration').props.onClick(); view.render(); }
@@ -105,7 +107,7 @@ test(`direct manual ${condition}, ${withIsbn ? 'with' : 'without'} ISBN: real va
   t.mock.method(globalThis, 'fetch', () => assert.fail('Manual registration must not fetch'));
   const service = setupStore(t); let draft = initial(condition);
   if (withIsbn) draft = { ...draft, ...api.registrationIdentifierUpdates(draft, 'isbn13', '978-1-23456-789-7') };
-  draft = { ...draft, title: 'Obra digitada manualmente', parentCode: 'LV12345-P', childCode: condition === 'novo' && withIsbn ? draft.childCode : 'LV12345', price: '29,90' };
+  draft = { ...draft, ...selectedCategory, title: 'Obra digitada manualmente', parentCode: 'LV12345-P', childCode: condition === 'novo' && withIsbn ? draft.childCode : 'LV12345', price: '29,90' };
   assert.deepEqual(api.validateRegistrationDraft(draft).errors, {}); assert.equal(draft.quantity, 1);
   const payloads = [], original = service.createProduct.bind(service);
   t.mock.method(service, 'createProduct', async (...args) => { payloads.push(structuredClone(args[0])); return original(...args); });
@@ -123,7 +125,7 @@ test(`direct manual ${condition}, ${withIsbn ? 'with' : 'without'} ISBN: real va
 test('valid ISBN-10 is normalized and equivalent ISBN-13 remains valid without a bibliography request', () => {
   let draft = initial(); draft = { ...draft, ...api.registrationIdentifierUpdates(draft, 'isbn10', '1-23456-789-x') };
   assert.equal(draft.isbn10, '123456789X'); assert.equal(draft.ean, '123456789X'); assert.equal(draft.childCode, '123456789X');
-  draft = { ...draft, ...api.registrationIdentifierUpdates(draft, 'isbn13', isbn), title: 'Título', parentCode: 'LV12345-P', price: '10' };
+  draft = { ...draft, ...selectedCategory, ...api.registrationIdentifierUpdates(draft, 'isbn13', isbn), title: 'Título', parentCode: 'LV12345-P', price: '10' };
   assert.deepEqual(api.validateRegistrationDraft(draft).errors, {}); assert.equal(draft.ean, isbn); assert.equal(draft.childCode, isbn);
 });
 
@@ -182,7 +184,7 @@ test('required title, commercial codes, positive price and quantity still block 
 });
 
 test('an already used commercial code is rejected without overwriting the existing simulator record', async t => {
-  const service = setupStore(t), draft = { ...initial(), title: 'Primeira obra', parentCode: 'LV12345-P', childCode: 'LV12345', price: '10' };
+  const service = setupStore(t), draft = { ...initial(), ...selectedCategory, title: 'Primeira obra', parentCode: 'LV12345-P', childCode: 'LV12345', price: '10' };
   await service.createProduct(draft, 'auto'); const before = structuredClone(service.getRecordsForEan(draft.childCode));
   const events = [], view = form({ ...draft, title: 'Outra obra' }, service, events); openReview(view);
   await view.find(node => node.props.id === 'btn-confirm-magazord-registration').props.onClick(); view.render();
