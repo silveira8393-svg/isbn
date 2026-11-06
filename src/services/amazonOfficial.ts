@@ -7,7 +7,7 @@ import { searchAmazonLab, type LabQuality, type LabResult } from './amazonLabCli
 import { roundPhysicalMeasurement } from '../utils/bibliographicNormalization';
 
 export const canUseAmazonOfficial = (user: Pick<User, 'active' | 'role' | 'storeId'>) =>
-  user.active === true && user.role === 'developer' && !!user.storeId;
+  user.active === true && ['developer', 'admin', 'operator'].includes(user.role) && !!user.storeId;
 // Image research belongs to the selected operational store, independently of SP-API credentials.
 export const canUseAmazonImageSource = (user: Pick<User, 'active' | 'role' | 'storeId'>) =>
   user.active === true && !!user.storeId && ['developer', 'admin', 'operator'].includes(user.role);

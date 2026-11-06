@@ -53,9 +53,9 @@ export function authorizeCatalog(request: Request, config: AuthConfig, fetcher: 
     const call = (table: string, query: Record<string, string>) => jsonRequest(fetcher,
       `${config.supabase}/rest/v1/${table}?${new URLSearchParams(query)}`, { method: 'GET', headers }, 65536);
     const profiles = await call('profiles', { id: `eq.${principal.user_id}`, active: 'eq.true', select: 'id,active', limit: '1' });
-    const members = await call('store_users', { user_id: `eq.${principal.user_id}`, store_id: `eq.${config.store}`, role: 'eq.developer', active: 'eq.true', select: 'user_id,store_id,role,active', limit: '1' });
+    const members = await call('store_users', { user_id: `eq.${principal.user_id}`, store_id: `eq.${config.store}`, role: 'in.(developer,admin,operator)', active: 'eq.true', select: 'user_id,store_id,role,active', limit: '1' });
     if (!Array.isArray(profiles) || profiles.length !== 1 || profiles[0]?.id !== principal.user_id || profiles[0]?.active !== true
       || !Array.isArray(members) || members.length !== 1 || members[0]?.user_id !== principal.user_id || members[0]?.store_id !== config.store
-      || members[0]?.role !== 'developer' || members[0]?.active !== true) fail(403, 'developer_required');
+      || !['developer', 'admin', 'operator'].includes(members[0]?.role) || members[0]?.active !== true) fail(403, 'catalog_access_denied');
   } }, fetcher);
 }

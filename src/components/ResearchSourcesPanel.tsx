@@ -17,7 +17,7 @@ export default function ResearchSourcesPanel({ states }: { states: ResearchState
         <div className="min-w-0">
         <span className="block font-medium text-slate-700">{sourceNames[source]}</span>
         <span className="isbn-source-state flex items-center gap-1.5 text-slate-500"><span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${colors[states[source]]}`} />{labels[states[source]]}</span>
-        {source === 'amazon' && states[source] === 'not_consulted' && <span className="isbn-source-reason">Requer perfil Desenvolvimento ativo e loja selecionada.</span>}
+        {source === 'amazon' && states[source] === 'not_consulted' && <span className="isbn-source-reason">Requer usuário autenticado, ativo e vinculado à loja.</span>}
         </div>
       </li>)}
     </ul>

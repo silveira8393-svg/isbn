@@ -44,12 +44,12 @@ test('source cards explain skipped SP-API without counting it as queried or rela
  const states={brasil_api:'found',curitiba:'found',amazon:'not_consulted',google_books:'not_found'};
  const skipped=render(api.Panel,{states});
  assert.match(skipped,/Pesquisa concluída/);assert.match(skipped,/Fontes consultadas: 3/);
- assert.match(skipped,/Requer perfil Desenvolvimento ativo e loja selecionada/);
+ assert.match(skipped,/Requer usuário autenticado, ativo e vinculado à loja/);
  assert.equal((skipped.match(/<svg /g)||[]).length,4);
  for(const [state,label] of [['found','Encontrado'],['not_found','Não encontrado'],['unavailable','Indisponível']]){
   const markup=render(api.Panel,{states:{...states,amazon:state}});
   assert.match(markup,/Fontes consultadas: 4/);
-  assert.ok(markup.includes(label));assert.doesNotMatch(markup,/Requer perfil Desenvolvimento/);
+  assert.ok(markup.includes(label));assert.doesNotMatch(markup,/Requer usuário autenticado/);
  }
 });
 test('Curitiba accepts only explicitly returned product URLs tied to verified identifiers; never manufactures a slug',()=>{

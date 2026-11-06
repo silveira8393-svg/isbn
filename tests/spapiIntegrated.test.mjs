@@ -26,8 +26,8 @@ function server(options = {}) {
       if (url.pathname === '/auth/v1/user') return options.authError ? new Response('secret error', { status: 401 }) : Response.json({ id: uid });
       if (url.pathname === '/rest/v1/profiles') return Response.json(options.inactive ? [] : [{ id: uid, active: true }]);
       assert.equal(url.pathname, '/rest/v1/store_users'); assert.equal(url.searchParams.get('store_id'), 'eq.' + sid);
-      assert.equal(url.searchParams.get('role'), 'eq.developer');
-      return Response.json(options.noMembership ? [] : [{ user_id: uid, store_id: sid, active: true, role: options.role || 'developer' }]);
+      assert.equal(url.searchParams.get('role'), 'in.(developer,admin,operator)');
+      return Response.json(options.noMembership ? [] : [{ user_id: uid, store_id: sid, active: true, role: options.role || 'developer', ...options.membership }]);
     }
     if (url.href === 'https://api.amazon.com/auth/o2/token') {
       assert.equal(init.body.get('refresh_token'), env.AMAZON_SPAPI_REFRESH_TOKEN); assert.equal(init.body.get('client_id'), env.AMAZON_SPAPI_CLIENT_ID);
@@ -53,11 +53,18 @@ test('Preview uses environment refresh token without AES, APP_ID, service role, 
   assert.doesNotMatch(JSON.stringify(data), /Atzr|synthetic-secret|synthetic-access|Restricted description/);
   assert.equal(h.calls.length, 5); assert.equal(response.headers.get('cache-control'), 'private, no-store');
 });
-test('private token cannot serve another store or an operator; no Amazon call on denied access', async () => {
-  for (const options of [{ env: { AMAZON_SPAPI_STORE_ID: uid } }, { noMembership: true }, { role: 'operator' }, { inactive: true }, { authError: true }]) {
+test('private token cannot serve foreign stores, inactive/unknown memberships or invalid sessions; no Amazon call on denial', async () => {
+  for (const options of [{ env: { AMAZON_SPAPI_STORE_ID: uid } }, { noMembership: true }, { role: 'unknown' }, { inactive: true }, { authError: true },
+    {membership:{active:false}}, {membership:{store_id:uid}}, {membership:{user_id:sid}}]) {
     const h = server(options), response = await h.handler(h.request());
     assert.ok([401, 403].includes(response.status)); assert.equal(h.calls.filter(c => c.url.hostname.includes('amazon.com')).length, 0);
   }
+});
+
+for(const role of ['developer','admin','operator'])test(`official catalog accepts a verified active ${role} membership in the configured store`,async()=>{
+ const h=server({role}),response=await h.handler(h.request());assert.equal(response.status,200);
+ assert.equal((await response.json()).items[0].isbn,isbn);
+ assert.equal(h.calls.filter(c=>c.url.hostname==='sellingpartnerapi-na.amazon.com').length,1);
 });
 test('missing environment token never falls back to encrypted storage; cross-origin and malformed ISBN denied', async () => {
   const missing = server({ env: { AMAZON_SPAPI_REFRESH_TOKEN: '' } });
@@ -78,14 +85,17 @@ const clientBuild = await build({ stdin: { resolveDir: process.cwd(), loader: 't
   } }] });
 const client = await import('data:text/javascript;base64,' + Buffer.from(clientBuild.outputFiles[0].text).toString('base64'));
 const user = { id: uid, storeId: '6058abd1-96e5-465b-a1df-292e5cf76de3', role: 'developer', active: true };
-test('automatic client uses same-origin session only for developer in the operational store, without extra actions', async t => {
+test('automatic client uses the authenticated same-origin session for all three active store roles', async t => {
   const calls = []; globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
   t.after(() => { delete globalThis.__spapiSession; });
   t.mock.method(globalThis, 'fetch', async (url, init) => { calls.push({ url, init }); return Response.json({ isbn, items: [{ isbn, asin: 'SYNTHETIC1', marketplaceId: api.MARKETPLACE, title: 'Title', publisher: 'Publisher', images: ['forbidden'], synopsis: 'forbidden' }] }); });
-  for (const other of [{ ...user, role: 'admin' }, { ...user, role: 'operator' }, { ...user, storeId: undefined }, { ...user, active: false }]) assert.equal((await client.searchAmazonOfficial(isbn, other)).status, 'skipped');
+  for (const other of [{ ...user, role: 'unknown' }, { ...user, storeId: undefined }, { ...user, active: false }]) assert.equal((await client.searchAmazonOfficial(isbn, other)).status, 'skipped');
   assert.equal(calls.length, 0);
-  const result = await client.searchAmazonOfficial(isbn, user); assert.equal(result.status, 'success'); assert.equal(result.book.publisher, 'Publisher');
-  assert.equal(result.book.synopsis, undefined); assert.equal(result.book.coverUrl, undefined);
+  for(const role of ['developer','admin','operator']){
+   const result = await client.searchAmazonOfficial(isbn, {...user,role}); assert.equal(result.status, 'success'); assert.equal(result.book.publisher, 'Publisher');
+   assert.equal(result.book.synopsis,undefined);
+  }
+  assert.equal(calls.length,3);
   assert.equal(calls[0].url, '/api/amazon/spapi/catalog?isbn=' + isbn); assert.equal(calls[0].init.credentials, 'same-origin');
   assert.equal(calls[0].init.headers.Authorization, 'Bearer synthetic-session');
 });
@@ -218,13 +228,29 @@ test('new ISBN resets every indicator and never retains the preceding book links
   const book=view.find('BookDetailsCard').props.book;assert.equal(book.isbn13,next);assert.equal(book.sourceLinks,undefined);
   assert.equal(view.find('ResearchSourcesPanel').props.states.google_books,'not_found');
 });
-test('technical failures stay unavailable while a restricted SP-API remains not consulted',async t=>{
-  t.mock.method(globalThis,'fetch',async()=>{assert.fail('No SP-API request for operator');});
+test('SP-API failures for an operator are unavailable rather than skipped',async t=>{
+  let calls=0;t.mock.method(globalThis,'fetch',async()=>{calls++;return new Response('upstream unavailable',{status:503});});
   const view=mountApp({user:{currentUser:{...user,role:'operator'},operationEnvironment:'development'},
     brasil:{book:null,diagnostic:{status:404}},curitiba:{book:null,diagnostic:{state:'unavailable',status:503}},
     googleBooks:{status:'unavailable',book:null,diagnostic:{code:'upstream_http',httpStatus:429}}});
   await view.search();view.render();assert.deepEqual(view.find('ResearchSourcesPanel').props.states,
-    {brasil_api:'not_found',curitiba:'unavailable',amazon:'not_consulted',google_books:'unavailable'});
+    {brasil_api:'not_found',curitiba:'unavailable',amazon:'unavailable',google_books:'unavailable'});
+  assert.equal(calls,1);
+});
+
+for(const failure of [false,true])test(`existing manual NOVO/USADO form remains reachable when all sources ${failure?'are unavailable':'find nothing'}`,async t=>{
+ t.mock.method(globalThis,'fetch',async()=>failure?new Response('',{status:503}):Response.json({isbn,items:[]}));
+ const view=mountApp({brasil:{book:null,diagnostic:{status:failure?503:404}},
+  curitiba:{book:null,diagnostic:{state:failure?'unavailable':'not_found',status:failure?503:200}},
+  googleBooks:{book:null,status:failure?'unavailable':'not_found',diagnostic:{httpStatus:failure?503:200}}});
+ await view.search();view.render();assert.equal(view.find('MagazordStatusCard').props.manualEntry,true);
+ for(const condition of ['novo','usado']){
+  view.find('MagazordStatusCard').props.onOpenRegistration(condition);view.render();
+  const props=view.find('ProductRegistrationForm').props;
+  assert.equal(props.draft.isbn13,isbn);assert.equal(props.draft.quantity,1);assert.equal(props.draft.condition,condition);
+  assert.equal(props.draft.title,'');assert.equal(props.draft.price,'');
+  props.onBackToSearch();view.render();
+ }
 });
 
 test('ISO publication dates normalize without timezone shifts and invalid dates cannot enter the year field', () => {
@@ -929,7 +955,7 @@ test(`Sebo Livraria Sul ${role}, ${query}: six extracted images traverse Functio
   assert.deepEqual(form.find(n => typeof n.type === 'function' && n.type.name === 'ImagesSection').props.draft.additionalImageUrls, additions);
   assert.deepEqual(counts, { laboratory: 6, function: 6, normalized: 6, distinct: 6, form: 6, rendered: 6 });
   assert.equal(logs[0].imagens_principais, 1); assert.equal(logs[0].imagens_adicionais, 5);
-  assert.equal(official, role === 'developer' ? 1 : 0); assert.equal(laboratory, 1, 'one request per search, no probes or retries');
+  assert.equal(official, 1); assert.equal(laboratory, 1, 'one request per search, no probes or retries');
   t.diagnostic(JSON.stringify({ isbn: query, role, ...counts }));
 });
 
