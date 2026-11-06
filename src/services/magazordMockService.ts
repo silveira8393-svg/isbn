@@ -11,7 +11,7 @@ import {
   MagazordMatchItem,
   RegistrationDraft,
 } from '../types';
-import { cleanIsbn } from '../utils/isbn';
+import { canonicalBookIsbn, cleanIsbn } from '../utils/isbn';
 
 export type MagazordSimulationMode =
   | 'auto'
@@ -41,6 +41,9 @@ const SIMULATION_CONFIG_KEY = 'sebo_magazord_sim_config_v2';
 export interface SimulatedRecord {
   id: string;
   ean: string;
+  // Explicit absence distinguishes ISBN-free internal keys from bibliography.
+  // Older records retain their existing EAN evidence without any migration.
+  bibliographicIsbn?: string | null;
   parentCode: string;
   childCode: string;
   condition: BookCondition;
@@ -340,7 +343,11 @@ class MagazordMockService {
     // MODO 'auto': busca no banco simulado local real
     // -------------------------------------------------------------
     const cleanKey = cleanIsbn(ean) || ean;
-    const records = this.getRecordsForEan(cleanKey, mode);
+    const canonical = canonicalBookIsbn(cleanKey);
+    const records = canonical
+      ? Object.values(this.getSimulatedDb(mode)).flatMap(list => Array.isArray(list) ? list.filter(record =>
+        (record.bibliographicIsbn === undefined ? canonicalBookIsbn(record.ean) : record.bibliographicIsbn) === canonical) : [])
+      : this.getRecordsForEan(cleanKey, mode);
 
     if (records.length === 0) {
       return {
@@ -568,6 +575,7 @@ class MagazordMockService {
     const newRecord: SimulatedRecord = {
       id: `rec-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       ean: cleanEan,
+      bibliographicIsbn: canonicalBookIsbn(draft.isbn13 || draft.isbn10 || draft.ean) || null,
       parentCode: draft.parentCode.trim(),
       childCode: draft.childCode.trim(),
       condition: draft.condition,
