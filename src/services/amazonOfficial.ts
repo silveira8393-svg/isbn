@@ -202,7 +202,7 @@ export async function searchAmazonOfficial(isbn: string, user: User, signal?: Ab
     const { data, error } = await supabase.auth.getSession();
     if (error || !data.session?.access_token || data.session.user.id !== user.id) return { book: null, status: 'unavailable' };
     const response = await fetch(`/api/amazon/spapi/catalog?isbn=${encodeURIComponent(cleanIsbn(isbn))}`, {
-      headers: { Authorization: `Bearer ${data.session.access_token}` }, credentials: 'same-origin', cache: 'no-store', redirect: 'error',
+      headers: { Authorization: `Bearer ${data.session.access_token}`, 'x-isbn-store-id': user.storeId }, credentials: 'same-origin', cache: 'no-store', redirect: 'error',
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(55000)]) : AbortSignal.timeout(55000),
     });
     if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) { void response.body?.cancel(); return { book: null, status: 'unavailable' }; }

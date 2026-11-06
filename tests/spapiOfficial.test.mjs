@@ -12,6 +12,7 @@ const compiled = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts',
 ` }, bundle: true, write: false, metafile: true, platform: 'node', format: 'esm', target: 'node24' });
 const api = await import('data:text/javascript;base64,' + Buffer.from(compiled.outputFiles[0].text).toString('base64'));
 const uid = '11111111-1111-4111-8111-111111111111', sid = api.PRIVATE_STORE_ID;
+const operationalStore='6058abd1-96e5-465b-a1df-292e5cf76de3';
 const env = { AMAZON_SPAPI_ENABLED: 'true', AMAZON_SPAPI_EXTERNAL_AUTH_APPROVED: 'true', AMAZON_SPAPI_ORIGIN: 'https://isbn.example.invalid',
   AMAZON_SPAPI_APP_ID: 'amzn1.sellerapps.app.synthetic', AMAZON_SPAPI_CLIENT_ID: 'synthetic-client', AMAZON_SPAPI_CLIENT_SECRET: 'synthetic-secret',
   AMAZON_SPAPI_TOKEN_KEY: 'ab'.repeat(32), AMAZON_SPAPI_STORE_ID: sid, AMAZON_SPAPI_SELLER_ID: 'SELLERTEST', AMAZON_SPAPI_REFRESH_TOKEN: 'Atzr|synthetic-refresh',
@@ -38,7 +39,8 @@ function harness(settings = {}) {
     const parsed = new URL(url);
     if (parsed.pathname === '/auth/v1/user') return Response.json(settings.user || { id: uid });
     if (parsed.pathname === '/rest/v1/profiles') return Response.json(active ? [{ id: uid, active: true }] : []);
-    if (parsed.pathname === '/rest/v1/store_users') return Response.json(active ? [{ user_id: uid, store_id: sid, role: 'developer', active: true }] : []);
+    if (parsed.pathname === '/rest/v1/store_users') return Response.json(active ? [{ user_id: uid, store_id: operationalStore, role: 'developer', active: true }] : []);
+    if (parsed.pathname === '/rest/v1/stores') return Response.json([{id:operationalStore,active:true}]);
     if (parsed.href === 'https://api.amazon.com/auth/o2/token') {
       assert.equal(init.method, 'POST'); assert.equal(init.body.get('client_secret'), env.AMAZON_SPAPI_CLIENT_SECRET);
       if (settings.lwaError) return new Response('sensitive-upstream-error', { status: settings.lwaError });
@@ -52,7 +54,7 @@ function harness(settings = {}) {
   };
   const handler = mode => api.createSpapiHandler(mode, { env: { ...env, ...settings.env }, fetcher, store });
   const request = (mode, query = {}, options = {}) => new Request(`${env.AMAZON_SPAPI_ORIGIN}/api/amazon/${mode === 'catalog' ? 'spapi/catalog' : 'oauth/' + mode}?${new URLSearchParams(query)}`, {
-    method: mode === 'start' ? 'POST' : 'GET', headers: { authorization: 'Bearer synthetic-session-token', origin: env.AMAZON_SPAPI_ORIGIN, ...options.headers }, ...options.init });
+    method: mode === 'start' ? 'POST' : 'GET', headers: { authorization: 'Bearer synthetic-session-token', origin: env.AMAZON_SPAPI_ORIGIN, ...(mode==='catalog'?{'x-isbn-store-id':operationalStore}:{}), ...options.headers }, ...options.init });
   async function start() {
     const response = await handler('start')(request('start')); assert.equal(response.status, 200);
     const target = new URL((await response.json()).authorization_url), cookie = response.headers.get('set-cookie').split(';')[0];

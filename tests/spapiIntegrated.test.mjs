@@ -5,6 +5,7 @@ const serverBuild = await build({ stdin: { resolveDir: process.cwd(), loader: 't
   bundle: true, write: false, platform: 'node', format: 'esm' });
 const api = await import('data:text/javascript;base64,' + Buffer.from(serverBuild.outputFiles[0].text).toString('base64'));
 const uid = '11111111-1111-4111-8111-111111111111', sid = api.PRIVATE_STORE_ID, isbn = '9788535914849';
+const operationalStore='6058abd1-96e5-465b-a1df-292e5cf76de3';
 const env = { AMAZON_SPAPI_ENABLED: 'true', AMAZON_SPAPI_REFRESH_TOKEN: 'Atzr|synthetic-refresh', AMAZON_SPAPI_CLIENT_ID: 'synthetic-client',
   AMAZON_SPAPI_CLIENT_SECRET: 'synthetic-secret', AMAZON_SPAPI_STORE_ID: sid, AMAZON_SPAPI_SELLER_ID: 'SELLERTEST',
   SUPABASE_URL: 'https://auth.example.invalid', SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_synthetic', VERCEL_URL: 'isbn-preview.example.invalid', VERCEL_ENV: 'preview',
@@ -25,9 +26,13 @@ function server(options = {}) {
       assert.ok(!url.href.includes('amazon_spapi')); assert.equal(init.method || 'GET', 'GET');
       if (url.pathname === '/auth/v1/user') return options.authError ? new Response('secret error', { status: 401 }) : Response.json({ id: uid });
       if (url.pathname === '/rest/v1/profiles') return Response.json(options.inactive ? [] : [{ id: uid, active: true }]);
-      assert.equal(url.pathname, '/rest/v1/store_users'); assert.equal(url.searchParams.get('store_id'), 'eq.' + sid);
+      if (url.pathname === '/rest/v1/stores') {
+        assert.equal(url.searchParams.get('id'),'eq.'+operationalStore);
+        return Response.json(options.inactiveStore?[]:[{id:operationalStore,active:true}]);
+      }
+      assert.equal(url.pathname, '/rest/v1/store_users'); assert.equal(url.searchParams.get('store_id'), 'eq.' + operationalStore);
       assert.equal(url.searchParams.get('role'), 'in.(developer,admin,operator)');
-      return Response.json(options.noMembership ? [] : [{ user_id: uid, store_id: sid, active: true, role: options.role || 'developer', ...options.membership }]);
+      return Response.json(options.noMembership ? [] : [{ user_id: uid, store_id: operationalStore, active: true, role: options.role || 'developer', ...options.membership }]);
     }
     if (url.href === 'https://api.amazon.com/auth/o2/token') {
       assert.equal(init.body.get('refresh_token'), env.AMAZON_SPAPI_REFRESH_TOKEN); assert.equal(init.body.get('client_id'), env.AMAZON_SPAPI_CLIENT_ID);
@@ -41,7 +46,7 @@ function server(options = {}) {
   };
   const handler = api.createSpapiHandler('catalog', { env: { ...env, ...options.env }, fetcher,
     store: new Proxy({}, { get() { assert.fail('Simplified catalog must not use authorization store'); } }) });
-  const request = (path = `/api/amazon/spapi/catalog?isbn=${isbn}`, headers = {}) => new Request(origin + path, { headers: { authorization: bearer, origin, ...headers } });
+  const request = (path = `/api/amazon/spapi/catalog?isbn=${isbn}`, headers = {}) => new Request(origin + path, { headers: { authorization: bearer, origin, 'x-isbn-store-id':operationalStore, ...headers } });
   return { handler, request, calls };
 }
 test('Preview uses environment refresh token without AES, APP_ID, service role, tables or provisioning', async () => {
@@ -51,14 +56,21 @@ test('Preview uses environment refresh token without AES, APP_ID, service role, 
   assert.deepEqual(data.items[0].images, [{ variant: 'MAIN', link: 'https://images.example.invalid/cover.jpg', width: null, height: null }]); assert.equal(data.items[0].synopsis, null);
   assert.equal(data.contentPolicy, 'synopsis_omitted');
   assert.doesNotMatch(JSON.stringify(data), /Atzr|synthetic-secret|synthetic-access|Restricted description/);
-  assert.equal(h.calls.length, 5); assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  assert.equal(h.calls.length, 6); assert.equal(response.headers.get('cache-control'), 'private, no-store');
 });
 test('private token cannot serve foreign stores, inactive/unknown memberships or invalid sessions; no Amazon call on denial', async () => {
   for (const options of [{ env: { AMAZON_SPAPI_STORE_ID: uid } }, { noMembership: true }, { role: 'unknown' }, { inactive: true }, { authError: true },
-    {membership:{active:false}}, {membership:{store_id:uid}}, {membership:{user_id:sid}}]) {
+    {membership:{active:false}}, {membership:{store_id:uid}}, {membership:{user_id:sid}}, {inactiveStore:true}]) {
     const h = server(options), response = await h.handler(h.request());
     assert.ok([401, 403].includes(response.status)); assert.equal(h.calls.filter(c => c.url.hostname.includes('amazon.com')).length, 0);
   }
+});
+
+test('catalog requires an explicit operational store; credential-store membership is never a fallback',async()=>{
+ for(const store of ['',sid,'invalid']){
+  const h=server();assert.equal((await h.handler(h.request(undefined,{'x-isbn-store-id':store}))).status,403);
+  assert.equal(h.calls.length,0);
+ }
 });
 
 for(const role of ['developer','admin','operator'])test(`official catalog accepts a verified active ${role} membership in the configured store`,async()=>{
@@ -98,6 +110,7 @@ test('automatic client uses the authenticated same-origin session for all three 
   assert.equal(calls.length,3);
   assert.equal(calls[0].url, '/api/amazon/spapi/catalog?isbn=' + isbn); assert.equal(calls[0].init.credentials, 'same-origin');
   assert.equal(calls[0].init.headers.Authorization, 'Bearer synthetic-session');
+  assert.equal(calls[0].init.headers['x-isbn-store-id'],operationalStore);
 });
 test('client handles source failure, ambiguity and session changes without retry or replacing existing data', async t => {
   globalThis.__spapiSession = { data: { session: { user: { id: uid }, access_token: 'synthetic-session' } } };
@@ -346,7 +359,7 @@ test('catalog projects publisher, pages, edition, authors, exact ISBN identifier
   assert.equal(book.isbn10, '8535914846'); assert.equal(book.isbn13, isbn);
   assert.deepEqual(book.identifiers, [{ type: 'ISBN_10', identifier: '8535914846' }, { type: 'ISBN_13', identifier: isbn }]);
   assert.deepEqual(book.physical, { item: expandedItem.dimensions[1].item, package: expandedItem.dimensions[1].package });
-  assert.equal(h.calls.length, 5); assert.equal(h.calls.filter(c => c.url.pathname.includes('/catalog/')).length, 1);
+  assert.equal(h.calls.length, 6); assert.equal(h.calls.filter(c => c.url.pathname.includes('/catalog/')).length, 1);
   assert.doesNotMatch(JSON.stringify(data), /Wrong marketplace|999|Not an author|Restricted prose|list_price|diagnostics/);
 });
 
@@ -356,7 +369,7 @@ test('authorized image references and metadata are projected without downloads, 
     { variant: 'MAIN', width: 300, height: 400, hasUrl: true }, { variant: 'PT01', width: 600, height: 800, hasUrl: true }] });
   assert.deepEqual(data.items[0].images, expandedItem.images[1].images); assert.equal(data.items[0].synopsis, null);
   assert.doesNotMatch(JSON.stringify(data), /other\.jpg|Restricted prose|synthetic-secret|synthetic-access|Atzr\|/);
-  assert.equal(h.calls.length, 5);
+  assert.equal(h.calls.length, 6);
   for (const [images, returned] of [[undefined, false], [[], true]]) {
     const empty = server({ item: { ...expandedItem, images } }), result = await (await empty.handler(empty.request())).json();
     assert.deepEqual(result.items[0].imageMetadata, { datasetReturned: returned, count: 0, entries: [] });
@@ -429,7 +442,7 @@ for (const [reportedIsbn, width, height] of [['9780515154559', 1400, 1900], ['97
     const h = server({ item: { ...item, identifiers: [{ marketplaceId: api.MARKETPLACE, identifiers: [{ identifierType: 'ISBN', identifier: reportedIsbn }] }],
       images: [{ marketplaceId: api.MARKETPLACE, images: raw }] } });
     const data = await (await h.handler(h.request('/api/amazon/spapi/catalog?isbn=' + reportedIsbn))).json();
-    assert.deepEqual(data.items[0].images, raw); assert.equal(h.calls.length, 5);
+    assert.deepEqual(data.items[0].images, raw); assert.equal(h.calls.length, 6);
     assert.equal(h.calls.filter(c => c.url.pathname.includes('/catalog/')).length, 1);
     let clientCalls = 0;
     t.mock.method(globalThis, 'fetch', async url => { clientCalls++; assert.equal(url, '/api/amazon/spapi/catalog?isbn=' + reportedIsbn); return Response.json(data); });
