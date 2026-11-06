@@ -45,7 +45,7 @@ import {
   type DistribuidoraSearchResult,
 } from './services/distribuidoraCuritiba';
 import { cleanIsbn, isValidIsbnFormat } from './utils/isbn';
-import { createRegistrationDraft } from './utils/draft';
+import { createRegistrationDraft, registrationConditionUpdates } from './utils/draft';
 import { loadCuritibaGallery, appendCuritibaGallery, appendCuritibaGalleryToDraft } from './services/curitibaGallery';
 import { magazordMockService as sharedMagazordService, type MagazordSimulationMode } from './services/magazordMockService';
 import {
@@ -64,7 +64,7 @@ export default function App() {
   const [errorText, setErrorText] = useState<string | null>(null);
   const [bibliographicState, setBibliographicState] = useState<'found' | 'not_found' | 'error' | null>(null);
   const [researchStates, setResearchStates] = useState(initialResearchStates);
-  const manualEntry = bibliographicState === 'not_found' || bibliographicState === 'error';
+  const manualEntry = foundBook?.id === 'manual-entry' || bibliographicState === 'not_found' || bibliographicState === 'error';
   const [searchedTerm, setSearchedTerm] = useState<string>('');
   const [rawSearchedTerm, setRawSearchedTerm] = useState<string>('');
   const magazordMockService = sharedMagazordService.forStore?.(currentUser.storeId) ?? sharedMagazordService;
@@ -426,16 +426,43 @@ export default function App() {
     clearHistory();
   };
 
+  const handleStartManualRegistration = () => {
+    if (searchInFlight.current || imageUploadInFlight.current) return;
+    galleryGeneration.current++;
+    galleryRequest.current?.abort();
+    deferredGalleryDraft.current = null;
+    const book: BookInfo = { id: 'manual-entry', title: '' };
+    setFoundBook(book);
+    setRegistrationDraft(createRegistrationDraft(book));
+    registrationCompleted.current = false;
+    setMagazordCheckResult(null);
+    setMagazordCheckError(null);
+    setBibliographicState(null);
+    setErrorText(null);
+    setSearchedTerm('');
+    setRawSearchedTerm('');
+    setIsbnValue('');
+    setResearchStates(initialResearchStates());
+    setActiveTab('cadastro');
+  };
+
   // Abre a tela única de cadastro garantindo a condição desejada (Novo ou Usado)
   const handleOpenRegistration = (condition?: BookCondition) => {
     if (!foundBook || imageUploadInFlight.current) return;
     const targetCondition =
       condition ||
+      (foundBook.id === 'manual-entry' ? registrationDraft?.condition : undefined) ||
       visibleMagazordCheck?.existingCondition ||
       'novo';
     // Ordinary navigation must not recreate the same edition/condition and discard manual edits.
-    const sameEdition = registrationDraft && cleanIsbn(registrationDraft.isbn13 || registrationDraft.isbn10)
-      === cleanIsbn(foundBook.isbn13 || foundBook.isbn10 || '');
+    const sameEdition = registrationDraft && (foundBook.id === 'manual-entry' || cleanIsbn(registrationDraft.isbn13 || registrationDraft.isbn10)
+      === cleanIsbn(foundBook.isbn13 || foundBook.isbn10 || ''));
+    if (foundBook.id === 'manual-entry' && registrationDraft && !registrationCompleted.current) {
+      setRegistrationDraft(targetCondition === registrationDraft.condition ? registrationDraft
+        : updateDraftWithMetaDescription(registrationDraft, registrationConditionUpdates(registrationDraft, targetCondition)));
+      setActiveTab('cadastro');
+      return;
+    }
     let draft = sameEdition && registrationDraft.condition === targetCondition && !registrationCompleted.current
       ? registrationDraft : createRegistrationDraft(foundBook, targetCondition);
     // Bibliographic corrections describe the edition. Commercial codes, stock and copy photographs do not.
@@ -545,7 +572,7 @@ export default function App() {
   ) => {
     // Registra evento de auditoria operacional do cadastro concluído
     registrationCompleted.current = result.success;
-    const currentIsbn = searchedTerm || savedDraft.isbn13 || savedDraft.ean;
+    const currentIsbn = searchedTerm || savedDraft.isbn13 || savedDraft.ean || savedDraft.isbn10;
     const opType: OperationType =
       savedDraft.condition === 'usado'
         ? 'novo_usado_com_edicao_conhecida'
@@ -588,7 +615,7 @@ export default function App() {
         bibliographicSource: foundBook?.enrichmentSource || foundBook?.provider || null },
       completedAt: new Date(result.registeredAt).toISOString(),
     });
-    void magazordMockService.checkProductByEan(currentIsbn, savedDraft.title, undefined, actionMode).then((freshCheck) => {
+    void magazordMockService.checkProductByEan(currentIsbn || savedDraft.childCode, savedDraft.title, undefined, actionMode).then((freshCheck) => {
       if (canShowActionResult(actionMode)) {
         checkActionMode.current = actionMode;
         setMagazordCheckResult(freshCheck);
@@ -900,7 +927,7 @@ export default function App() {
                   Nenhum livro carregado para cadastro
                 </h3>
                 <p className="text-sm text-slate-500 mt-2 max-w-md leading-relaxed">
-                  O fluxo operacional do sistema começa pela consulta de ISBN para pré-preencher todos os dados bibliográficos automaticamente.
+                  Consulte o ISBN para preencher os dados disponíveis ou inicie o cadastro manual de uma obra com ou sem ISBN.
                 </p>
                 <button
                   type="button"
@@ -908,7 +935,12 @@ export default function App() {
                   className="mt-6 inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition-all cursor-pointer"
                 >
                   <Search className="w-4 h-4" />
-                  <span>Iniciar Consulta de ISBN</span>
+                  <span>Consultar por ISBN</span>
+                </button>
+                <button type="button" onClick={handleStartManualRegistration} disabled={isLoading}
+                  className="mt-3 inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold text-sm transition-all cursor-pointer disabled:opacity-50">
+                  <BookOpen className="w-4 h-4" />
+                  <span>Iniciar cadastro manual</span>
                 </button>
               </div>
             )}

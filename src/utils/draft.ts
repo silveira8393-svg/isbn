@@ -16,6 +16,34 @@ export function registrationModeForCondition(condition: BookCondition, mode?: Re
   return mode === 'reuse_existing_new' ? mode : 'new_product';
 }
 
+/** Keep operator codes per condition; ISBN-free works use the existing manual code. */
+export function registrationConditionUpdates(draft: RegistrationDraft, condition: BookCondition): Partial<RegistrationDraft> {
+  const conditionChildCodes = { ...draft.conditionChildCodes, [draft.condition]: draft.childCode };
+  const isbnCode = draft.isbn13 || draft.ean || draft.isbn10 || '';
+  const childCode = conditionChildCodes[condition] ?? (condition === 'novo'
+    ? isbnCode || draft.childCode
+    : draft.childCode === isbnCode ? '' : draft.childCode);
+  return { condition, registrationMode: registrationModeForCondition(condition), childCode, conditionChildCodes,
+    category: draft.category.replace(/^(Novo|Usado) >/, condition === 'novo' ? 'Novo >' : 'Usado >') };
+}
+
+/** Fill derived identifiers only while they remain empty or follow the previous ISBN. */
+export function registrationIdentifierUpdates(draft: RegistrationDraft, field: 'isbn13' | 'isbn10' | 'ean', value: string): Partial<RegistrationDraft> {
+  const normalized = cleanIsbn(value);
+  const updates: Partial<RegistrationDraft> = { [field]: normalized };
+  if (field === 'ean') return updates;
+  const prior = cleanIsbn(draft.isbn13 || draft.isbn10 || '');
+  const next = { ...draft, ...updates };
+  const code = next.isbn13 || next.isbn10 || '';
+  // Invalid edits stay visible for correction and never become commercial identifiers.
+  if (code && !canonicalBookIsbn(code)) return updates;
+  if (!draft.ean || cleanIsbn(draft.ean) === prior) updates.ean = code;
+  if (draft.condition === 'novo' && (!draft.childCode || cleanIsbn(draft.childCode) === prior)) updates.childCode = code;
+  if (draft.conditionChildCodes?.novo && cleanIsbn(draft.conditionChildCodes.novo) === prior)
+    updates.conditionChildCodes = { ...draft.conditionChildCodes, novo: code };
+  return updates;
+}
+
 export const CATEGORIES_BY_CONDITION: Record<BookCondition, string[]> = {
   novo: [
     'Novo > Literatura & Ficção',

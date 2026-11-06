@@ -133,6 +133,13 @@ export default function ProductRegistrationForm({
     setIsSubmitting(true);
 
     try {
+      // Reuse the store-scoped simulator lookup. Internal codes stay out of ISBN/EAN.
+      // Existing automatic registration/upsert semantics are unchanged.
+      if (originalBook.id === 'manual-entry') {
+        const records = magazordMockService.getRecordsForEan(draft.childCode, actionMode);
+        if (records.some(record => cleanIsbn(record.childCode) === cleanIsbn(draft.childCode)))
+          throw new Error('Código Filho já utilizado nesta loja. Confira o código comercial interno antes de concluir.');
+      }
       const finalDescription = buildFinalDescription(draft);
       const images = imageReferences([draft.mainImageUrl, ...(draft.additionalImageUrls || [])]);
       const draftToSubmit: RegistrationDraft = {
@@ -315,7 +322,7 @@ export default function ProductRegistrationForm({
                 Cadastro bibliográfico
               </h2>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">
-                Pré-preenchido
+                {originalBook.id === 'manual-entry' ? 'Cadastro manual' : 'Pré-preenchido'}
               </span>
             </div>
             <p className="text-xs text-slate-500">
@@ -398,7 +405,9 @@ export default function ProductRegistrationForm({
           <div>
             <span className="font-bold">Cadastro de Novo Exemplar Usado:</span>
             <p className="mt-0.5 text-indigo-800">
-              Os dados bibliográficos da edição foram reaproveitados. Por ser um exemplar usado, insira a etiqueta física deste livro (Código Pai), Código Filho manual e as observações de conservação física.
+              {originalBook.id === 'manual-entry'
+                ? 'Preencha os dados da obra quando disponíveis, a etiqueta física (Código Pai), o sequencial interno (Código Filho) e as observações de conservação. ISBN é opcional.'
+                : 'Os dados bibliográficos da edição foram reaproveitados. Por ser um exemplar usado, insira a etiqueta física deste livro (Código Pai), Código Filho manual e as observações de conservação física.'}
             </p>
           </div>
         </div>

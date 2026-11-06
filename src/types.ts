@@ -89,6 +89,8 @@ export type RegistrationMode =
   | 'new_used_from_known_edition';
 
 export interface RegistrationDraft {
+  // Transient editor values, excluded from registration snapshots.
+  conditionChildCodes?: Partial<Record<BookCondition, string>>;
   // Internal source references, not commercial content or registration export fields.
   sourceLinks?: BookSourceLink[];
   // Identificação e códigos

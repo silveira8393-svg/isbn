@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { BookCondition, RegistrationDraft } from '../../types';
-import { registrationModeForCondition } from '../../utils/draft';
+import { registrationConditionUpdates, registrationIdentifierUpdates } from '../../utils/draft';
 import {
   Tag,
   Barcode,
@@ -39,26 +39,7 @@ export default function ProductIdentitySection({
   const handleConditionChange = (newCondition: BookCondition) => {
     if (newCondition === draft.condition) return;
 
-    if (newCondition === 'novo') {
-      // Se NOVO: Código Filho preenchido automaticamente com ISBN-13 ou EAN
-      const autoChild = draft.isbn13 || draft.ean || '';
-      onChange({
-        condition: 'novo',
-        registrationMode: registrationModeForCondition('novo'),
-        childCode: autoChild,
-        category: draft.category.replace('Usado >', 'Novo >'),
-      });
-    } else {
-      // Se USADO: Código Filho deve ser manual (limpa preenchimento automático se coincidia com ISBN)
-      const currentChildIsIsbn =
-        draft.childCode === draft.isbn13 || draft.childCode === draft.ean;
-      onChange({
-        condition: 'usado',
-        registrationMode: registrationModeForCondition('usado'),
-        childCode: currentChildIsIsbn ? '' : draft.childCode,
-        category: draft.category.replace('Novo >', 'Usado >'),
-      });
-    }
+    onChange(registrationConditionUpdates(draft, newCondition));
   };
 
   return (
@@ -122,7 +103,7 @@ export default function ProductIdentitySection({
         </div>
         <p className="text-[11px] text-slate-500 mt-1.5">
           {draft.condition === 'novo'
-            ? 'Livro novo: Código Filho será preenchido automaticamente com o ISBN-13.'
+            ? 'Livro novo: com ISBN, o Código Filho é sugerido pelo identificador. Sem ISBN, informe o código interno da loja.'
             : 'Livro usado: Código Filho é o código sequencial interno da loja para este exemplar.'}
         </p>
       </div>
@@ -175,7 +156,7 @@ export default function ProductIdentitySection({
               <span className="text-red-500">*</span>
             </label>
             <span className="text-[11px] text-slate-400 font-mono">
-              {draft.condition === 'novo' ? 'Automático (ISBN-13)' : 'Sequencial Manual'}
+              {draft.condition === 'novo' && (draft.isbn13 || draft.isbn10 || draft.ean) ? 'Automático (ISBN)' : 'Sequencial Manual'}
             </span>
           </div>
           <div className="relative">
@@ -187,7 +168,7 @@ export default function ProductIdentitySection({
                 markSensitiveField('childCode');
                 onChange({ childCode: e.target.value });
               }}
-              placeholder={draft.condition === 'novo' ? '9786553508675' : 'Ex: LV10100'}
+              placeholder={draft.condition === 'novo' && (draft.isbn13 || draft.isbn10 || draft.ean) ? '9786553508675' : 'Ex: LV10100'}
               className={`w-full px-3.5 py-2.5 rounded-lg border text-sm font-mono font-semibold transition-colors focus:outline-none focus:ring-2 ${
                 errors.childCode
                   ? 'border-red-300 bg-red-50/40 text-red-900 focus:ring-red-200 focus:border-red-500'
@@ -203,7 +184,7 @@ export default function ProductIdentitySection({
           ) : (
             <p className="text-[11px] text-slate-500 mt-1">
               {draft.condition === 'novo'
-                ? 'Para livro novo, coincide com o ISBN-13 (editável).'
+                ? 'Com ISBN, coincide com o identificador (editável). Sem ISBN, use o código comercial interno, mantendo ISBN/EAN vazios.'
                 : 'Para livro usado, informe o código da derivação do exemplar.'}
             </p>
           )}
@@ -222,12 +203,12 @@ export default function ProductIdentitySection({
             data-registration-field="ean"
             onChange={(e) => {
               markSensitiveField('ean');
-              onChange({ ean: e.target.value });
+              onChange(registrationIdentifierUpdates(draft, 'ean', e.target.value));
             }}
             placeholder="EAN do livro"
             className="w-full px-3.5 py-2 rounded-lg border border-slate-300 bg-white text-sm font-mono text-slate-900 focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
           />
-          <span className="text-[10px] text-slate-400 block mt-0.5">Identificador comercial do produto</span>
+          <span className="text-[10px] text-slate-400 block mt-0.5">Opcional para obras sem ISBN; não informe o código interno aqui.</span>
           {errors.ean && <p className="mt-1 text-xs font-medium text-red-600">{errors.ean}</p>}
         </div>
 
@@ -241,7 +222,7 @@ export default function ProductIdentitySection({
             data-registration-field="isbn13"
             onChange={(e) => {
               markSensitiveField('isbn13');
-              onChange({ isbn13: e.target.value });
+              onChange(registrationIdentifierUpdates(draft, 'isbn13', e.target.value));
             }}
             placeholder="978..."
             className="w-full px-3.5 py-2 rounded-lg border border-slate-300 bg-white text-sm font-mono text-slate-900 focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
@@ -260,7 +241,7 @@ export default function ProductIdentitySection({
             data-registration-field="isbn10"
             onChange={(e) => {
               markSensitiveField('isbn10');
-              onChange({ isbn10: e.target.value });
+              onChange(registrationIdentifierUpdates(draft, 'isbn10', e.target.value));
             }}
             placeholder="85..."
             className="w-full px-3.5 py-2 rounded-lg border border-slate-300 bg-white text-sm font-mono text-slate-900 focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
