@@ -1,5 +1,5 @@
 import type { BookInfo } from '../types';
-import { canonicalBookIsbn } from './isbn';
+import { canonicalBookIsbn } from './isbn.js';
 
 export const RESEARCH_SOURCES = ['brasil_api', 'curitiba', 'amazon', 'google_books'] as const;
 export type ResearchSource = typeof RESEARCH_SOURCES[number];

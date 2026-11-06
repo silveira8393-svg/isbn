@@ -1,6 +1,6 @@
 import type { BookInfo, BookSourceLink } from '../types';
-import { canonicalBookIsbn } from './isbn';
-import { matchesBookIsbn } from './researchSources';
+import { canonicalBookIsbn } from './isbn.js';
+import { matchesBookIsbn } from './researchSources.js';
 
 type LinkBook = Pick<BookInfo, 'isbn13' | 'isbn10' | 'sourceLinks' | 'amazonCatalogReference' | 'googleBooksReference'>;
 const curitibaHosts = ['www.livrariascuritiba.com.br', 'livrariascuritiba.com.br', 'www.distribuidoracuritiba.com.br', 'distribuidoracuritiba.com.br'];
