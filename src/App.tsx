@@ -36,6 +36,7 @@ import { searchGoogleBooks, complementWithGoogleBooks } from './services/googleB
 import ResearchSourcesPanel from './components/ResearchSourcesPanel';
 import { initialResearchStates, researchOutcome, type ResearchSource, type ResearchState } from './utils/researchSources';
 import { attachBookSourceLinks } from './utils/bookSourceLinks';
+import { loadCuritibaProductLink, appendCuritibaProductLinks } from './services/curitibaProductLink';
 import { searchAmazonOfficial, complementWithAmazon, complementAmazonImages } from './services/amazonOfficial';
 import {
   mergeBookWithDistribuidora,
@@ -233,6 +234,8 @@ export default function App() {
       showSource('curitiba', researchOutcome(distribuidoraResult.book, cleaned, distribuidoraResult.diagnostic.state, distribuidoraResult.diagnostic.status));
       const galleryPending = 'gallery' in distribuidoraResult && distribuidoraResult.gallery
         ? loadCuritibaGallery(distribuidoraResult.gallery, galleryController.signal) : null;
+      const productLinkPending = distribuidoraResult.book
+        ? loadCuritibaProductLink(distribuidoraResult.book, cleaned, galleryController.signal) : null;
       const identifiers = cleaned.length === 13 ? { isbn13: cleaned } : { isbn10: cleaned };
       const isbnBook: BookInfo = { id: `isbn-${cleaned}`, title: '', ...identifiers };
       const primaryBook = result.book || distribuidoraResult.book ? {
@@ -278,6 +281,13 @@ export default function App() {
         setRegistrationDraft(draft);
       }
       // Secondary links never delay the bibliographic result, audit, simulated lookup or opening a form.
+      if (productLinkPending) void productLinkPending.then(links => {
+        const current = () => sameActor() && galleryGeneration.current === generation
+          && !galleryController.signal.aborted && !registrationCompleted.current;
+        if (!links.length || !current()) return;
+        setFoundBook(book => current() && book ? appendCuritibaProductLinks(book, links) : book);
+        setRegistrationDraft(draft => current() && draft ? appendCuritibaProductLinks(draft, links) : draft);
+      });
       if (galleryPending) void galleryPending.then(images => {
         const current = () => sameActor() && galleryGeneration.current === generation
           && !galleryController.signal.aborted && !registrationCompleted.current;

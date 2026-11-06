@@ -70,6 +70,7 @@ const componentMocks = [
   [/\/contexts\/UserContext$/, 'exports.useUser=()=>deps.user'],
   [/\/services\/operationsService$/, 'exports.recordOperation=(...args)=>deps.record(...args)'],
   [/\/services\/brasilApi$/, 'exports.searchBookByIsbnBrasilApi=(...args)=>deps.brasil(...args)'],
+  [/\/services\/curitibaProductLink$/, 'exports.loadCuritibaProductLink=async()=>[];exports.appendCuritibaProductLinks=book=>book'],
   [/\/services\/googleBooks$/, 'exports.searchGoogleBooks=async()=>({status:"not_found",book:null,diagnostic:{code:"offline"}});exports.complementWithGoogleBooks=(base)=>base'],
   [/\/services\/distribuidoraCuritiba$/, 'exports.searchBookByIsbnDistribuidoraCuritiba=(...args)=>deps.curitiba(...args);exports.mergeBookWithDistribuidora=(a,b)=>({...a,...b})'],
   [/\/services\/magazordMockService$/, 'exports.magazordMockService=deps.magazord'],

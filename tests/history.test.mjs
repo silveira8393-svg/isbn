@@ -23,6 +23,7 @@ const output = await build({
       [/^lucide-react$/, 'module.exports=new Proxy({},{get:(_,key)=>String(key)})'],
       [/\/contexts\/UserContext$/, 'exports.useUser=()=>deps.user'],
       [/\/services\/brasilApi$/, 'exports.searchBookByIsbnBrasilApi=(...args)=>deps.brasil(...args)'],
+      [/\/services\/curitibaProductLink$/, 'exports.loadCuritibaProductLink=async()=>[];exports.appendCuritibaProductLinks=book=>book'],
       [/\/services\/googleBooks$/, 'exports.searchGoogleBooks=async()=>({status:"not_found",book:null,diagnostic:{code:"offline"}});exports.complementWithGoogleBooks=(base)=>base'],
       [/\/services\/distribuidoraCuritiba$/, 'exports.searchBookByIsbnDistribuidoraCuritiba=(...args)=>deps.curitiba(...args);exports.mergeBookWithDistribuidora=(a,b)=>deps.merge(a,b)'],
       [/\/lib\/supabase$/, 'exports.supabase=deps.supabase'],

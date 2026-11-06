@@ -1,0 +1,11 @@
+{
+  "evidence": "Sanitized real public catalog response, queried by product reference LV434083. Only link and identity fields retained. No cookies, session, price or stock.",
+  "endpoint": "https://www.livrariascuritiba.com.br/api/catalog_system/pub/products/search?fq=alternateIds_RefId%3ALV434083&_from=0&_to=1",
+  "http": 200,
+  "items": [{
+    "productId": "399701",
+    "productReference": "LV434083",
+    "link": "https://www.livrariascuritiba.com.br/o-diario-perdido-de-gravity-falls-3-lv434083/p",
+    "items": [{ "ean": "9788550303628", "referenceId": [{ "Key": "RefId", "Value": "LV434083" }] }]
+  }]
+}

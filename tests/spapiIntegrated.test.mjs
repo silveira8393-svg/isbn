@@ -116,6 +116,7 @@ const appMocks = [
   [/\/hooks\/useOperationAudit$/, 'exports.useOperationAudit=()=>({saveOperation:deps.audit,pending:[],retry:()=>{}})'],
   [/\/hooks\/useLocalHistory$/, 'exports.useLocalHistory=()=>({history:[],setHistory:()=>{},clearHistory:()=>{}})'],
   [/\/services\/brasilApi$/, 'exports.searchBookByIsbnBrasilApi=async()=>deps.brasil'],
+  [/\/services\/curitibaProductLink$/, 'exports.loadCuritibaProductLink=async(...args)=>deps.productLink?deps.productLink(...args):[];exports.appendCuritibaProductLinks=(book,links)=>deps.appendProductLinks?deps.appendProductLinks(book,links):book'],
   [/\/services\/googleBooks$/, 'exports.searchGoogleBooks=async()=>deps.googleBooks||({status:"not_found",book:null,diagnostic:{code:"offline"}});exports.complementWithGoogleBooks=deps.googleMerge||((base)=>base)'],
   [/\/services\/distribuidoraCuritiba$/, 'exports.searchBookByIsbnDistribuidoraCuritiba=async()=>deps.curitiba;exports.mergeBookWithDistribuidora=(a,b)=>({...a,...b})'],
   [/\/lib\/supabase(?:\.js)?$/, 'exports.supabase={auth:{getSession:async()=>({data:{session:{user:{id:deps.user.currentUser.id},access_token:"synthetic-session"}}})}}'],
