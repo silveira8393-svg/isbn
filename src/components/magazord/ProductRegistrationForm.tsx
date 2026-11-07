@@ -17,6 +17,7 @@ import { formatPhysicalMeasurement, normalizeLanguage, roundPhysicalMeasurement 
 import RegistrationImage from '../dashboard/RegistrationImage';
 import { imageReferences } from '../../utils/imageUrls';
 import ProductIdentitySection from './ProductIdentitySection';
+import MagazordProductLookup from './MagazordProductLookup';
 import CategoryAndBrandSection from './CategoryAndBrandSection';
 import { useMagazordCategories } from '../../hooks/useMagazordCategories';
 import CommercialSection from './CommercialSection';
@@ -436,6 +437,7 @@ export default function ProductRegistrationForm({
         onChange={onUpdateDraft}
         errors={errors}
       />
+      <MagazordProductLookup user={imageUser} parentCode={draft.parentCode} childCode={draft.childCode} isbn={draft.isbn13 || draft.isbn10 || draft.ean} />
       <CategoryAndBrandSection
         categories={categories}
         draft={draft}

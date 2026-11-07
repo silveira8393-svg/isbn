@@ -1,0 +1,14 @@
+{
+  "parents": [
+    { "codigo": "FIXTURE-N-P", "nome": "Livro novo de teste", "ativo": true, "fixtureCondition": "novo", "preco": "99.99" },
+    { "codigo": "FIXTURE-U-P", "nome": "Primeiro usado de teste", "ativo": true, "fixtureCondition": "usado" },
+    { "codigo": "FIXTURE-U2-P", "nome": "Segundo usado de teste", "ativo": false, "fixtureCondition": "usado" },
+    { "codigo": "FIXTURE-X-P", "nome": "Livro sem ISBN de teste", "ativo": true }
+  ],
+  "children": [
+    { "codigo": "9788551003664", "nomeCompleto": "Livro novo de teste", "tipoRegistro": "Filho", "agrupador": "FIXTURE-N-P", "ativo": true, "ean": "9788551003664", "derivacaoEan": [], "quantidade": 10 },
+    { "codigo": "FIXTURE-U-001", "nomeCompleto": "Primeiro exemplar usado", "tipoRegistro": "Filho", "agrupador": "FIXTURE-U-P", "ativo": true, "ean": "9788551003664", "derivacaoEan": [], "quantidade": 1 },
+    { "codigo": "FIXTURE-U-002", "nomeCompleto": "Segundo exemplar usado", "tipoRegistro": "Filho", "agrupador": "FIXTURE-U2-P", "ativo": false, "ean": "9788551003664", "derivacaoEan": [], "quantidade": 1 },
+    { "codigo": "FIXTURE-X-001", "nomeCompleto": "Sem ISBN", "tipoRegistro": "Filho", "agrupador": "FIXTURE-X-P", "ativo": true, "ean": null, "derivacaoEan": [] }
+  ]
+}

@@ -4,12 +4,21 @@ import path from 'path';
 import {defineConfig, loadEnv} from 'vite';
 import { createGoogleBooksFunction } from './server/googleBooksFunction';
 import { createMagazordCategoriesFunction } from './server/magazordCategories';
+import { createMagazordProductsFunction } from './server/magazordProducts';
 
 export default defineConfig(({ mode }) => {
   const googleBooks = createGoogleBooksFunction({ env: { ...loadEnv(mode, process.cwd(), 'GOOGLE_BOOKS_'), ...process.env } });
   const categories = createMagazordCategoriesFunction({ env: { ...loadEnv(mode, process.cwd(), ['MAGAZORD_', 'SUPABASE_', 'VITE_SUPABASE_']), ...process.env } });
+  const products = createMagazordProductsFunction({ env: { ...loadEnv(mode, process.cwd(), ['MAGAZORD_', 'SUPABASE_', 'VITE_SUPABASE_']), ...process.env } });
   return {
     plugins: [react(), tailwindcss(), { name: 'google-books-local-api', configureServer(server) {
+      server.middlewares.use('/api/magazord/products', async (req, res) => {
+        const headers = new Headers();
+        for (const key of ['origin', 'sec-fetch-site', 'authorization', 'x-isbn-store-id']) if (typeof req.headers[key] === 'string') headers.set(key, req.headers[key]);
+        const result = await products(new Request('http://' + (req.headers.host || 'localhost:3000') + (req.originalUrl || '/api/magazord/products'), { method: req.method, headers }));
+        res.statusCode = result.status; result.headers.forEach((value, key) => res.setHeader(key, value));
+        res.end(await result.text());
+      });
       server.middlewares.use('/api/magazord/categories', async (req, res) => {
         const headers = new Headers();
         for (const key of ['origin', 'sec-fetch-site', 'authorization', 'x-isbn-store-id']) if (typeof req.headers[key] === 'string') headers.set(key, req.headers[key]);

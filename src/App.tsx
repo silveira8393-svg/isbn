@@ -12,6 +12,7 @@ import BookDetailsCard from './components/BookDetailsCard';
 import SearchHistoryGroup from './components/SearchHistoryGroup';
 import CameraScannerModal from './components/CameraScannerModal';
 import MagazordStatusCard from './components/magazord/MagazordStatusCard';
+import MagazordProductLookup from './components/magazord/MagazordProductLookup';
 import ProductRegistrationForm from './components/magazord/ProductRegistrationForm';
 import OwnerDashboard from './components/OwnerDashboard';
 import { useOperationAudit } from './hooks/useOperationAudit';
@@ -853,6 +854,7 @@ export default function App() {
                     onLinkStock={handleLinkStock}
                   />
 
+                  <MagazordProductLookup user={currentUser} isbn={foundBook.isbn13 || foundBook.isbn10 || searchedTerm} />
                   {/* Ficha Bibliográfica Completa (Preservada do projeto original) */}
                   {!manualEntry && <BookDetailsCard book={foundBook} />}
                   {manualEntry && <BookSourceLinks book={foundBook} />}
