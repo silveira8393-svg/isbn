@@ -96,7 +96,8 @@ test('valid priority values, dimensions, manual synopsis and commercial fields a
   for (const key of Object.keys(original).filter(key => original[key] !== undefined)) assert.deepEqual(book[key], original[key], key);
   assert.ok(book.bibliographicWarnings.some(w => w.startsWith('editora:')));
   assert.ok(book.bibliographicWarnings.some(w => w.startsWith('peso:')));
-  assert.match(api.renderToStaticMarkup(api.createElement(api.Card, { book })), /divergência no Laboratório Amazon/);
+  assert.match(book.bibliographicWarnings.join(' '), /divergência no Laboratório Amazon/);
+  assert.doesNotMatch(api.renderToStaticMarkup(api.createElement(api.Card, { book })), /divergência no Laboratório Amazon/);
 });
 
 test('partial factual fields complement even when no image is added; invalid existing pages can be replaced', async t => {

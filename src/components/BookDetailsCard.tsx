@@ -27,7 +27,11 @@ interface BookDetailsCardProps {
   book: BookInfo;
 }
 
+// Presentation only: match the laboratory's specific messages, never generic review warnings.
+const laboratoryWarning = /^(?:Edição divergente no Laboratório Amazon; complemento bibliográfico não incorporado\.|Dimensões Amazon sem eixos inequívocos ou conflitantes; medidas selecionadas preservadas para revisão\.|(?:titulo|subtitulo|autores|editora|ano|edicao|idioma|formato|paginas|data_publicacao|peso|largura|altura|profundidade): (?:candidato inconsistente no Laboratório Amazon; requer revisão, sem preenchimento automático\.|ano e data divergentes no Laboratório Amazon; fonte selecionada preservada\.|divergência no Laboratório Amazon; fonte selecionada preservada\.))$/;
+
 export default function BookDetailsCard({ book }: BookDetailsCardProps) {
+  const operationalWarnings = (book.bibliographicWarnings || []).filter(warning => !laboratoryWarning.test(warning));
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [failedImageUrls, setFailedImageUrls] = useState<Set<string>>(new Set());
 
@@ -304,12 +308,9 @@ export default function BookDetailsCard({ book }: BookDetailsCardProps) {
             {Object.values(book.provenance || {}).includes('amazon_spapi_catalog_2022-04-01') && (
               <p className="text-xs text-slate-500">Fonte complementar: Amazon SP-API.</p>
             )}
-            {Object.values(book.provenance || {}).some(source => source.startsWith('amazon_lab_verified:')) && (
-              <p className="text-xs text-slate-500">Fonte complementar: Amazon (edição verificada no laboratório).</p>
-            )}
-            {!!book.bibliographicWarnings?.length && (
+            {!!operationalWarnings.length && (
               <ul role="status" className="text-xs text-amber-800 list-disc pl-4">
-                {book.bibliographicWarnings.map(warning => <li key={warning}>{warning}</li>)}
+                {operationalWarnings.map(warning => <li key={warning}>{warning}</li>)}
               </ul>
             )}
 
