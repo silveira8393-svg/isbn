@@ -73,18 +73,25 @@ test('categories do not change existing bibliographic projection',async()=>{
  const a=await project([raw({summaries:[{marketplaceId,itemName:'Obra sintética'}]})]);const b=await project([raw({classifications:[group([hierarchy])]})]);
  const {browseClassification,classifications,...unchanged}=b.items[0];assert.deepEqual(unchanged,a.items[0]);
 });
-test('synthetic category paths render as separate full lines with root-specific badges and all sources preserved',()=>{
+test('synthetic Amazon leaves deduplicate within origin only, highlight physical books and preserve original paths and other sources',()=>{
  const book={...base,productCategory:'Categoria Curitiba sintética',department:'Departamento Curitiba sintético',
   googleBooksReference:{categories:['Google sintético 1','Google sintético 2']},amazonCatalogReference:{asin,isbn,marketplaceId},
   amazonCategoryReference:{asin,isbn,marketplaceId,classifications:[
    node('k','Fantasia',node('kindle','Loja Kindle')),node('p','Fantasia',node('books','Livros')),node('o','Outro caminho'),
+   node('p2','Fantasia',node('sub','Literatura',node('books','Livros'))),
+   node('k2','Fantasia',node('subk','Literatura',node('kindle','Loja Kindle'))),
+   node('p3','História',node('books','Livros')),
    node('x','Livros digitais — raiz diferente'),node('y','Loja Kindle alternativa'),
   ]}};
  const before=structuredClone(book),html=render(book);
  const lines=[...html.matchAll(/<li\b[^>]*>(.*?)<\/li>/gs)].map(match=>match[1]);
- assert.equal(lines.length,10);
- const kindle=lines.find(line=>line.includes('Loja Kindle &gt; Fantasia'));assert.match(kindle,/>Kindle<\/span>/);
- const physical=lines.find(line=>line.includes('Livros &gt; Fantasia'));assert.match(physical,/>Livro físico<\/span>/);
+ assert.equal(lines.length,11);
+ const fantasy=lines.filter(line=>line.includes('>Fantasia</span>'));assert.equal(fantasy.length,2);
+ assert.ok(fantasy.some(line=>line.includes('>Kindle</span>')));assert.ok(fantasy.some(line=>line.includes('>Livro físico</span>')));
+ assert.ok(lines.some(line=>line.includes('>História</span>')&&line.includes('>Livro físico</span>')));
+ for(const line of fantasy)assert.doesNotMatch(line,/Loja Kindle|Livros|Literatura|&gt;/);
+ assert.match(html,/<li[^>]*font-semibold text-blue-700[^>]*>[\s\S]*?>Livro físico<\/span>/);
+ assert.ok(html.includes('title="Livros &gt; Fantasia"'));
  for(const text of ['Outro caminho','Livros digitais — raiz diferente','Loja Kindle alternativa']){
   const line=lines.find(line=>line.includes(text));assert.ok(line);assert.doesNotMatch(line,/>Kindle<\/span>|>Livro físico<\/span>/);
  }

@@ -58,14 +58,16 @@ export default function CategoryAndBrandSection({
         <dl className="space-y-2">{references.map(reference => <div key={reference.source}>
           <dt className="font-semibold">{reference.source}:</dt>
           <dd className="mt-0.5"><ul className="space-y-1">{reference.values.map(value => {
-            const kind = reference.source === 'Amazon — categoria de navegação'
+            const amazon = reference.source === 'Amazon — categoria de navegação';
+            const kind = amazon
               ? /^Loja Kindle(?:\s*>|$)/i.test(value) ? 'Kindle' : /^Livros(?:\s*>|$)/i.test(value) ? 'Livro físico' : undefined
               : undefined;
-            return <li key={value} className="flex items-start gap-2">
+            return { value, kind, name: amazon ? value.split(' > ').at(-1)! : value };
+          }).filter((item, index, items) => items.findIndex(other => other.kind === item.kind && other.name === item.name) === index)
+            .map(({ value, kind, name }) => <li key={value} title={value} className={`flex items-start gap-2 ${kind === 'Livro físico' ? 'font-semibold text-blue-700' : ''}`}>
               {kind && <span className="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">{kind}</span>}
-              <span className="min-w-0 [overflow-wrap:anywhere]">{value}</span>
-            </li>;
-          })}</ul></dd>
+              <span className="min-w-0 [overflow-wrap:anywhere]">{name}</span>
+            </li>)}</ul></dd>
         </div>)}</dl>
       </aside>}
 

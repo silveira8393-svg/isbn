@@ -9,6 +9,7 @@ book.amazonCatalogReference={asin:'SYNTHETIC1',isbn:book.isbn13,marketplaceId:'A
 book.amazonCategoryReference={...book.amazonCatalogReference,classifications:[
  {classificationId:'k',displayName:'Fantasia sintética',parent:{classificationId:'kindle',displayName:'Loja Kindle'}},
  {classificationId:'p',displayName:'Literatura e Ficção sintética',parent:{classificationId:'books',displayName:'Livros'}},
+ {classificationId:'p2',displayName:'Literatura e Ficção sintética',parent:{classificationId:'parent',displayName:'Outra seção',parent:{classificationId:'books',displayName:'Livros'}}},
  {classificationId:'o',displayName:'Outro caminho sintético preservado'},
 ]};
 const bundle=await build({stdin:{resolveDir:process.cwd(),loader:'tsx',contents:`
@@ -30,7 +31,9 @@ try{
  await page.goto('http://127.0.0.1:'+server.address().port);const reference=page.getByRole('complementary',{name:'Referências das fontes'});await reference.waitFor();
  for(const name of ['BrasilAPI:','Distribuidora Curitiba:','Google Books:','Amazon — categoria de navegação:','Kindle','Livro físico'])assert.ok((await reference.innerText()).includes(name));
  assert.equal(await reference.locator('li').count(),8);
- assert.equal(await page.evaluate(()=>window.currentDraft.magazordCategoryId),777);console.log('PASS all four sources render separate paths and badges without altering selected ID');
+ const physical=reference.locator('li').filter({hasText:'Livro físico'});assert.equal(await physical.count(),1);assert.ok((await physical.getAttribute('class')).includes('font-semibold text-blue-700'));
+ assert.doesNotMatch(await reference.innerText(),/Loja Kindle|Outra seção|Livros >|Livros\s*>/);
+ assert.equal(await page.evaluate(()=>window.currentDraft.magazordCategoryId),777);console.log('PASS all four sources render Amazon leaf names, origin badges and physical highlight, deduplicated without altering selected ID');
  await page.locator('#magazord-category-search').fill('Outra');await page.locator('#magazord-category-options button').click();assert.equal(await page.evaluate(()=>window.currentDraft.magazordCategoryId),888);assert.ok((await reference.innerText()).includes('Ficção BrasilAPI sintética'));console.log('PASS manual category selection remains independent of source references');
  await mkdir('dist/qa',{recursive:true});await page.locator('#registration-category').screenshot({path:'dist/qa/bibliographic-categories-desktop.png'});await page.setViewportSize({width:390,height:1000});await page.locator('#registration-category').screenshot({path:'dist/qa/bibliographic-categories-mobile.png'});
  const boxes=await reference.locator('li').evaluateAll(rows=>rows.map(row=>({top:row.getBoundingClientRect().top,bottom:row.getBoundingClientRect().bottom,overflow:row.scrollWidth>row.clientWidth})));
