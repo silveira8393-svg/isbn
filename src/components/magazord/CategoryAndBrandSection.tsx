@@ -3,13 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { RegistrationDraft } from '../../types';
+import { BookInfo, RegistrationDraft } from '../../types';
 import MagazordCategoryPicker from './MagazordCategoryPicker';
 import type { useMagazordCategories } from '../../hooks/useMagazordCategories';
 import { FolderTree, Building2, Bookmark, Check } from 'lucide-react';
 
 interface CategoryAndBrandSectionProps {
   draft: RegistrationDraft;
+  originalBook?: BookInfo;
   categories: ReturnType<typeof useMagazordCategories>;
   onChange: (updates: Partial<RegistrationDraft>) => void;
   errors: Record<string, string>;
@@ -17,12 +18,17 @@ interface CategoryAndBrandSectionProps {
 
 export default function CategoryAndBrandSection({
   draft,
+  originalBook,
   categories,
   onChange,
   errors,
 }: CategoryAndBrandSectionProps) {
-
-
+  const classifications = (values: unknown[]) => [...new Set(values.filter((value): value is string => typeof value === 'string' && !!value.trim()).map(value => value.trim()))];
+  const references = [
+    { source: 'BrasilAPI', values: classifications(originalBook?.categories || []) },
+    { source: 'Distribuidora Curitiba', values: classifications([originalBook?.productCategory, originalBook?.department]) },
+    { source: 'Google Books', values: classifications([originalBook?.googleBooksReference?.mainCategory, ...(originalBook?.googleBooksReference?.categories || [])]) },
+  ].filter(reference => reference.values.length);
   return (
     <div id="registration-category" className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-5">
       <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
@@ -40,6 +46,13 @@ export default function CategoryAndBrandSection({
       </div>
 
       <MagazordCategoryPicker draft={draft} onChange={onChange} categories={categories} error={errors.category} />
+      {references.length > 0 && <aside aria-label="Referências das fontes" className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+        <h4 className="font-semibold text-slate-700 mb-1">Referências das fontes</h4>
+        <dl className="space-y-1">{references.map(reference => <div key={reference.source}>
+          <dt className="inline font-semibold">{reference.source}: </dt>
+          <dd className="inline break-words">{reference.values.join(' · ')}</dd>
+        </div>)}</dl>
+      </aside>}
 
       {/* 2. CAMPOS SEPARADOS: MARCA e EDITORA */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">

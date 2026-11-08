@@ -68,7 +68,10 @@ export function mapGoogleBooksResponse(payload: unknown, searchedIsbn: string): 
     const images = object(info.imageLinks);
     const coverUrl = ['thumbnail', 'smallThumbnail', 'small', 'medium', 'large', 'extraLarge']
       .map(key => volumeUrl(images[key], id, true)).find(Boolean);
+    const categories = [...new Set((Array.isArray(info.categories) ? info.categories : []).map(category => text(category)).filter((value): value is string => !!value))];
+    const mainCategory = text(info.mainCategory);
     book.googleBooksReference = { volumeId: id, isbn: expected, infoLink, previewLink, coverUrl,
+      ...(categories.length ? { categories } : {}), ...(mainCategory ? { mainCategory } : {}),
       descriptionAvailable: typeof info.description === 'string' && !!info.description.trim(), contentReviewRequired: true };
     if (book.googleBooksReference.descriptionAvailable || coverUrl) book.bibliographicWarnings = [
       'Google Books: descrição/capa disponíveis como referência; direitos de uso comercial exigem verificação.'];

@@ -439,6 +439,7 @@ export default function ProductRegistrationForm({
       />
       <MagazordProductLookup user={imageUser} parentCode={draft.parentCode} childCode={draft.childCode} isbn={draft.isbn13 || draft.isbn10 || draft.ean} />
       <CategoryAndBrandSection
+        originalBook={originalBook}
         categories={categories}
         draft={draft}
         onChange={onUpdateDraft}

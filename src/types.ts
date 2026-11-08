@@ -69,7 +69,7 @@ export interface BookInfo {
   synopsis?: string;
   sourceLinks?: BookSourceLink[];
   googleBooksReference?: { volumeId: string; isbn: string; infoLink?: string; previewLink?: string;
-    coverUrl?: string; descriptionAvailable: boolean; contentReviewRequired: true };
+    coverUrl?: string; descriptionAvailable: boolean; contentReviewRequired: true; categories?: string[]; mainCategory?: string };
 }
 
 export interface AmazonCatalogCandidate {
