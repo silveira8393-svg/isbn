@@ -4,6 +4,13 @@ import{createRequire}from'node:module';import{join}from'node:path';import{homedi
 const require=createRequire(import.meta.url);let playwright;try{playwright=require('playwright');}catch{playwright=require(join(homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));}
 const user={id:'11111111-1111-4111-8111-111111111111',storeId:'22222222-2222-4222-8222-222222222222',active:true,role:'developer'};
 const book={id:'synthetic-book',title:'Obra sintética',categories:['Ficção BrasilAPI sintética'],productCategory:'Literatura Curitiba sintética',department:'Livros Curitiba sintético',googleBooksReference:{volumeId:'synthetic',isbn:'9788551003664',categories:['Fiction / Fantasy sintética'],mainCategory:'Juvenile Fiction sintética',descriptionAvailable:false,contentReviewRequired:true}};
+book.isbn13='9788551003664';
+book.amazonCatalogReference={asin:'SYNTHETIC1',isbn:book.isbn13,marketplaceId:'A2Q3Y263D00KWC'};
+book.amazonCategoryReference={...book.amazonCatalogReference,classifications:[
+ {classificationId:'k',displayName:'Fantasia sintética',parent:{classificationId:'kindle',displayName:'Loja Kindle'}},
+ {classificationId:'p',displayName:'Literatura e Ficção sintética',parent:{classificationId:'books',displayName:'Livros'}},
+ {classificationId:'o',displayName:'Outro caminho sintético preservado'},
+]};
 const bundle=await build({stdin:{resolveDir:process.cwd(),loader:'tsx',contents:`
  import React,{useState}from'react';import{createRoot}from'react-dom/client';import Form from './src/components/magazord/ProductRegistrationForm';import{createRegistrationDraft}from'./src/utils/draft';
  const initial=${JSON.stringify(book)},user=${JSON.stringify(user)};
@@ -21,10 +28,14 @@ try{
  browser=await playwright.chromium.launch({channel:'msedge',headless:true});const page=await browser.newPage({viewport:{width:1440,height:1000}});
  await page.route('**/*',route=>{const url=new URL(route.request().url());if(url.hostname==='127.0.0.1'&&!url.pathname.startsWith('/api/'))return route.continue();if(url.pathname.startsWith('/api/'))requests++;return route.abort();});
  await page.goto('http://127.0.0.1:'+server.address().port);const reference=page.getByRole('complementary',{name:'Referências das fontes'});await reference.waitFor();
- for(const name of ['BrasilAPI:','Distribuidora Curitiba:','Google Books:'])assert.ok((await reference.innerText()).includes(name));assert.doesNotMatch(await reference.innerText(),/Amazon/);
- assert.equal(await page.evaluate(()=>window.currentDraft.magazordCategoryId),777);console.log('PASS all three references render below the picker without altering selected ID');
+ for(const name of ['BrasilAPI:','Distribuidora Curitiba:','Google Books:','Amazon — categoria de navegação:','Kindle','Livro físico'])assert.ok((await reference.innerText()).includes(name));
+ assert.equal(await reference.locator('li').count(),8);
+ assert.equal(await page.evaluate(()=>window.currentDraft.magazordCategoryId),777);console.log('PASS all four sources render separate paths and badges without altering selected ID');
  await page.locator('#magazord-category-search').fill('Outra');await page.locator('#magazord-category-options button').click();assert.equal(await page.evaluate(()=>window.currentDraft.magazordCategoryId),888);assert.ok((await reference.innerText()).includes('Ficção BrasilAPI sintética'));console.log('PASS manual category selection remains independent of source references');
  await mkdir('dist/qa',{recursive:true});await page.locator('#registration-category').screenshot({path:'dist/qa/bibliographic-categories-desktop.png'});await page.setViewportSize({width:390,height:1000});await page.locator('#registration-category').screenshot({path:'dist/qa/bibliographic-categories-mobile.png'});
+ const boxes=await reference.locator('li').evaluateAll(rows=>rows.map(row=>({top:row.getBoundingClientRect().top,bottom:row.getBoundingClientRect().bottom,overflow:row.scrollWidth>row.clientWidth})));
+ for(let i=0;i<boxes.length;i++){assert.equal(boxes[i].overflow,false);if(i)assert.ok(boxes[i].top>=boxes[i-1].bottom);}
+ console.log('PASS mobile paths occupy distinct lines without horizontal overflow');
  await page.locator('#clear-references').click();assert.equal(await reference.count(),0);assert.equal(await page.evaluate(()=>window.currentDraft.magazordCategoryId),888);console.log('PASS absent classifications hide the block and preserve the commercial choice');
- assert.equal(requests,0);console.log('PASS no additional HTTP API request');console.log(JSON.stringify({checks:4,syntheticFixtures:true,apiRequests:requests}));
+ assert.equal(requests,0);console.log('PASS no additional HTTP API request');console.log(JSON.stringify({checks:5,syntheticFixtures:true,apiRequests:requests}));
 }finally{await browser?.close();await new Promise(r=>server.close(r));}

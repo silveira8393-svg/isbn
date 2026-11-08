@@ -55,9 +55,17 @@ export default function CategoryAndBrandSection({
       <MagazordCategoryPicker draft={draft} onChange={onChange} categories={categories} error={errors.category} />
       {references.length > 0 && <aside aria-label="Referências das fontes" className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
         <h4 className="font-semibold text-slate-700 mb-1">Referências das fontes</h4>
-        <dl className="space-y-1">{references.map(reference => <div key={reference.source}>
-          <dt className="inline font-semibold">{reference.source}: </dt>
-          <dd className="inline break-words">{reference.values.join(' · ')}</dd>
+        <dl className="space-y-2">{references.map(reference => <div key={reference.source}>
+          <dt className="font-semibold">{reference.source}:</dt>
+          <dd className="mt-0.5"><ul className="space-y-1">{reference.values.map(value => {
+            const kind = reference.source === 'Amazon — categoria de navegação'
+              ? /^Loja Kindle(?:\s*>|$)/i.test(value) ? 'Kindle' : /^Livros(?:\s*>|$)/i.test(value) ? 'Livro físico' : undefined
+              : undefined;
+            return <li key={value} className="flex items-start gap-2">
+              {kind && <span className="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">{kind}</span>}
+              <span className="min-w-0 [overflow-wrap:anywhere]">{value}</span>
+            </li>;
+          })}</ul></dd>
         </div>)}</dl>
       </aside>}
 

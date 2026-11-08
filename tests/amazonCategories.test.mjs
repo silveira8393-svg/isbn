@@ -73,3 +73,21 @@ test('categories do not change existing bibliographic projection',async()=>{
  const a=await project([raw({summaries:[{marketplaceId,itemName:'Obra sintética'}]})]);const b=await project([raw({classifications:[group([hierarchy])]})]);
  const {browseClassification,classifications,...unchanged}=b.items[0];assert.deepEqual(unchanged,a.items[0]);
 });
+test('synthetic category paths render as separate full lines with root-specific badges and all sources preserved',()=>{
+ const book={...base,productCategory:'Categoria Curitiba sintética',department:'Departamento Curitiba sintético',
+  googleBooksReference:{categories:['Google sintético 1','Google sintético 2']},amazonCatalogReference:{asin,isbn,marketplaceId},
+  amazonCategoryReference:{asin,isbn,marketplaceId,classifications:[
+   node('k','Fantasia',node('kindle','Loja Kindle')),node('p','Fantasia',node('books','Livros')),node('o','Outro caminho'),
+   node('x','Livros digitais — raiz diferente'),node('y','Loja Kindle alternativa'),
+  ]}};
+ const before=structuredClone(book),html=render(book);
+ const lines=[...html.matchAll(/<li\b[^>]*>(.*?)<\/li>/gs)].map(match=>match[1]);
+ assert.equal(lines.length,10);
+ const kindle=lines.find(line=>line.includes('Loja Kindle &gt; Fantasia'));assert.match(kindle,/>Kindle<\/span>/);
+ const physical=lines.find(line=>line.includes('Livros &gt; Fantasia'));assert.match(physical,/>Livro físico<\/span>/);
+ for(const text of ['Outro caminho','Livros digitais — raiz diferente','Loja Kindle alternativa']){
+  const line=lines.find(line=>line.includes(text));assert.ok(line);assert.doesNotMatch(line,/>Kindle<\/span>|>Livro físico<\/span>/);
+ }
+ for(const text of ['Brasil sintético','Categoria Curitiba sintética','Departamento Curitiba sintético','Google sintético 1','Google sintético 2'])assert.ok(lines.some(line=>line.includes(text)));
+ assert.deepEqual(book,before);
+});
