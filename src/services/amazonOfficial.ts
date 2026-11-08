@@ -1,4 +1,5 @@
 import type { BookInfo, User } from '../types';
+import { amazonBrowseNode, amazonBrowseNodes, type AmazonBrowseNode } from '../../shared/amazonCategories';
 import { cleanIsbn } from '../utils/isbn';
 import { normalizePublicationDate, publicationYear } from '../../shared/publicationDate';
 import { imageIdentity, imageReferences, isImageReference } from '../utils/imageUrls';
@@ -67,6 +68,7 @@ function amazonPhysicalFields(physical?: AmazonPhysical) {
     ...([width, height, depth].some(v => v !== undefined) ? { dimensionsUnit: 'cm' as const } : {}) };
 }
 type CatalogItem = { isbn: string; asin: string; title?: string; authors?: string[]; publisher?: string;
+  browseClassification?: AmazonBrowseNode; classifications?: AmazonBrowseNode[];
   publicationDate?: string; language?: string; binding?: string; edition?: string; pageCount?: number; marketplaceId: string;
   isbn10?: string; isbn13?: string; identifiers?: { type: string; identifier: string }[]; physical?: AmazonPhysical;
   images?: { variant: string; link: string; width?: number; height?: number }[] };
@@ -321,6 +323,9 @@ export async function searchAmazonOfficial(isbn: string, user: User, signal?: Ab
     const identifiers = actualIdentifiers.filter(id => equivalent13(id.identifier) === equivalent13(cleanIsbn(isbn)));
     const canonical = canonicalBookIsbn(isbn);
     const physical = amazonPhysical(item.physical);
+    const browseClassification = amazonBrowseNode(item.browseClassification);
+    const classifications = amazonBrowseNodes(item.classifications);
+    if (!classifications.length && browseClassification) classifications.push(browseClassification);
     const images = catalogImages(item.images);
     const book: BookInfo = { id: `amazon-spapi-${item.asin}`, title: text(item.title) || '',
       ...(cleanIsbn(isbn).length === 13 ? { isbn13: cleanIsbn(isbn) } : { isbn10: cleanIsbn(isbn) }),
@@ -329,6 +334,8 @@ export async function searchAmazonOfficial(isbn: string, user: User, signal?: Ab
       ...(identifiers.length ? { rawIdentifiers: identifiers as BookInfo['rawIdentifiers'] } : {}),
       ...(canonical && identifiers.length && /^[A-Z0-9]{10}$/.test(item.asin)
         ? { amazonCatalogReference: { asin: item.asin, isbn: canonical, marketplaceId: item.marketplaceId } } : {}),
+      ...(canonical && identifiers.length && classifications.length
+        ? { amazonCategoryReference: { asin: item.asin, isbn: canonical, marketplaceId: item.marketplaceId, classifications } } : {}),
       authors: Array.isArray(item.authors) ? item.authors.map(text).filter((v): v is string => Boolean(v)) : undefined,
       publisher: text(item.publisher), publishedDate: normalizePublicationDate(item.publicationDate), year: publicationYear(item.publicationDate), language: amazonLanguage(item.language),
       format: amazonBinding(item.binding), edition: text(item.edition), pageCount: Number.isInteger(item.pageCount) && item.pageCount! > 0 && item.pageCount! <= 20000 ? item.pageCount : undefined,
@@ -390,6 +397,10 @@ export function complementWithAmazon(base: BookInfo | null, amazon: BookInfo | n
     && reference.isbn === canonicalBookIsbn(amazon.isbn13 || amazon.isbn10)
     && reference.isbn === canonicalBookIsbn(merged.isbn13 || merged.isbn10)) {
     merged.amazonCatalogReference = { ...reference };
+    const categories = amazon.amazonCategoryReference;
+    if (categories && categories.asin === reference.asin && categories.isbn === reference.isbn && categories.marketplaceId === reference.marketplaceId) {
+      merged.amazonCategoryReference = structuredClone(categories);
+    }
   }
   if (amazon.amazonImages?.length) merged.amazonImages = amazon.amazonImages.map(image => ({ ...image }));
   // Keep a valid primary-source cover; Amazon fills a missing cover and joins the existing gallery.

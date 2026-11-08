@@ -57,6 +57,8 @@ export interface BookInfo {
   amazonImages?: { variant: string; link: string }[];
   // Internal edition reference from a matching official catalog result; never a replacement ISBN.
   amazonCatalogReference?: { asin: string; isbn: string; marketplaceId: string };
+  // Informative navigation references for one selected ASIN, never commercial categories.
+  amazonCategoryReference?: { asin: string; isbn: string; marketplaceId: string; classifications: import('../shared/amazonCategories').AmazonBrowseNode[] };
   // Returned SP-API candidates retained for optional review, never registration fields.
   amazonCandidates?: AmazonCatalogCandidate[];
   amazonReviewRequired?: boolean;

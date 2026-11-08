@@ -42,7 +42,7 @@ function server(options = {}) {
     }
     assert.equal(url.origin, 'https://sellingpartnerapi-na.amazon.com'); assert.equal(url.pathname, '/catalog/2022-04-01/items');
     assert.equal(init.method, 'GET'); assert.equal(url.searchParams.get('identifiersType'), 'ISBN');
-    assert.equal(url.searchParams.get('includedData'), 'summaries,attributes,identifiers,dimensions,images');
+    assert.equal(url.searchParams.get('includedData'), 'summaries,attributes,identifiers,dimensions,images,classifications');
     return Response.json({ numberOfResults: 1, items: [options.item || item] });
   };
   const handler = api.createSpapiHandler('catalog', { env: { ...env, ...options.env }, fetcher,

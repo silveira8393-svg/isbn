@@ -4,6 +4,8 @@
  */
 
 import { BookInfo, RegistrationDraft } from '../../types';
+import { amazonBrowseNodes, amazonCategoryPath } from '../../../shared/amazonCategories';
+import { canonicalBookIsbn } from '../../utils/isbn';
 import MagazordCategoryPicker from './MagazordCategoryPicker';
 import type { useMagazordCategories } from '../../hooks/useMagazordCategories';
 import { FolderTree, Building2, Bookmark, Check } from 'lucide-react';
@@ -28,6 +30,11 @@ export default function CategoryAndBrandSection({
     { source: 'BrasilAPI', values: classifications(originalBook?.categories || []) },
     { source: 'Distribuidora Curitiba', values: classifications([originalBook?.productCategory, originalBook?.department]) },
     { source: 'Google Books', values: classifications([originalBook?.googleBooksReference?.mainCategory, ...(originalBook?.googleBooksReference?.categories || [])]) },
+    { source: 'Amazon — categoria de navegação', values: originalBook?.amazonCategoryReference
+      && originalBook.amazonCategoryReference.marketplaceId === 'A2Q3Y263D00KWC'
+      && originalBook.amazonCategoryReference.asin === originalBook.amazonCatalogReference?.asin
+      && originalBook.amazonCategoryReference.isbn === canonicalBookIsbn(originalBook.isbn13 || originalBook.isbn10)
+      ? classifications(amazonBrowseNodes(originalBook.amazonCategoryReference.classifications).map(amazonCategoryPath)) : [] },
   ].filter(reference => reference.values.length);
   return (
     <div id="registration-category" className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-5">

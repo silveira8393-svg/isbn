@@ -1,5 +1,6 @@
 import { type Config, MARKETPLACE, fail, jsonRequest } from './core.js';
 import { normalizePublicationDate } from '../../shared/publicationDate.js';
+import { amazonBrowseNode, amazonBrowseNodes } from '../../shared/amazonCategories.js';
 
 export function normalizeIsbn(input: string) {
   if (input.length > 32 || !/^[0-9Xx\s-]+$/.test(input)) return fail(422, 'invalid_isbn');
@@ -45,7 +46,7 @@ function physicalDimensions(value: any): PhysicalDimensions {
 export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, fetcher: typeof fetch, isbn: string, access: string) {
   const url = new URL('https://sellingpartnerapi-na.amazon.com/catalog/2022-04-01/items');
   url.search = new URLSearchParams({ identifiers: isbn, identifiersType: 'ISBN', marketplaceIds: MARKETPLACE,
-    includedData: 'summaries,attributes,identifiers,dimensions,images', pageSize: '20' }).toString();
+    includedData: 'summaries,attributes,identifiers,dimensions,images,classifications', pageSize: '20' }).toString();
   const data = await jsonRequest(fetcher, url, { method: 'GET', headers: { 'x-amz-access-token': access,
     'x-amz-date': new Date().toISOString().replace(/[:-]|\.\d{3}/g, ''), 'User-Agent': 'ISBN/1.0 (Language=TypeScript)', Accept: 'application/json' } });
   if (!data || !Array.isArray(data.items) || data.items.length > 20 || !Number.isInteger(data.numberOfResults) || data.numberOfResults < 0) fail(502, 'invalid_catalog_response');
@@ -55,6 +56,10 @@ export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, f
       && matchesIsbn(id.identifier, isbn))));
   const items = matching.map((item: any) => {
     const summary = Array.isArray(item.summaries) ? item.summaries.find((s: any) => s?.marketplaceId === MARKETPLACE) : null;
+    const browseClassification = amazonBrowseNode(summary?.browseClassification);
+    const classifications = amazonBrowseNodes((Array.isArray(item.classifications) ? item.classifications : [])
+      .filter((group: any) => group?.marketplaceId === MARKETPLACE)
+      .flatMap((group: any) => Array.isArray(group.classifications) ? group.classifications : []));
     const attr = (name: string) => {
       const values = Array.isArray(item.attributes?.[name]) ? item.attributes[name] : [];
       return [...values.filter((a: any) => a?.marketplace_id === MARKETPLACE), ...values.filter((a: any) => a && a.marketplace_id === undefined)];
@@ -97,6 +102,7 @@ export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, f
       } catch { return null; }
     };
     return { asin: text(item.asin), isbn, title: text(summary?.itemName) || value('item_name'),
+      ...(browseClassification ? { browseClassification } : {}), ...(classifications.length ? { classifications } : {}),
       authors: [...new Set(authors)], publisher: value('publisher') || value('publisher_name'),
       publicationDate: normalizePublicationDate(value('publication_date')) || normalizePublicationDate(value('street_date')) || null,
       language: text(language?.value), binding: value('binding'),
