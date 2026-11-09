@@ -287,7 +287,7 @@ export default function ProductRegistrationForm({
     <div data-registration-form className="space-y-6 animate-fade-in w-full pb-16">
       <style>{[
         ...validFields.map(field => `[data-registration-form] [data-registration-field="${field}"] { border-color: #6ee7b7; }`),
-        ...Object.keys(errors).map(field => `[data-registration-form] [data-registration-field="${field}"] { border-color: #f87171; background-color: #361e29; }`),
+        ...Object.keys(errors).map(field => `[data-registration-form] [data-registration-field="${field}"] { border-color: #f87171; background-color: var(--isbn-field-warning, #361e29); }`),
       ].join('\n')}</style>
       {reviewing && <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-5 sm:p-7" aria-label="Revisão do cadastro">
         <h2 data-registration-field="review" tabIndex={-1} className="text-xl font-bold text-slate-900">Revisão do cadastro</h2>
@@ -328,7 +328,7 @@ export default function ProductRegistrationForm({
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <h2 className="text-lg font-bold text-slate-900">
                 Cadastro bibliográfico
               </h2>
@@ -371,12 +371,6 @@ export default function ProductRegistrationForm({
           </button>
         </div>
       </div>
-
-      <nav aria-label="Seções do cadastro" className="isbn-registration-sections">
-        <a href="#registration-identification">Identificação</a><a href="#registration-category">Categoria</a>
-        <a href="#registration-commercial">Preço e estoque</a><a href="#registration-images">Imagens</a>
-        <a href="#registration-description">Descrição</a><a href="#registration-seo">SEO</a>
-      </nav>
 
       {/* Banner de Erros no Envio se houver */}
       {visibleRequired.length > 0 && reviewRequested && (
@@ -432,6 +426,7 @@ export default function ProductRegistrationForm({
         onChange={onUpdateDraft}
         errors={errors}
       />
+      <BibliographicSection variant="metadata" draft={draft} onChange={onUpdateDraft} errors={errors} />
       <ProductIdentitySection
         draft={draft}
         onChange={onUpdateDraft}
@@ -450,18 +445,11 @@ export default function ProductRegistrationForm({
         onChange={onUpdateDraft}
         errors={errors}
       />
-      <BibliographicSection variant="metadata" draft={draft} onChange={onUpdateDraft} errors={errors} />
       <PhysicalAttributesSection
         draft={draft}
         onChange={onUpdateDraft}
         errors={errors}
       />
-      <AdvancedFiscalSection
-        draft={draft}
-        onChange={onUpdateDraft}
-      />
-      </div>
-      <div className="isbn-registration-column">
       <ImagesSection
         draft={draft}
         onChange={onUpdateDraft}
@@ -475,25 +463,28 @@ export default function ProductRegistrationForm({
         onChange={onUpdateDraft}
       />
       <SeoSection draft={draft} onChange={onUpdateDraft} />
+      <AdvancedFiscalSection
+        draft={draft}
+        onChange={onUpdateDraft}
+      />
       </div>
-      <aside className="isbn-registration-column isbn-registration-aside" aria-label="Resumo e acoes do cadastro">
+      <aside className="isbn-registration-column isbn-registration-aside" aria-label="Resumo e ações do cadastro">
       <RegistrationSummary draft={draft} />
-      {/* Barra de Ação Inferior Flutuante / Fixa */}
-      <div className="isbn-registration-actions bg-slate-900 text-white rounded-2xl p-4 px-6 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4 border border-slate-700/80">
+      <div className="isbn-registration-actions rounded-xl border border-slate-200 bg-white">
         <div className="flex items-center gap-3 text-xs">
-          <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold">
+          <div className="w-9 h-9 shrink-0 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center font-bold">
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-white text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-bold text-slate-900 text-sm">
                 Pronto para concluir o cadastro no simulador?
               </span>
-              <span className="px-2 py-0.2 rounded text-[10px] bg-slate-800 text-slate-300 font-mono">
+              <span className="px-2 py-0.2 rounded text-[10px] bg-slate-100 text-slate-700 font-mono">
                 {draft.condition === 'novo' ? 'Livro Novo' : 'Livro Usado'}
               </span>
             </div>
-            <p className="text-slate-400 text-[11px]">
+            <p className="text-slate-600 text-[11px]">
               {draft.parentCode
                 ? `Código Pai: ${draft.parentCode} · Filho: ${draft.childCode || 'Pendente'}`
                 : 'Lembre-se de preencher o Código Pai da etiqueta física.'}
@@ -505,7 +496,7 @@ export default function ProductRegistrationForm({
           <button
             type="button"
             onClick={() => { if (!imageUploadInFlight.current) onBackToSearch(); }}
-            className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-semibold transition-colors cursor-pointer"
+            className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-semibold transition-colors cursor-pointer"
           >
             Voltar
           </button>

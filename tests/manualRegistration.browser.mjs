@@ -14,6 +14,7 @@ const fixture=target=>({id:'fixture-'+target,title:target==='9786556096674'?'O l
   authors:['Autor da fixture'],publisher:'Editora da fixture',year:2020,pageCount:288,coverUrl:'https://images.invalid/cover.svg',additionalImages:['https://images.invalid/inside.svg']});
 const mocks=[
  [/contexts\/UserContext$/,`export const useUser=()=>({currentUser:${JSON.stringify(user)},operationEnvironment:'development',canViewProduction:true,canViewSettings:true,isOperator:false,signOut:async()=>{}});`],
+ [/hooks\/useMagazordCategories$/, `export const useMagazordCategories=()=>({loading:false,storeId:'${user.storeId}',reload(){},catalog:{categories:[{id:1,nome:'Livros',pai:null,path:'Livros',depth:0}],invalidCount:0}});`],
  [/hooks\/useOperationAudit$/,`export const useOperationAudit=()=>({saveOperation:()=>{},pending:[],retry:()=>{},saving:0});`],
  [/hooks\/useLocalHistory$/,`import {useState} from 'react';export const useLocalHistory=()=>{const[history,setHistory]=useState([]);return{history,setHistory,clearHistory:()=>setHistory([])}};`],
  [/services\/brasilApi$/,`const fixture=${fixture.toString()};export const searchBookByIsbnBrasilApi=async isbn=>{await new Promise(r=>setTimeout(r,60));return{book:fixture(isbn),diagnostic:{status:200}}};`],
@@ -62,7 +63,7 @@ try{
   const field=name=>page.locator('[data-registration-field="'+name+'"]');
   assert.equal(await field('title').inputValue(),'');assert.equal(await field('price').inputValue(),'');
   assert.equal(await field('quantity').inputValue(),'1');assert.equal(await field('isbn13').inputValue(),'');
-  assert.equal(await page.evaluate(()=>getComputedStyle(document.querySelector('.isbn-app-shell')).backgroundColor),'rgb(4, 17, 30)');
+  assert.equal(await page.evaluate(()=>getComputedStyle(document.querySelector('.isbn-app-shell')).backgroundColor),'rgb(247, 249, 252)');
   if(condition==='usado')await page.getByRole('button',{name:'USADO (SEBO)',exact:true}).click();
   if(hasIsbn)await field('isbn13').fill(width===1440?'9781234567897':'9788535914849');
   const code='LV'+String(41000+scenarios);
@@ -90,6 +91,8 @@ try{
   assert.equal(await page.evaluate(()=>window.__bibliographicCalls),0);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   if(!hasIsbn)await page.screenshot({path:'dist/qa/manual-'+condition+'-'+width+'.png',fullPage:true});
+  await page.locator('#magazord-category-search').fill('Livros');
+  await page.locator('#magazord-category-options button').click();
   await page.locator('#btn-submit-magazord-registration').click();
   const review=page.getByRole('region',{name:'Revisão do cadastro'});await review.waitFor();
   if(!hasIsbn){assert.equal(await field('isbn13').count(),1);}
@@ -106,6 +109,6 @@ try{
  await page.goto('http://127.0.0.1:'+server.address().port);await page.locator('#isbn-input-field').fill('9788550303628');await page.locator('#search-submit-button').click();
  await page.waitForFunction(()=>document.querySelectorAll('[data-state="querying"]').length===0&&document.querySelector('[data-source="brasil_api"][data-state="found"]'));
  assert.ok(await page.evaluate(()=>window.__bibliographicCalls>=3));assert.deepEqual(errors,[]);
- console.log(JSON.stringify({scenarios,uploads,viewports:[1440,390],conditions:['novo','usado'],isbn:['with','without'],manualBibliographicRequests:0,pageErrors:errors,checks:['blank form','dark layout','condition choice','ISBN derivation','quantity 1 editable','price','URL image','local upload and removal','manual description and SEO','navigation persistence','review','double-click lock','simulator persistence','automatic ISBN lookup retained']}));
+ console.log(JSON.stringify({scenarios,uploads,viewports:[1440,390],conditions:['novo','usado'],isbn:['with','without'],manualBibliographicRequests:0,pageErrors:errors,checks:['blank form','light workspace','condition choice','ISBN derivation','quantity 1 editable','price','URL image','local upload and removal','manual description and SEO','navigation persistence','review','double-click lock','simulator persistence','automatic ISBN lookup retained']}));
 }catch(error){console.error(JSON.stringify({errors,text:(await page?.locator('body').innerText())?.slice(-4000)}));throw error;
 }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}

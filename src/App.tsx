@@ -753,8 +753,10 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  const operationalView = activeTab === 'consultar' || activeTab === 'cadastro';
+
   return (
-    <div className="isbn-app-shell min-h-screen bg-slate-50 flex flex-col selection:bg-blue-100 selection:text-blue-800">
+    <div className={`isbn-app-shell ${operationalView ? 'isbn-operational' : ''} min-h-screen bg-slate-50 flex flex-col selection:bg-blue-100 selection:text-blue-800`}>
       {/* 1. Header azul profissional com navegação Consultar | Cadastro | Histórico */}
       <div className="isbn-store-context border-b bg-white px-4 py-2 text-xs text-slate-600">Loja operacional: <strong>{currentUser.storeName}</strong>
         {magazordMockService.hasUnscopedLegacyCatalog?.() && <p>O catálogo simulado agora é separado por loja. Registros locais antigos sem identificação de loja estão preservados, sem atribuição automática.</p>}
@@ -781,7 +783,7 @@ export default function App() {
           <button type="button" onClick={retryAudit} className="font-semibold underline cursor-pointer">Reenviar auditoria pendente</button>
           <details><summary className="cursor-pointer">IDs pendentes para evidência</summary><ul>{pendingAudit.map(entry => <li key={entry.input.id}>{entry.input.id} · {entry.input.operationType} · {entry.input.completedAt}</li>)}</ul></details>
         </div>}
-        {(activeTab === 'consultar' || activeTab === 'cadastro') && <div className="isbn-shared-search">
+        {operationalView && <div className="isbn-shared-search">
           <SearchForm
             onSearch={handleSearch}
             isLoading={isLoading}

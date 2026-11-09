@@ -51,7 +51,8 @@ try{
    await page.getByRole('link',{name:/^Curitiba /}).waitFor();
    assert.equal(await page.locator('[data-source]').count(),4);
    assert.equal(await page.getByRole('link',{name:/^Curitiba /}).getAttribute('href'),'https://www.livrariascuritiba.com.br/o-diario-perdido-de-gravity-falls-3-lv434083/p');
-   assert.equal(await page.evaluate(()=>getComputedStyle(document.querySelector('.isbn-app-shell')).backgroundColor),'rgb(4, 17, 30)');
+   assert.equal(await page.locator('.isbn-app-shell').evaluate(node=>getComputedStyle(node).backgroundColor),'rgb(247, 249, 252)');
+   assert.equal(await page.locator('.isbn-header').evaluate(node=>getComputedStyle(node).backgroundColor),'rgb(6, 19, 33)');
    const queryLinks=await page.locator('section[aria-label="Fontes externas da obra"] a').evaluateAll(nodes=>nodes.map(n=>n.href));
    if(condition==='Novo') await page.screenshot({path:`dist/qa/v14-consulta-${width}.png`,fullPage:true});
    await page.getByRole('button',{name:condition,exact:true}).click();await page.waitForSelector('[data-registration-form]');
@@ -78,7 +79,17 @@ try{
    assert.ok((await summary.innerText()).includes('Titulo revisado '+condition));
    assert.match(await summary.innerText(),/24,90/);assert.match(await summary.innerText(),/3 un\./);
    const columns=await page.locator('.isbn-registration-grid').evaluate(n=>getComputedStyle(n).gridTemplateColumns.split(' ').length);
-   assert.equal(columns,width>=1280?3:width>=768?2:1);
+   assert.equal(columns,width>=1200?2:1);
+   assert.equal(await page.getByRole('navigation',{name:'Seções do cadastro'}).count(),0);
+   const sectionIds=['registration-identification','registration-category','registration-images','registration-description','registration-seo'];
+   const sections=await Promise.all(sectionIds.map(id=>page.locator('#'+id).boundingBox()));
+   for(let i=1;i<sections.length;i++){
+    assert.equal(sections[i].x,sections[0].x);
+    assert.ok(sections[i].y>=sections[i-1].y+sections[i-1].height);
+   }
+   const summaryBox=await summary.boundingBox();
+   if(width>=1200)assert.ok(summaryBox.x>=sections[0].x+sections[0].width);
+   else assert.ok(summaryBox.y>=sections.at(-1).y+sections.at(-1).height);
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
    await page.evaluate(()=>scrollTo(0,0));
    await page.screenshot({path:`dist/qa/v14-cadastro-${condition.toLowerCase()}-${width}.png`,fullPage:true});

@@ -1,36 +1,36 @@
-/* ISBN 1.4: the approved navy presentation, shared by existing screens. */
+/* Dark navigation and shared screen styles. */
 :root { color-scheme: dark; --isbn-navy: #061321; --isbn-sidebar-width: 220px; --isbn-panel: #0c1c2b; --isbn-border: #304b65; }
 body { margin: 0; background: #04111e; color: #f0f5ff; font: 14px/1.5 var(--font-sans); -webkit-font-smoothing: antialiased; }
 * { scrollbar-color: #37536c #071524; }
 .isbn-app-shell { background: #04111e; }
 .isbn-login { background: #04111e; }
 /* Keep the existing semantic utilities and state distinctions across all real screens. */
-:is(.isbn-app-shell,.isbn-login) :is(.bg-white,.bg-slate-50,.bg-gray-50) { background-color: var(--isbn-panel); }
-:is(.isbn-app-shell,.isbn-login) :is(.bg-slate-100,.bg-slate-200,.bg-gray-100) { background-color: #12283b; }
-:is(.isbn-app-shell,.isbn-login) :is([class*="bg-white/"],[class*="bg-slate-50/"],[class*="bg-slate-100/"],[class*="bg-slate-200/"]) { background-color: #102336; }
-:is(.isbn-app-shell,.isbn-login) :is([class*="bg-blue-50/"],[class*="bg-indigo-50/"]) { background-color: #102b48; }
-:is(.isbn-app-shell,.isbn-login) [class*="bg-amber-50/"] { background-color: #302918; }
-:is(.isbn-app-shell,.isbn-login) :is([class*="bg-red-50/"],[class*="bg-rose-50/"]) { background-color: #361e29; }
-:is(.isbn-app-shell,.isbn-login) :is(.text-slate-950,.text-slate-900,.text-slate-800,.text-gray-900,.text-gray-800) { color: #f0f5ff; }
-:is(.isbn-app-shell,.isbn-login) :is(.text-slate-700,.text-slate-600,.text-gray-700,.text-gray-600) { color: #c9d8ec; }
-:is(.isbn-app-shell,.isbn-login) :is(.text-slate-500,.text-slate-400,.text-gray-500,.text-gray-400) { color: #a5bad1; }
-:is(.isbn-app-shell,.isbn-login) :is(.border-slate-100,.border-slate-200,.border-slate-300,.border-gray-200) { border-color: var(--isbn-border); }
-:is(.isbn-app-shell,.isbn-login) :is(.bg-blue-50,.bg-blue-100,.bg-indigo-50,.bg-indigo-100,.bg-purple-50,.bg-violet-50) { background-color: #102b48; }
-:is(.isbn-app-shell,.isbn-login) :is(.text-blue-600,.text-blue-700,.text-blue-800,.text-blue-900,.text-indigo-600,.text-indigo-700,.text-indigo-800,.text-indigo-900) { color: #75b5ff; }
-:is(.isbn-app-shell,.isbn-login) :is(.bg-emerald-50,.bg-emerald-100,.bg-green-50,.bg-green-100) { background-color: #07352d; }
-:is(.isbn-app-shell,.isbn-login) :is(.text-emerald-600,.text-emerald-700,.text-emerald-800,.text-emerald-900,.text-green-700,.text-green-800) { color: #5aefb1; }
-:is(.isbn-app-shell,.isbn-login) :is(.bg-amber-50,.bg-amber-100,.bg-yellow-50) { background-color: #302918; }
-:is(.isbn-app-shell,.isbn-login) :is(.text-amber-600,.text-amber-700,.text-amber-800,.text-amber-900,.text-yellow-800) { color: #f4ce79; }
-:is(.isbn-app-shell,.isbn-login) :is(.bg-red-50,.bg-red-100,.bg-rose-50) { background-color: #361e29; }
-:is(.isbn-app-shell,.isbn-login) :is(.text-red-600,.text-red-700,.text-red-800,.text-red-900,.text-rose-800) { color: #ff9da6; }
-:is(.isbn-app-shell,.isbn-login) :is(input:not([type=checkbox]):not([type=radio]),select,textarea) { min-width: 0; max-width: 100%; background: #0a1928; color: #f1f5ff; border-color: #45627f; border-radius: 6px; font-size: 14px; }
+:is(.isbn-app-shell,.isbn-login) :is(.bg-white,.bg-slate-50,.bg-gray-50):not(:where(.isbn-operational .isbn-workspace *)) { background-color: var(--isbn-panel); }
+:is(.isbn-app-shell,.isbn-login) :is(.bg-slate-100,.bg-slate-200,.bg-gray-100):not(:where(.isbn-operational .isbn-workspace *)) { background-color: #12283b; }
+:is(.isbn-app-shell,.isbn-login) :is([class*="bg-white/"],[class*="bg-slate-50/"],[class*="bg-slate-100/"],[class*="bg-slate-200/"]):not(:where(.isbn-operational .isbn-workspace *)) { background-color: #102336; }
+:is(.isbn-app-shell,.isbn-login) :is([class*="bg-blue-50/"],[class*="bg-indigo-50/"]):not(:where(.isbn-operational .isbn-workspace *)) { background-color: #102b48; }
+:is(.isbn-app-shell,.isbn-login) [class*="bg-amber-50/"]:not(:where(.isbn-operational .isbn-workspace *)) { background-color: #302918; }
+:is(.isbn-app-shell,.isbn-login) :is([class*="bg-red-50/"],[class*="bg-rose-50/"]):not(:where(.isbn-operational .isbn-workspace *)) { background-color: #361e29; }
+:is(.isbn-app-shell,.isbn-login) :is(.text-slate-950,.text-slate-900,.text-slate-800,.text-gray-900,.text-gray-800):not(:where(.isbn-operational .isbn-workspace *)) { color: #f0f5ff; }
+:is(.isbn-app-shell,.isbn-login) :is(.text-slate-700,.text-slate-600,.text-gray-700,.text-gray-600):not(:where(.isbn-operational .isbn-workspace *)) { color: #c9d8ec; }
+:is(.isbn-app-shell,.isbn-login) :is(.text-slate-500,.text-slate-400,.text-gray-500,.text-gray-400):not(:where(.isbn-operational .isbn-workspace *)) { color: #a5bad1; }
+:is(.isbn-app-shell,.isbn-login) :is(.border-slate-100,.border-slate-200,.border-slate-300,.border-gray-200):not(:where(.isbn-operational .isbn-workspace *)) { border-color: var(--isbn-border); }
+:is(.isbn-app-shell,.isbn-login) :is(.bg-blue-50,.bg-blue-100,.bg-indigo-50,.bg-indigo-100,.bg-purple-50,.bg-violet-50):not(:where(.isbn-operational .isbn-workspace *)) { background-color: #102b48; }
+:is(.isbn-app-shell,.isbn-login) :is(.text-blue-600,.text-blue-700,.text-blue-800,.text-blue-900,.text-indigo-600,.text-indigo-700,.text-indigo-800,.text-indigo-900):not(:where(.isbn-operational .isbn-workspace *)) { color: #75b5ff; }
+:is(.isbn-app-shell,.isbn-login) :is(.bg-emerald-50,.bg-emerald-100,.bg-green-50,.bg-green-100):not(:where(.isbn-operational .isbn-workspace *)) { background-color: #07352d; }
+:is(.isbn-app-shell,.isbn-login) :is(.text-emerald-600,.text-emerald-700,.text-emerald-800,.text-emerald-900,.text-green-700,.text-green-800):not(:where(.isbn-operational .isbn-workspace *)) { color: #5aefb1; }
+:is(.isbn-app-shell,.isbn-login) :is(.bg-amber-50,.bg-amber-100,.bg-yellow-50):not(:where(.isbn-operational .isbn-workspace *)) { background-color: #302918; }
+:is(.isbn-app-shell,.isbn-login) :is(.text-amber-600,.text-amber-700,.text-amber-800,.text-amber-900,.text-yellow-800):not(:where(.isbn-operational .isbn-workspace *)) { color: #f4ce79; }
+:is(.isbn-app-shell,.isbn-login) :is(.bg-red-50,.bg-red-100,.bg-rose-50):not(:where(.isbn-operational .isbn-workspace *)) { background-color: #361e29; }
+:is(.isbn-app-shell,.isbn-login) :is(.text-red-600,.text-red-700,.text-red-800,.text-red-900,.text-rose-800):not(:where(.isbn-operational .isbn-workspace *)) { color: #ff9da6; }
+:is(.isbn-app-shell,.isbn-login) :is(input:not([type=checkbox]):not([type=radio]),select,textarea):not(:where(.isbn-operational .isbn-workspace *)) { min-width: 0; max-width: 100%; background: #0a1928; color: #f1f5ff; border-color: #45627f; border-radius: 6px; font-size: 14px; }
 :is(.isbn-app-shell,.isbn-login) :is(input,select) { min-height: 36px; }
-:is(.isbn-app-shell,.isbn-login) input::placeholder, :is(.isbn-app-shell,.isbn-login) textarea::placeholder { color: #90a7bf; }
+:is(.isbn-app-shell,.isbn-login) :is(input,textarea):not(:where(.isbn-operational .isbn-workspace *))::placeholder { color: #90a7bf; }
 :is(.isbn-app-shell,.isbn-login) :is(button,a,input,select,textarea,summary):focus-visible { outline: 2px solid #6abaff; outline-offset: 3px; box-shadow: none; }
 .isbn-app-shell button { cursor: pointer; }
 .isbn-app-shell button:disabled { cursor: not-allowed; }
-.isbn-app-shell :is(.hover\:bg-slate-100,.hover\:bg-slate-50,.hover\:bg-white):hover { background-color: #183149; }
-.isbn-app-shell :is(.hover\:text-slate-900,.hover\:text-slate-700):hover { color: white; }
+.isbn-app-shell :is(.hover\:bg-slate-100,.hover\:bg-slate-50,.hover\:bg-white):hover:not(:where(.isbn-operational .isbn-workspace *)) { background-color: #183149; }
+.isbn-app-shell :is(.hover\:text-slate-900,.hover\:text-slate-700):hover:not(:where(.isbn-operational .isbn-workspace *)) { color: white; }
 .isbn-app-shell :is(.rounded-2xl,.rounded-xl) { border-radius: 8px; }
 .isbn-app-shell :is(h1,h2,h3) { letter-spacing: -.025em; }
 .isbn-app-shell .shadow-xs,.isbn-app-shell .shadow-sm { box-shadow: none; }
@@ -93,52 +93,96 @@ body { margin: 0; background: #04111e; color: #f0f5ff; font: 14px/1.5 var(--font
 .isbn-integration-card > div:first-child { padding: 10px 16px; background: #0b1d31; }
 .isbn-integration-card > div:first-child h3 { font-size: 14px; }
 .isbn-registration-view { max-width: none; }
-.isbn-registration-heading { padding: 0 0 12px; background: transparent !important; border: 0; border-bottom: 1px solid #36516d; border-radius: 0 !important; }
-.isbn-registration-heading h2 { font-size: 25px; }
-.isbn-registration-heading > div:last-child { display: none; }
-.isbn-registration-sections { display: flex; flex-wrap: wrap; gap: 8px 22px; border-bottom: 1px solid #36516d; padding: 0 12px 10px; }
-.isbn-registration-sections a { color: #c8daf1; font-size: 13px; padding: 5px 0; text-decoration: none; }
-.isbn-registration-sections a:hover,.isbn-registration-sections a:focus-visible { color: #8bbdff; text-decoration: underline; }
-[id^=registration-] { scroll-margin-top: 90px; }
-.isbn-registration-grid { display: grid; gap: 14px; align-items: start; }
-.isbn-registration-column { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.isbn-registration-column > .bg-white, .isbn-registration-summary { padding: 16px; border: 1px solid #36516d; background: linear-gradient(120deg,#0e2031,#091725); }
-.isbn-registration-column > .bg-white > div:first-child { padding-bottom: 10px; }
+/* The operational workspace uses the existing components' light utilities. */
+.isbn-operational { background: #f7f9fc; }
+.isbn-operational :is(.isbn-workspace,.isbn-store-context) {
+  color-scheme: light;
+  color: #17243a;
+  scrollbar-color: #a7b8cc #f7f9fc;
+}
+.isbn-operational .isbn-workspace { --isbn-field-warning: #fff1f2; }
+.isbn-operational .isbn-workspace * { scrollbar-color: inherit; }
+.isbn-operational .isbn-workspace > [data-integration-mode] { border-color: #f2ca6f; }
+.isbn-operational .isbn-workspace :is(input:not([type=checkbox]):not([type=radio]),select,textarea) {
+  min-width: 0;
+  max-width: 100%;
+  border-radius: 6px;
+  font-size: 14px;
+}
+.isbn-operational .isbn-workspace :is(input,textarea)::placeholder { color: #64748b; }
+.isbn-operational .isbn-workspace :is(button,a,input,select,textarea,summary):focus-visible { outline-color: #1763e6; }
+.isbn-operational .isbn-search-panel #isbn-input-field { background: #fff; }
+.isbn-operational .isbn-search-panel #search-submit-button:disabled { background: #dce6f5; color: #475a73; }
+.isbn-operational .isbn-sources-panel { border-color: #d5e0ef; background: #f6f9ff; }
+.isbn-operational .isbn-sources-heading { border-color: #d5e0ef; background: #eef4ff; color: #445873; }
+.isbn-operational .isbn-sources-heading strong { color: #17243a; }
+.isbn-operational .isbn-sources-panel li { border-color: #d5e0ef; background: #fff; }
+.isbn-operational .isbn-sources-panel [data-source=amazon] .isbn-source-symbol text { fill: #17243a; }
+.isbn-operational .isbn-source-reason { color: #475a73; }
+.isbn-operational .isbn-sources-panel [data-state=found] .isbn-source-state { color: #047045; }
+.isbn-operational .isbn-sources-panel [data-state=not_found] .isbn-source-state { color: #b12333; }
+.isbn-operational .isbn-sources-panel :is([data-state=unavailable],[data-state=not_consulted],[data-state=review_required]) .isbn-source-state { color: #865100; }
+.isbn-operational .isbn-integration-card > div:first-child { background: #eef4ff; }
+
+.isbn-shared-search {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid #d5e0ef;
+  border-radius: 10px;
+  background: #fff;
+}
+.isbn-registration-heading { padding: 12px 14px; }
+.isbn-registration-heading h2 { font-size: 20px; }
+[data-registration-field] { scroll-margin-top: 90px; }
+.isbn-registration-grid {
+  display: grid;
+  grid-template-columns: minmax(0,1fr);
+  gap: 14px;
+  align-items: start;
+}
+.isbn-registration-column { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.isbn-registration-column > .bg-white,
+.isbn-registration-summary {
+  padding: 14px;
+  border: 1px solid #d5e0ef;
+  background: #fff;
+}
 .isbn-registration-column h3 { font-size: 16px; }
 .isbn-registration-column .space-y-5 > :not(:last-child) { margin-bottom: 12px; }
 .isbn-registration-column .gap-4 { gap: 12px; }
-.isbn-registration-column .grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
-.isbn-registration-column .grid > * { min-width: 0; grid-column: auto; }
-.isbn-registration-column .sm\:grid-cols-12 > :first-child { grid-column: 1/-1; }
-.isbn-registration-column .isbn-image-gallery { grid-template-columns: minmax(0,1.2fr) minmax(0,.8fr); }
-.isbn-registration-column .isbn-image-gallery > :first-child { grid-column: auto; }
-.isbn-registration-column .isbn-image-thumbnails { grid-template-columns: minmax(0,1fr); }
-.isbn-registration-column .isbn-image-thumbnails > div { max-height: 140px; }
-.isbn-registration-column .isbn-image-gallery .max-w-\[220px\] { max-width: 185px; }
-.isbn-registration-column .flex { min-width: 0; }
+.isbn-registration-column .grid > * { min-width: 0; }
 .isbn-registration-column :is(label,p,span) { overflow-wrap: anywhere; }
-.isbn-registration-column :is(.justify-between,.justify-end) { flex-wrap: wrap; gap: 6px; }
-.isbn-registration-column .text-\[10px\],.isbn-registration-column .text-\[11px\] { font-size: 11px; }
-.isbn-shared-search { display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
-.isbn-registration-column input { padding-block: 8px; }
-.isbn-registration-column :is(input,select,textarea):is(:disabled,[readonly]) { opacity: .8; }
-.isbn-registration-column .uppercase { letter-spacing: 0; }
-.isbn-registration-summary h3 { display: flex; align-items: center; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid #36516d; font-size: 16px; font-weight: 700; }
-.isbn-registration-summary h3 svg { color: #9b78ff; }
-.isbn-registration-summary dl > div { display: grid; grid-template-columns: minmax(70px,.8fr) minmax(0,1.2fr); gap: 10px; padding: 9px 0; border-bottom: 1px solid #213b54; }
-.isbn-registration-summary dt { color: #bdcfe6; font-size: 12px; }
-.isbn-registration-summary dd { overflow-wrap: anywhere; color: #f0f5ff; font-size: 13px; font-weight: 600; }
-.isbn-registration-actions { display: flex; flex-direction: column; gap: 10px; padding: 0; background: transparent; box-shadow: none; border: 0; position: static; }
-.isbn-registration-actions > div { width: 100%; }
-.isbn-registration-actions > div:last-child { display: flex; flex-direction: column-reverse; gap: 10px; }
-.isbn-registration-actions button { width: 100%; min-height: 44px; justify-content: center; }
-.isbn-registration-actions #btn-submit-magazord-registration { background: #00a84f; border: 1px solid #19d27a; }
-.isbn-registration-actions #btn-submit-magazord-registration:hover { background: #008d44; }
-[data-registration-form] { padding-bottom: 0; }
+.isbn-registration-column input:not([type=checkbox]):not([type=radio]) { padding-block: 6px; }
+.isbn-registration-summary h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -14px -14px 4px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #d5e0ef;
+  border-radius: 7px 7px 0 0;
+  background: #eef4ff;
+  font-size: 16px;
+  font-weight: 700;
+}
+.isbn-registration-summary h3 svg { color: #1763e6; }
+.isbn-registration-summary dl > div {
+  display: grid;
+  grid-template-columns: minmax(70px,.8fr) minmax(0,1.2fr);
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid #e7edf5;
+}
+.isbn-registration-summary dt { color: #445873; font-size: 12px; }
+.isbn-registration-summary dd { overflow-wrap: anywhere; font-size: 13px; font-weight: 600; }
+.isbn-registration-actions { display: grid; gap: 10px; }
+.isbn-registration-actions > div:last-child { display: flex; flex-direction: column-reverse; gap: 8px; }
+.isbn-registration-actions button { width: 100%; min-height: 40px; justify-content: center; }
 [data-registration-form] .isbn-registration-editor { display: flex; flex-direction: column; gap: 12px; }
 [data-registration-form] .isbn-registration-editor[hidden] { display: none; }
 [data-registration-form] .isbn-registration-editor > * { margin-block: 0; }
-[data-registration-form] :is(input,select,textarea)[data-registration-field] { background-color: #0a1928; }
 @media (min-width:768px) {
  .isbn-header-layout { margin-left: var(--isbn-sidebar-width); height: 70px; padding: 0 22px; grid-template-columns: minmax(0,1fr); }
  .isbn-sidebar { position: fixed; inset: 0 auto 0 0; width: var(--isbn-sidebar-width); padding: 0 12px 18px; display: flex; flex-direction: column; background: #05121f; border-right: 1px solid #263e55; overflow-y: auto; }
@@ -152,13 +196,10 @@ body { margin: 0; background: #04111e; color: #f0f5ff; font: 14px/1.5 var(--font
  .isbn-workspace,.isbn-store-context,.isbn-app-shell > footer { width: calc(100% - var(--isbn-sidebar-width)); margin-left: var(--isbn-sidebar-width); margin-right: 0; }
  .isbn-workspace { padding: 12px 22px 24px; }
  .isbn-store-context { padding: 6px 22px 0; }
- .isbn-registration-grid { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
- .isbn-registration-aside { grid-column: 1/-1; }
- .isbn-registration-column .sm\:grid-cols-2 { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
-@media (min-width:1280px) {
- .isbn-registration-grid { grid-template-columns: minmax(0,1.22fr) minmax(0,1fr) minmax(230px,.72fr); }
- .isbn-registration-aside { grid-column: auto; position: sticky; top: 88px; }
+@media (min-width:1200px) {
+ .isbn-registration-grid { grid-template-columns: minmax(0,1fr) minmax(245px,28%); }
+ .isbn-registration-aside { position: sticky; top: 84px; }
  .isbn-query-history { max-width: none; }
 }
 @media (max-width:767px) {
@@ -169,7 +210,6 @@ body { margin: 0; background: #04111e; color: #f0f5ff; font: 14px/1.5 var(--font
  .isbn-registration-heading h2 { font-size: 21px; }
  .isbn-search-panel #search-submit-button { flex: 1; min-width: 0; }
  .isbn-search-panel form > div:first-child > div:last-child { width: 100%; }
- .isbn-registration-column .grid { grid-template-columns: minmax(0,1fr); }
  .isbn-registration-summary dl > div { grid-template-columns: minmax(80px,.7fr) minmax(0,1.3fr); }
 }
 @media (prefers-reduced-motion:reduce) { .animate-fade-in { animation: none; } }
