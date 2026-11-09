@@ -5,7 +5,7 @@
 
 import { SearchHistoryItem } from '../types';
 import { formatStoreDateTime, formatStoreTime } from '../utils/storeTime';
-import { History, Trash2, Download, BookOpen, Clock, AlertCircle, User as UserIcon } from 'lucide-react';
+import { History, Trash2, Download, BookOpen, Clock, User as UserIcon } from 'lucide-react';
 
 interface SearchHistoryGroupProps {
   items: SearchHistoryItem[];
@@ -26,8 +26,8 @@ export default function SearchHistoryGroup({
 
   if (items.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-6 flex flex-col items-center justify-center text-center min-h-[220px]">
-        <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
+      <div className="isbn-history-empty bg-white rounded-xl border border-slate-200 shadow-xs p-6 flex flex-col items-center justify-center text-center min-h-[220px]">
+        <div className="isbn-history-empty-icon w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
           <History className="w-5 h-5 stroke-[1.5]" />
         </div>
         <p className="text-sm font-semibold text-slate-800">Nenhum livro consultado</p>
@@ -39,12 +39,12 @@ export default function SearchHistoryGroup({
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col overflow-hidden">
+    <div className="isbn-history-card bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="p-3.5 px-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-2">
+      <div className="isbn-history-heading p-3.5 px-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <History className="w-4 h-4 text-blue-600" />
-          <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+          <h2 className="isbn-history-title text-xs font-bold text-slate-900 uppercase tracking-wide">
             Histórico deste usuário e loja
           </h2>
           <span className="bg-blue-50 text-blue-700 text-[11px] font-mono px-1.5 py-0.2 rounded font-bold border border-blue-100">
@@ -52,7 +52,7 @@ export default function SearchHistoryGroup({
           </span>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="isbn-history-actions flex items-center gap-1">
           <button
             type="button"
             onClick={onExport}
@@ -86,7 +86,7 @@ export default function SearchHistoryGroup({
             type="button"
             onClick={() => onSelect(item.isbn)}
             id={`history-item-${item.isbn}`}
-            className="w-full text-left p-3 hover:bg-slate-50/80 transition-colors flex items-start gap-3 group border-l-2 border-transparent hover:border-blue-600 cursor-pointer"
+            className="isbn-history-row w-full text-left p-3 hover:bg-slate-50/80 transition-colors flex items-start gap-3 group border-l-2 border-transparent hover:border-blue-600 cursor-pointer"
           >
             {/* Thumbnail */}
             <div className="w-9 h-12 rounded bg-slate-100 border border-slate-200 text-slate-400 flex items-center justify-center shrink-0 overflow-hidden">
@@ -108,7 +108,7 @@ export default function SearchHistoryGroup({
             {/* Info */}
             <div className="min-w-0 flex-1">
               <p
-                className={`text-xs font-semibold line-clamp-1 group-hover:text-blue-700 transition-colors ${
+                className={`isbn-history-book text-xs font-semibold line-clamp-1 group-hover:text-blue-700 transition-colors ${
                   item.success ? 'text-slate-900' : 'text-slate-600 italic'
                 }`}
               >
@@ -121,7 +121,7 @@ export default function SearchHistoryGroup({
               </p>
 
               {item.authors && item.authors.length > 0 && (
-                <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+                <p className="isbn-history-authors text-[11px] text-slate-500 line-clamp-1 mt-0.5">
                   {item.authors.join(', ')}
                 </p>
               )}
@@ -176,7 +176,7 @@ export default function SearchHistoryGroup({
 
               {/* Auditoria de Usuário & Ambiente */}
               {item.userName && (
-                <div className="flex items-center gap-1.5 mt-1 text-[10px]">
+                <div className="isbn-history-operator flex items-center gap-1.5 mt-1 text-[10px]">
                   <span className="inline-flex items-center gap-1 text-slate-500 font-medium">
                     <UserIcon className="w-2.5 h-2.5 text-slate-400" />
                     <span className="text-slate-700 font-semibold">{item.userName}</span>
@@ -189,7 +189,7 @@ export default function SearchHistoryGroup({
                 </div>
               )}
 
-              <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400 font-mono">
+              <div className="isbn-history-metadata flex items-center justify-between mt-1 text-[10px] text-slate-400 font-mono">
                 <span className="text-blue-700 font-medium">ISBN {item.isbn}</span>
                 <span className="flex items-center gap-1" title={`${formatStoreDateTime(item.timestamp)} (São Paulo)`}>
                   <Clock className="w-2.5 h-2.5" />

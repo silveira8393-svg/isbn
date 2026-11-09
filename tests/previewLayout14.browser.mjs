@@ -9,13 +9,17 @@ import assert from 'node:assert/strict';
 const require=createRequire(import.meta.url);
 let playwright;try{playwright=require('playwright');}catch{playwright=require(join(homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));}
 const user={id:'11111111-1111-4111-8111-111111111111',storeId:'22222222-2222-4222-8222-222222222222',role:'developer',active:true,name:'Ensaio visual',storeName:'Livraria Sul — fixtures'};
+const historyTimestamp=Date.parse('2026-11-09T13:24:15Z');
+const historyFixture={userId:user.id,storeId:user.storeId,userName:user.name,timestamp:historyTimestamp,
+ isbn:'9788550303628',title:'Obra de teste — consulta bibliográfica',authors:['Autora de teste','Coautor de teste'],
+ success:true,magazordStatus:'cadastrado_simulado',condition:'novo',operationType:'novo_cadastro',parentCode:'TESTE-P01'};
+const historyKey=(storeId,userId)=>`sebo_isbn_history_v2:${storeId}:${userId}`;
 const google=JSON.parse(await readFile('tests/fixtures/google-books-preview-2026-11-05.json','utf8')).results[2].body;
 const fixture=target=>({id:'fixture-'+target,title:target==='9786556096674'?'O livro do Bill':target==='9788550303628'?'O diário perdido de Gravity Falls':'O Rei de Amarelo',isbn13:target,
   authors:['Autor da fixture'],publisher:'Editora da fixture',year:2020,pageCount:288,coverUrl:'https://images.invalid/cover.svg',additionalImages:['https://images.invalid/inside.svg']});
 const mocks=[
  [/contexts\/UserContext$/,`export const useUser=()=>({currentUser:${JSON.stringify(user)},operationEnvironment:'development',canViewProduction:true,canViewSettings:true,isOperator:false,signOut:async()=>{}});`],
  [/hooks\/useOperationAudit$/,`export const useOperationAudit=()=>({saveOperation:()=>{},pending:[],retry:()=>{},saving:0});`],
- [/hooks\/useLocalHistory$/,`import {useState} from 'react';export const useLocalHistory=()=>{const[history,setHistory]=useState([]);return{history,setHistory,clearHistory:()=>setHistory([])}};`],
  [/services\/brasilApi$/,`const fixture=${fixture.toString()};export const searchBookByIsbnBrasilApi=async isbn=>{await new Promise(r=>setTimeout(r,60));return{book:fixture(isbn),diagnostic:{status:200}}};`],
  [/services\/distribuidoraCuritiba$/,`export const searchBookByIsbnDistribuidoraCuritiba=async()=>{await new Promise(r=>setTimeout(r,150));return{book:{id:'curitiba-fixture',title:'Gravity Falls',isbn13:'9788550303628',reference:'LV434083'},diagnostic:{status:200,state:'success'}}};export const mergeBookWithDistribuidora=(a,b)=>({...a,...b});`],
  [/services\/googleBooks$/,`export {complementWithGoogleBooks} from './src/services/googleBooks.ts';export const searchGoogleBooks=async isbn=>{await new Promise(r=>setTimeout(r,20));return isbn==='9788550303628'?${JSON.stringify(google)}:{status:'not_found',book:null,diagnostic:{code:'no_results',httpStatus:200}}};`],
@@ -43,6 +47,70 @@ try{
  });
  page=await context.newPage();page.setDefaultTimeout(8000);page.on('pageerror',error=>errors.push(error.message));
  await mkdir('dist/qa',{recursive:true});
+ for(const width of [1440,900,390]){
+  await page.setViewportSize({width,height:1000});
+  await page.goto('http://127.0.0.1:'+server.address().port);
+  await page.evaluate(()=>localStorage.clear());
+  await page.reload();
+  const historyNav=page.getByRole('button',{name:/^Histórico/}).filter({visible:true});
+  await historyNav.click();
+  const history=page.locator('.isbn-history-page');
+  await history.getByText('Nenhum livro consultado',{exact:true}).waitFor();
+  assert.match(await history.innerText(),/Horários de São Paulo/);
+  assert.equal(await history.locator('.isbn-history-empty').evaluate(n=>getComputedStyle(n).backgroundColor),'rgb(255, 255, 255)');
+  assert.equal(await page.locator('.isbn-header').evaluate(n=>getComputedStyle(n).backgroundColor),'rgb(6, 19, 33)');
+  assert.equal(await page.locator('.isbn-app-shell').evaluate(n=>getComputedStyle(n).backgroundColor),'rgb(247, 249, 252)');
+  await page.screenshot({path:`dist/qa/historico-vazio-${width}.png`});
+  await page.getByRole('button',{name:'Cadastro',exact:true}).filter({visible:true}).click();
+  await page.getByRole('button',{name:'Iniciar cadastro manual'}).waitFor();
+  assert.equal(await page.locator('.isbn-app-shell').evaluate(n=>getComputedStyle(n).backgroundColor),'rgb(247, 249, 252)');
+
+  const ownKey=historyKey(user.storeId,user.id);
+  const foreignUserKey=historyKey(user.storeId,'other-user');
+  const foreignStoreKey=historyKey('other-store',user.id);
+  const foreignUser={...historyFixture,userId:'other-user',title:'Registro de outro usuário'};
+  const foreignStore={...historyFixture,storeId:'other-store',title:'Registro de outra loja'};
+  const second={...historyFixture,isbn:'9786556096674',timestamp:historyTimestamp-60000,
+   title:'Obra usada de teste com um título mais longo para verificar a leitura em telas menores',
+   authors:['Autora de teste '+ 'SobrenomeComposto'.repeat(3)],condition:'usado',
+   historyKind:'test',operationEnvironment:'development',operationType:'novo_exemplar_usado'};
+  await page.evaluate(fixtures=>Object.entries(fixtures).forEach(([key,rows])=>localStorage.setItem(key,JSON.stringify(rows))),{
+   [ownKey]:[historyFixture,second,foreignUser,foreignStore],
+   [foreignUserKey]:[foreignUser],
+   [foreignStoreKey]:[foreignStore],
+  });
+  await page.reload();
+  await historyNav.click();
+  const first=history.locator('#history-item-9788550303628');
+  await first.waitFor();
+  assert.equal(await history.locator('.isbn-history-row').count(),2);
+  assert.match(await first.innerText(),/Obra de teste[\s\S]*Autora de teste, Coautor de teste[\s\S]*Novo Produto Cadastrado[\s\S]*Pai: TESTE-P01[\s\S]*ISBN 9788550303628[\s\S]*10:24/);
+  assert.match(await first.locator('[title]').getAttribute('title'),/09\/11\/2026.*10:24:15.*São Paulo/);
+  assert.match(await history.locator('#history-item-9786556096674').innerText(),/TESTE[\s\S]*Novo Usado Cadastrado[\s\S]*Dev Mock/);
+  assert.doesNotMatch(await history.innerText(),/Registro de outr[ao]/);
+  assert.ok(await history.evaluate(node=>[node,...node.querySelectorAll('.isbn-history-row')].every(n=>n.scrollWidth<=n.clientWidth+1)));
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  await page.screenshot({path:`dist/qa/historico-preenchido-${width}.png`});
+  const downloadPromise=page.waitForEvent('download');
+  await history.getByRole('button',{name:'CSV'}).click();
+  const download=await downloadPromise;
+  assert.match(download.suggestedFilename(),/^historico-isbn-.*\.csv$/);
+  const csv=await readFile(await download.path(),'utf8');
+  assert.match(csv,/Obra de teste/);
+  assert.doesNotMatch(csv,/Registro de outr[ao]/);
+  await history.getByRole('button',{name:'Limpar'}).click();
+  await history.getByText('Nenhum livro consultado',{exact:true}).waitFor();
+  assert.ok(await page.evaluate(keys=>keys.every(key=>localStorage.getItem(key)),[foreignUserKey,foreignStoreKey]));
+  assert.equal(await page.evaluate(key=>localStorage.getItem(key),ownKey),null);
+
+  await page.evaluate(({key,row})=>localStorage.setItem(key,JSON.stringify([row])),{key:ownKey,row:historyFixture});
+  await page.reload();
+  await historyNav.click();
+  await first.click();
+  assert.equal(await page.locator('#isbn-input-field').inputValue(),historyFixture.isbn);
+  await page.getByRole('link',{name:/^Curitiba /}).waitFor();
+  console.log(`Histórico ${width}px: vazio, preenchido, isolamento, horário, CSV, limpeza e reconsulta aprovados.`);
+ }
  for(const width of [1440,900,390]){
   await page.setViewportSize({width,height:1000});await page.goto('http://127.0.0.1:'+server.address().port);
   for(const condition of ['Novo','Usado']){

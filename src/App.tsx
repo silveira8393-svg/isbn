@@ -754,9 +754,10 @@ export default function App() {
   };
 
   const operationalView = activeTab === 'consultar' || activeTab === 'cadastro';
+  const lightWorkspace = operationalView || activeTab === 'historico';
 
   return (
-    <div className={`isbn-app-shell ${operationalView ? 'isbn-operational' : ''} min-h-screen bg-slate-50 flex flex-col selection:bg-blue-100 selection:text-blue-800`}>
+    <div className={`isbn-app-shell ${lightWorkspace ? 'isbn-operational' : ''} min-h-screen bg-slate-50 flex flex-col selection:bg-blue-100 selection:text-blue-800`}>
       {/* 1. Header azul profissional com navegação Consultar | Cadastro | Histórico */}
       <div className="isbn-store-context border-b bg-white px-4 py-2 text-xs text-slate-600">Loja operacional: <strong>{currentUser.storeName}</strong>
         {magazordMockService.hasUnscopedLegacyCatalog?.() && <p>O catálogo simulado agora é separado por loja. Registros locais antigos sem identificação de loja estão preservados, sem atribuição automática.</p>}
@@ -953,7 +954,7 @@ export default function App() {
 
         {/* ABA 3: HISTÓRICO */}
         {activeTab === 'historico' && (
-          <div className="max-w-3xl mx-auto">
+          <div className="isbn-history-page max-w-4xl mx-auto">
             <SearchHistoryGroup
               items={visibleHistory}
               onSelect={(isbn) => {
