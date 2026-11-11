@@ -1577,3 +1577,15 @@ Os intervalos abaixo correspondem ao estado final do worktree. Em arquivos exist
 - Vercel inspecionada somente por leitura, usando a conta Pessoal: projeto `isbn`, ID `prj_pvcmEP52OoMKQhhvb5FJRWrGZv1e`, equipe `team_6Mb3ib4RldlG91XsfpCCDvYF`, runtime configurado `24.x`. O Preview existente da base confirma a integração com `silveira8393-svg/isbn`.
 - Última implantação de produção observada antes do push: `dpl_4pwx2HrjCuZNCe4xWUi62HDTeH6x`, branch `main`, commit `93ff20473ca68b50d42d075276e07c624772c9e0`. Nenhuma operação será feita sobre ela.
 - Esta atualização acompanha o commit funcional. Após o push, o resultado da criação automática do Preview será acrescentado ao relatório em commit exclusivamente documental, sem modificar o código homologável.
+
+### Resultado da publicação e Preview
+
+- Commit funcional publicado: `1fc72b05672f306598668c109ca2e42722a315b8` — `feat: add Google Books title search with manual edition selection`.
+- Push realizado exclusivamente para `origin/feature/isbn-pesquisa-titulo`, com rastreamento da branch remota; sem merge, force push ou alteração de outra branch.
+- A integração Git da Vercel criou automaticamente o deployment `dpl_HYH6smjL9XP3YEK7GZG2es2bUnKG`. Estado verificado: **READY**. Origem confirmada nos metadados: `silveira8393-svg/isbn`, branch `feature/isbn-pesquisa-titulo`, SHA `1fc72b05672f306598668c109ca2e42722a315b8`, ambiente Preview (`target: null`, sem destino production).
+- URL exata para homologação deste commit: **https://isbn-75fnzmzcz-silveira8393-svgs-projects.vercel.app**.
+- Inspeção do deployment: https://vercel.com/silveira8393-svgs-projects/isbn/HYH6smjL9XP3YEK7GZG2es2bUnKG.
+- A produção foi reinspecionada após a publicação e continua no mesmo deployment `dpl_4pwx2HrjCuZNCe4xWUi62HDTeH6x`, commit `93ff20473ca68b50d42d075276e07c624772c9e0` da branch `main`.
+- Não foi necessário configurar ou autorizar nada adicional para gerar este Preview. Não houve criação manual de deployment, mudança de proteção de acesso, variáveis de ambiente ou integrações. A conta Vercel Pessoal permitiu a inspeção; a segunda conexão disponível foi descartada após negar acesso à sua própria equipe, sem solicitar ou alterar permissões.
+- A disponibilidade foi confirmada pela API Vercel como READY; a homologação humana autenticada, a conferência visual e a pesquisa real Google Books ficam para o operador no navegador. Os testes executados nesta preparação usaram fixtures e não gravaram na Magazord.
+- Esta subseção é entregue em um segundo commit exclusivamente documental. O Preview acima fixa o SHA funcional testado; um Preview adicional pode ser gerado automaticamente ao publicar este relatório, contendo o mesmo código da aplicação.
