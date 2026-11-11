@@ -19,7 +19,22 @@ export default function TitleSearch({ onConfirm, disabled = false }: { onConfirm
   const [message, setMessage] = useState('');
   const request = useRef<AbortController | null>(null);
   const generation = useRef(0);
+  const confirmationDialog = useRef<HTMLDialogElement | null>(null);
+  const selectionTrigger = useRef<HTMLButtonElement | null>(null);
+  const chosen = candidates.find(candidate => candidate.key === selected);
   useEffect(() => () => { generation.current++; request.current?.abort(); }, []);
+  useEffect(() => {
+    const dialog = confirmationDialog.current;
+    if (!dialog) return;
+    if (disabled || loading) { if (dialog.open) dialog.close(); return; }
+    if (chosen && !dialog.open) dialog.showModal();
+  }, [chosen, disabled, loading]);
+
+  const cancelSelection = () => {
+    confirmationDialog.current?.close();
+    setSelected(null);
+    selectionTrigger.current?.focus({ preventScroll: true });
+  };
 
   const search = async () => {
     if (disabled) return;
@@ -35,7 +50,6 @@ export default function TitleSearch({ onConfirm, disabled = false }: { onConfirm
       : result.status === 'unavailable' ? 'Google Books indisponível ou resposta incompleta. Tente novamente.'
       : `${result.candidates.length} resultado(s) do Google Books, limitados aos primeiros 20. Confira a edição antes de selecionar.`);
   };
-  const chosen = candidates.find(candidate => candidate.key === selected);
   return <section aria-label="Pesquisa por título" className="mb-6 rounded-xl border border-slate-200 bg-white p-4 space-y-4">
     <form onSubmit={event => { event.preventDefault(); void search(); }} className="flex flex-wrap items-end gap-3">
       <label className="flex-1 min-w-48 text-sm font-semibold text-slate-700">Título do livro
@@ -71,14 +85,45 @@ export default function TitleSearch({ onConfirm, disabled = false }: { onConfirm
               {book.bibliographicWarnings?.map(warning => <p key={warning} className="text-xs text-amber-800">{warning}</p>)}
             </div>
           </div>
-          <button type="button" disabled={disabled || loading} aria-pressed={selected === candidate.key} onClick={() => setSelected(candidate.key)} className="mt-3 rounded-lg border border-blue-300 px-3 py-2 text-sm font-semibold text-blue-800">Selecionar esta edição</button>
+          <button type="button" disabled={disabled || loading} aria-pressed={selected === candidate.key} aria-haspopup="dialog"
+            onClick={event => { selectionTrigger.current = event.currentTarget; setSelected(candidate.key); }}
+            className="mt-3 rounded-lg border border-blue-300 px-3 py-2 text-sm font-semibold text-blue-800">Selecionar esta edição</button>
         </article>;
       })}
     </div>
-    {chosen && <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm space-y-3">
-      <p>Confirmar “{chosen.book.title}” — {chosen.book.publisher || 'editora não informada'}, {chosen.book.year || 'ano não informado'}, ISBN {chosen.book.isbn13 || chosen.book.isbn10 || 'não informado'}? Confira os dados no formulário antes de cadastrar.</p>
-      <button type="button" disabled={disabled || loading} onClick={() => onConfirm(structuredClone(chosen.book))} className="rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white">Confirmar seleção e abrir cadastro</button>
-      <button type="button" onClick={() => setSelected(null)} className="ml-3 text-slate-700 underline">Cancelar seleção</button>
-    </div>}
+    {chosen && <dialog ref={confirmationDialog} aria-labelledby="edition-confirmation-title" aria-describedby="edition-confirmation-help"
+      onCancel={event => { event.preventDefault(); cancelSelection(); }} onClose={() => setSelected(null)}
+      onKeyDown={event => {
+        if (event.key !== 'Tab') return;
+        const buttons = event.currentTarget.querySelectorAll('button:not([disabled])');
+        const first = buttons[0], last = buttons[buttons.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }}
+      className="fixed inset-0 m-auto max-h-[calc(100dvh_-_2rem)] w-[calc(100%_-_2rem)] max-w-xl overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 text-slate-700 shadow-xl backdrop:bg-slate-900/50">
+      <h2 id="edition-confirmation-title" className="text-lg font-bold text-slate-900">Confirmar edição</h2>
+      <p id="edition-confirmation-help" className="mt-2 text-sm">Confira a edição selecionada. O cadastro será aberto para revisão e edição manual.</p>
+      <div className="mt-4 flex items-start gap-4 text-sm">
+        {chosen.book.googleBooksReference?.coverUrl && <img src={chosen.book.googleBooksReference.coverUrl} alt={`Capa de ${chosen.book.title}`}
+          referrerPolicy="no-referrer" className="h-36 w-24 shrink-0 object-contain" />}
+        <div className="min-w-0 space-y-2 break-words">
+          <h3 className="font-bold text-slate-900">{chosen.book.title}</h3>
+          {chosen.book.subtitle && <p>{chosen.book.subtitle}</p>}
+          <p>Autores: {chosen.book.authors?.join(', ') || 'Não informados'}</p>
+          <p>Editora: {chosen.book.publisher || 'Não informada'}</p>
+          <p>Ano: {chosen.book.year || 'Não informado'}</p>
+          <p>ISBN-13: {chosen.book.isbn13 || 'Não informado'}</p>
+          <p>ISBN-10: {chosen.book.isbn10 || 'Não informado'}</p>
+          <p>Fonte: {chosen.book.provider}</p>
+        </div>
+      </div>
+      <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
+        <button type="button" autoFocus onClick={cancelSelection} className="rounded-lg border border-slate-300 px-4 py-3 font-semibold text-slate-700">Cancelar</button>
+        <button type="button" disabled={disabled || loading} onClick={() => {
+          if (disabled || loading) return;
+          confirmationDialog.current?.close(); onConfirm(structuredClone(chosen.book));
+        }} className="rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white disabled:opacity-50">Confirmar edição e abrir cadastro</button>
+      </div>
+    </dialog>}
   </section>;
 }

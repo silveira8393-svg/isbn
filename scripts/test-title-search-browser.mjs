@@ -1,7 +1,7 @@
 // Real App/React/DOM with synthetic bibliography; external requests and persistence are denied.
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
-import { access, readFile, mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { access, readFile, readdir, mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname, basename } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -9,16 +9,19 @@ import { spawn } from 'node:child_process';
 
 const browser = process.env.ISBN_TEST_BROWSER || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 await access(browser);
-const images = [];
+const cover = 'https://books.google.com/books/content?id=second&img=1';
+const images = [cover];
+const viewportWidth = process.argv.includes('--mobile') ? 390 : 1280;
 const user = { id: '11111111-1111-4111-8111-111111111111', storeId: '22222222-2222-4222-8222-222222222222', role: 'operator', active: true, name: 'Teste offline' };
 const bundle = await build({ stdin: { resolveDir: process.cwd(), loader: 'tsx', contents: `
 import React from 'react'; import { createRoot } from 'react-dom/client';
 import App from './src/App'; import { mapGoogleBooksTitleResponse } from './shared/googleBooks';
 window.__calls=[]; window.__errors=[]; window.__completed=[];
 window.addEventListener('error',event=>window.__errors.push(event.message));
-const payload={kind:'books#volumes',totalItems:2,items:[
+const payload={kind:'books#volumes',totalItems:20,items:[
  {id:'first',volumeInfo:{title:'Obra sintética',publisher:'Editora A',publishedDate:'2001',authors:['Autor A']}},
- {id:'second',volumeInfo:{title:'Obra sintética',subtitle:'Edição revisada',publisher:'Editora B',publishedDate:'2020',industryIdentifiers:[{type:'ISBN_10',identifier:'8550303623'}]}}
+ {id:'second',volumeInfo:{title:'Obra sintética',subtitle:'Edição revisada',publisher:'Editora B',publishedDate:'2020',imageLinks:{thumbnail:${JSON.stringify(cover)}},industryIdentifiers:[{type:'ISBN_10',identifier:'8550303623'}]}},
+ ...Array.from({length:18},(_,i)=>({id:'other_'+i,volumeInfo:{title:'Outra edição '+i}}))
 ]};
 let scenario='multiple';
 window.fetch=async(url,init)=>{
@@ -32,6 +35,7 @@ const check=(value,message)=>{if(!value)throw Error(message);};
 async function wait(fn,label){for(let i=0;i<250;i++){if(fn())return;await pause();}throw Error('Timeout '+label);}
 function click(text){const button=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===text);check(button,'button '+text);button.click();}
 function edit(input,value){Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));}
+async function keyboard(key,shift=false){window.__keyRequest={key,shift};await wait(()=>!window.__keyRequest,'keyboard '+key);await pause();}
 const field=key=>document.querySelector('[data-registration-field="'+key+'"]');
 const root=createRoot(document.getElementById('root'));
 async function run(){
@@ -46,11 +50,29 @@ async function run(){
    await wait(()=>section.textContent.includes(scenario==='empty'?'Nenhum resultado':'indisponível'),'failure state');
    check(section.querySelectorAll('article').length===0,'no stale cards');window.__completed.push(scenario);continue;
   }
-  await wait(()=>section.querySelectorAll('article').length===2,'multiple cards');
+  await wait(()=>section.querySelectorAll('article').length===20,'multiple cards');
   for(const source of ['Amazon','Distribuidora Curitiba'])check([...section.querySelectorAll('button')].find(b=>b.textContent.includes(source)).disabled,'disabled '+source);
-  section.querySelectorAll('article button')[scenario==='multiple'?1:0].click();await pause();
-  check(!field('title'),'selection alone cannot open form');click('Confirmar seleção e abrir cadastro');
+  const trigger=section.querySelectorAll('article button')[scenario==='multiple'?1:0];trigger.focus();trigger.click();
+  await wait(()=>section.querySelector('dialog[open]'),'modal opens near selected edition');
+  let dialog=section.querySelector('dialog[open]');
+  check(dialog.matches(':modal'),'native modal with inert background');
+  check(document.activeElement.textContent==='Cancelar','initial focus on cancel');
+  const buttons=[...dialog.querySelectorAll('button')];
+  buttons[buttons.length-1].focus();await keyboard('Tab');check(dialog.contains(document.activeElement),'Tab stays inside modal');
+  buttons[0].focus();await keyboard('Tab',true);check(dialog.contains(document.activeElement),'Shift+Tab stays inside modal');
+  const box=dialog.getBoundingClientRect();check(box.left>=0&&box.right<=innerWidth&&box.top>=0&&box.bottom<=innerHeight,'responsive modal fits viewport');
+  check(Math.abs((box.left+box.right)/2-document.documentElement.clientWidth/2)<3&&Math.abs((box.top+box.bottom)/2-innerHeight/2)<3,'centered modal in usable viewport');
+  if(scenario==='multiple')check(dialog.querySelector('img')?.src===${JSON.stringify(cover)},'cover reference in modal');
+  click('Cancelar');await wait(()=>!section.querySelector('dialog'),'cancel closes modal');
+  check(document.activeElement===trigger,'cancel restores selection trigger focus');
+  check(section.querySelectorAll('article').length===20,'cancel preserves results');
+  trigger.click();await wait(()=>section.querySelector('dialog[open]'),'reopen');await keyboard('Escape');
+  await wait(()=>!section.querySelector('dialog'),'Escape closes modal');check(document.activeElement===trigger,'Escape restores focus');
+  trigger.click();await wait(()=>section.querySelector('dialog[open]'),'confirm dialog');
+  check(!field('title'),'selection alone cannot open form');
+  const callsBeforeConfirm=window.__calls.length;click('Confirmar edição e abrir cadastro');
   await wait(()=>field('title'),'existing registration form');
+  check(window.__calls.length===callsBeforeConfirm,'confirm cannot query any source');
   check(field('title').value==='Obra sintética','mapped title');
   check(field('publisher').value===(scenario==='multiple'?'Editora B':'Editora A'),'selected publisher');
   check(field('year').value===(scenario==='multiple'?'2020':'2001'),'selected edition year');
@@ -60,7 +82,7 @@ async function run(){
   check(field('title').value==='Correção manual','draft preserved');window.__completed.push(scenario);
  }
  check(window.__calls.length===4,'exactly one title query per scenario');check(!window.__errors.length,'page errors');
- return {ok:true,completed:window.__completed,mockedCalls:window.__calls.length,externalRequests:0,registrations:0,pageErrors:window.__errors};
+ return {ok:true,completed:window.__completed,viewport:innerWidth,mockedCalls:window.__calls.length,externalRequests:0,registrations:0,pageErrors:window.__errors};
 }
 run().then(result=>document.getElementById('result').textContent=JSON.stringify(result)).catch(error=>document.getElementById('result').textContent=JSON.stringify({ok:false,message:error.message,completed:window.__completed,calls:window.__calls,errors:window.__errors}));
 ` }, bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic', define: { 'import.meta.env': '{}', 'process.env.NODE_ENV': '"development"' },
@@ -76,7 +98,10 @@ run().then(result=>document.getElementById('result').textContent=JSON.stringify(
   } }] });
 const directory=await mkdtemp(join(tmpdir(),'isbn-title-dom-'));
 const file=join(directory,'test.html');
-await writeFile(file,`<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none';script-src 'unsafe-inline';style-src 'unsafe-inline';img-src https:;connect-src 'none'"><div id="root"></div><pre id="result">pending</pre><script>${bundle.outputFiles[0].text.replaceAll('</script','<\\/script')}</script>`,'utf8');
+const cssFile = (await readdir(resolve('dist/assets'))).find(name => /^index-.*\.css$/.test(name));
+assert.ok(cssFile, 'Run build before the browser test to verify the actual CSS');
+const css = (await readFile(resolve('dist/assets', cssFile), 'utf8')).replace(/@import[^;]+;/g, '');
+await writeFile(file,`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none';script-src 'unsafe-inline';style-src 'unsafe-inline';img-src https:;connect-src 'none'"><style>${css}</style><div id="root"></div><pre id="result">pending</pre><script>${bundle.outputFiles[0].text.replaceAll('</script','<\\/script')}</script>`,'utf8');
 const profile=join(directory,'profile');
 let child, socket;
 try{
@@ -109,9 +134,15 @@ try{
  const {sessionId}=await command('Target.attachToTarget',{targetId,flatten:true});
  await command('Fetch.enable',{patterns:[{urlPattern:'http://*'},{urlPattern:'https://*'}]},sessionId);
  await command('Page.enable',{},sessionId);
+ await command('Emulation.setDeviceMetricsOverride',{width:viewportWidth,height:900,deviceScaleFactor:1,mobile:viewportWidth<600},sessionId);
  await command('Page.navigate',{url:pathToFileURL(file).href},sessionId);
  let result;
  for(let i=0;i<350;i++){
+  const key=await command('Runtime.evaluate',{expression:'window.__keyRequest',returnByValue:true},sessionId);
+  if(key.result?.value){const {key:keyboardKey,shift}=key.result.value;const code=keyboardKey==='Escape'?27:9;
+   for(const type of ['keyDown','keyUp'])await command('Input.dispatchKeyEvent',{type,key:keyboardKey,code:keyboardKey,windowsVirtualKeyCode:code,modifiers:shift?8:0},sessionId);
+   await command('Runtime.evaluate',{expression:'window.__keyRequest=null'},sessionId);
+  }
   const evaluated=await command('Runtime.evaluate',{expression:'document.getElementById("result")?.textContent',returnByValue:true},sessionId);
   const value=evaluated.result?.value;
   if(value&&value!=='pending'){result=JSON.parse(value);break;}

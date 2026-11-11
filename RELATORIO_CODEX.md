@@ -1589,3 +1589,63 @@ Os intervalos abaixo correspondem ao estado final do worktree. Em arquivos exist
 - Não foi necessário configurar ou autorizar nada adicional para gerar este Preview. Não houve criação manual de deployment, mudança de proteção de acesso, variáveis de ambiente ou integrações. A conta Vercel Pessoal permitiu a inspeção; a segunda conexão disponível foi descartada após negar acesso à sua própria equipe, sem solicitar ou alterar permissões.
 - A disponibilidade foi confirmada pela API Vercel como READY; a homologação humana autenticada, a conferência visual e a pesquisa real Google Books ficam para o operador no navegador. Os testes executados nesta preparação usaram fixtures e não gravaram na Magazord.
 - Esta subseção é entregue em um segundo commit exclusivamente documental. O Preview acima fixa o SHA funcional testado; um Preview adicional pode ser gerado automaticamente ao publicar este relatório, contendo o mesmo código da aplicação.
+
+## Etapa 2 por título — Fase A bloqueada e modal Google Books (11/11/2026)
+
+### Base e decisão de escopo
+
+- Referência: branch `feature/isbn-pesquisa-titulo`, commit `754c18b69bf998910791246d1ae58cd1fca5b950`. Git status inicial limpo; nenhum trabalho local foi sobrescrito.
+- Branch exclusiva criada: `feature/isbn-amazon-titulo-etapa2`.
+- Aplicada a alternativa expressamente autorizada na seção 13 do pedido: quando a Fase A não comprovar autorização apropriada, não integrar Amazon e implementar/testar exclusivamente o modal Google Books em commit próprio.
+- Nesta entrega, somente `src/components/TitleSearch.tsx`, seus testes direcionados, o script de navegador e este relatório são alterados. Backend, clientes Amazon, pesquisa ISBN, cadastro, credenciais, OAuth, variáveis, banco, Magazord e arquivos históricos permanecem intactos.
+
+### Fase A: evidência técnica existente e impedimento
+
+- A conciliação anterior confirmou, somente por leitura dos logs, que o Preview `isbn-75fnzmzcz-silveira8393-svgs-projects.vercel.app` corresponde ao commit funcional `1fc72b05672f306598668c109ca2e42722a315b8` e ao deployment `dpl_HYH6smjL9XP3YEK7GZG2es2bUnKG`.
+- Registro existente: `GET /api/amazon/spapi/catalog`, HTTP da Function **200**, cache **BYPASS**, em 11/11/2026 às **19:29:33.410 de Brasília**, ID `trtq9-1794436173410-1af6bb6e0185`. O código desse deployment exige autorização interna, troca LWA e resposta Catalog Items válida para retornar sucesso. Isso evidencia respostas upstream 2xx, sem comprovar seus códigos numéricos individuais. O registro não conserva ISBN, cabeçalho de loja, corpo ou vendedor; a vinculação ao ISBN `9786555320350` e à loja Sebo Livraria Sul é também evidência observacional fornecida pelo operador.
+- A rejeição `selectedStore === config.store` foi introduzida deliberadamente no commit `0a2834f901b46953f21729d67f844a43796de2fc`: separa a loja operacional da loja vinculada às credenciais, valida perfil e vínculo operacional e admite developer/admin/operator. A documentação anterior que descreve consulta somente pela própria Silveira Lab está desatualizada em relação ao código.
+- **Funcionamento técnico não equivale à comprovação do escopo organizacional autorizado pela Amazon.** Permanecem sem evidência suficiente o vínculo efetivo vendedor/aplicativo, a aprovação vigente de Product Listing e a autorização apropriada para atendimento à Livraria Sul com a conta configurada da Silveira Lab. Não se declarou que os segredos são inválidos ou que o acesso técnico está indisponível.
+- Referências oficiais já consultadas: [Search catalog items](https://developer-docs.amazon/sp-api/docs/search-catalog-items) e [Authorize Private Applications](https://developer-docs.amazon/sp-api/docs/self-authorization). A primeira exige autorização do selling partner e papel Product Listing aprovado; a segunda descreve autoautorização em nome da própria organização. A operação suporta keywords, mas isso não comprova o escopo da conta configurada.
+- **Decisão: Fase A bloqueada.** Nenhuma chamada Amazon ou troca LWA foi feita nesta etapa; segredos não foram lidos/exportados e não houve tentativa de contornar controles. `keywords=O Alquimista` não foi executado. Assim, não há HTTP upstream, quantidade, ASINs, ISBNs, campos, edições ou paginação real a relatar desta consulta.
+- Fases B/C/E/F Amazon não iniciadas: nenhuma rota, adaptador, status por fonte ou paginação Amazon foi implementado; sua aba continua desabilitada. Não houve uso, execução, alteração, exclusão ou fallback para o mecanismo HTML histórico.
+
+### Modal implementado
+
+- Substituído o painel de confirmação ao final da lista por um diálogo nativo centralizado, aberto imediatamente após selecionar uma edição Google Books.
+- Mostra capa como referência quando disponível, título, subtítulo, autores, editora, ano, ISBN-10/13 e fonte, identificando ausências.
+- Ações: **Confirmar edição e abrir cadastro** e **Cancelar**. Escape também cancela. O foco inicial fica em Cancelar; Tab/Shift+Tab permanecem nos controles; cancelamento devolve foco ao resultado selecionado sem rolar a lista.
+- Resultados e pesquisa permanecem ao cancelar. O diálogo usa nome e descrição acessíveis, fundo inerte, largura responsiva, altura limitada à janela e rolagem interna.
+- Confirmar reutiliza o callback e o formulário existentes. Não cria consultas, cadastros, publicações, preços ou estoque. Cancelar não altera rascunhos; o mapeamento e a navegação do cadastro permanecem os existentes.
+- Google Books conserva o limite de 20 volumes. Amazon e Distribuidora Curitiba permanecem desabilitadas na busca por título.
+
+### Arquivos e linhas afetadas
+
+Intervalos finais desta entrega; linhas não relacionadas dentro dos intervalos abrangentes foram preservadas.
+
+| Arquivo | Linhas inicial–final | Alteração |
+| --- | --- | --- |
+| `src/components/TitleSearch.tsx` | 22–127 | Referências do diálogo/gatilho, abertura, cancelamento, foco, modal e ações; remoção do painel antigo |
+| `tests/titleSearch.test.mjs` | 107–137 | Atualização da confirmação e teste de cancelamento/Escape, foco e ausência de consulta adicional |
+| `scripts/test-title-search-browser.mjs` | 4–145 | Fixtures com 20 resultados/capa, CSS real do build, desktop/mobile, teclado via CDP e verificação do modal/cadastro |
+| `RELATORIO_CODEX.md` | 1593–1651 | Diagnóstico da Fase A, entrega permitida, verificações e situação de publicação |
+
+### Testes, falhas encontradas e correções
+
+Runtime reutilizado do cache já instalado: **Node 24.22.2**; nenhuma dependência instalada ou lockfile alterado.
+
+- TypeScript: `node24 node_modules/typescript/bin/tsc --noEmit`, aprovado no estado final.
+- Build: `node24 node_modules/vite/bin/vite.js build`, aprovado. Mantidos os avisos conhecidos de bundle grande e importação estática/dinâmica Supabase. Nenhuma configuração alterada.
+- Testes focados: `node24 --test --test-concurrency=1 tests/titleSearch.test.mjs tests/googleBooks.test.mjs tests/manualRegistration.test.mjs`, **47 aprovados, zero falhas**. Incluem ISBN e formulário existente NOVO/USADO, obras sem ISBN, campos ausentes, respostas atrasadas, modal e fontes futuras desabilitadas.
+- Navegador: `node24 scripts/test-title-search-browser.mjs`, aprovado no Edge isolado em **1280 × 900**; `node24 scripts/test-title-search-browser.mjs --mobile`, aprovado em **390 × 900**. Cada execução cobre quatro cenários: múltiplos resultados, sem ISBN, nenhum resultado e falha Google Books. São 20 cartões nas listas válidas, quatro chamadas simuladas por execução, zero requisições externas, zero cadastros e zero erros de página.
+- Verificações reais de DOM/CSS: diálogo `:modal`, conteúdo/capa, centralização, limites da janela, foco inicial, Tab/Shift+Tab reais, Escape, Cancelar, preservação dos 20 cartões, retorno de foco, confirmação sem requisição e edição do rascunho ao navegar.
+- A primeira execução focada revelou que o helper de texto do teste ignorava números; corrigido para conferir o ano renderizado. A primeira execução de teclado revelou que o diálogo nativo podia mover foco ao documento ao pressionar Tab no último botão; adicionada retenção explícita nos extremos. A medição inicial de centralização foi ajustada para descontar a barra de rolagem, usando a largura útil da janela. Todos esses pontos foram revalidados.
+- `git diff --check`: aprovado. Suíte global não executada, conforme o pedido. Nenhum teste Amazon por título simulado foi criado para representar como implementada uma fase bloqueada.
+- Revisão React/acessibilidade conforme a skill já adotada `vercel:react-best-practices`; referência do diálogo: [MDN dialog](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/dialog).
+
+### Riscos, Preview e próximos passos
+
+- Esta entrega homologa **somente o modal Google Books**; não declara validação ou integração Amazon por título.
+- Antes da Fase A, obter evidência não sensível do aplicativo, da conta vendedora, do papel Product Listing e do escopo permitido entre Silveira Lab e Livraria Sul. Nenhuma rotação, mudança de OAuth, permissão ou ajuste de loja foi inferido como autorizado.
+- Após comprovação, o menor ensaio é uma única chamada oficial com LWA existente, keywords `O Alquimista`, marketplace Brasil, pageSize 10 e os datasets solicitados, sem identifiers e sem alterar controles de acesso. Implementação/paginação permanecem posteriores ao sucesso desse ensaio.
+- O modal utiliza HTMLDialogElement.showModal e foi validado no Edge atual. Homologação humana com tecnologias assistivas e nos navegadores móveis usados pela equipe continua recomendada.
+- Publicação limitada à branch exclusiva de desenvolvimento, incluindo apenas o modal autorizado e seu diagnóstico. Nenhum merge, promoção ou alteração de produção, ambiente, proteção de Preview, Supabase ou Magazord. O resultado do push/Preview será registrado após a operação, em atualização documental.

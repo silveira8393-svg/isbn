@@ -104,15 +104,36 @@ function mountTitle(search) {
     query(value) { nodes(tree).find(n => n.type === 'input').props.onChange({ target: { value } }); render(); },
     async submit() { nodes(tree).find(n => n.type === 'form').props.onSubmit({ preventDefault() {} }); await new Promise(resolve => setImmediate(resolve)); render(); } };
 }
-const text = node => typeof node === 'string' ? node : Array.isArray(node) ? node.map(text).join('') : node?.props ? text(node.props.children) : '';
+const text = node => typeof node === 'string' || typeof node === 'number' ? String(node) : Array.isArray(node) ? node.map(text).join('') : node?.props ? text(node.props.children) : '';
 test('UI displays editions, disables future sources and requires selection plus confirmation', async () => {
   const view = mountTitle(async () => api.mapGoogleBooksTitleResponse(editions)); view.query('Título'); await view.submit();
   assert.equal(view.all().filter(n => n.type === 'article').length, 2);
   for (const name of ['Amazon', 'Distribuidora Curitiba']) assert.equal(view.all().find(n => n.type === 'button' && text(n).includes(name)).props.disabled, true);
-  view.all().filter(n => n.type === 'button' && text(n) === 'Selecionar esta edição')[1].props.onClick(); view.render();
+  view.all().filter(n => n.type === 'button' && text(n) === 'Selecionar esta edição')[1].props.onClick({ currentTarget: { focus() {} } }); view.render();
   assert.equal(view.confirmed.length, 0);
-  view.all().find(n => n.type === 'button' && text(n) === 'Confirmar seleção e abrir cadastro').props.onClick();
+  const dialog = view.all().find(n => n.type === 'dialog'); assert.ok(dialog);
+  assert.equal(dialog.props['aria-labelledby'], 'edition-confirmation-title');
+  assert.match(text(dialog), /Editora B/); assert.match(text(dialog), /2020/); assert.match(text(dialog), /Google Books/);
+  view.all().find(n => n.type === 'button' && text(n) === 'Confirmar edição e abrir cadastro').props.onClick();
   assert.equal(view.confirmed[0].publisher, 'Editora B'); assert.equal(view.confirmed[0].year, 2020);
+});
+test('modal cancel and Escape retain results, restore trigger focus and do not fetch or confirm', async () => {
+  let calls = 0, focused = 0, prevented = 0;
+  const view = mountTitle(async () => { calls++; return api.mapGoogleBooksTitleResponse(editions); });
+  view.query('Título'); await view.submit();
+  for (const method of ['button', 'escape']) {
+    view.all().filter(n => n.type === 'button' && text(n) === 'Selecionar esta edição')[0]
+      .props.onClick({ currentTarget: { focus() { focused++; } } }); view.render();
+    const dialog = view.all().find(n => n.type === 'dialog');
+    assert.match(text(dialog), /ISBN-13: Não informado/);
+    if (method === 'button') view.all().find(n => n.type === 'button' && text(n) === 'Cancelar').props.onClick();
+    else dialog.props.onCancel({ preventDefault() { prevented++; } });
+    view.render();
+    assert.equal(view.all().some(n => n.type === 'dialog'), false);
+    assert.equal(view.all().filter(n => n.type === 'article').length, 2);
+    assert.equal(view.confirmed.length, 0);
+  }
+  assert.equal(calls, 1); assert.equal(focused, 2); assert.equal(prevented, 1);
 });
 test('UI discards late results after query edit or unmount', async () => {
   let resolve, signal;
