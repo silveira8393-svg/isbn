@@ -1474,3 +1474,106 @@ Também manter fora os artefatos locais do CLI:
 O conjunto específico evita incluir B1 ou cache por adição genérica do diretório
 supabase. Nenhuma autorização de commit ou execução B1 foi inferida da aprovação
 técnica. Encerramento da Etapa 5 neste ponto, aguardando a decisão do usuário.
+
+## Pesquisa por título — Etapa 1 (11/11/2026)
+
+### Base, segurança e arquitetura analisadas
+
+- Repositório: `silveira8393-svg/isbn`; worktree: `C:\Desenvolv\isbn-layout-claro`.
+- Branch inicial/de referência: `feature/isbn-layout-claro`.
+- Commit analisado e base da nova branch: `ca5d82b4900668b51f301ed48f0d6a9fbd604c85` — Apply the shared light workspace to ISBN history.
+- Branch criada: `feature/isbn-pesquisa-titulo`. HEAD permanece no commit de base; alterações entregues no worktree, sem commit, merge, push ou publicação.
+- `git status --short` inicial vazio: nenhuma alteração local pendente. Todo o histórico deste relatório foi preservado.
+- Metadados Git deste worktree ficam em `C:/Desenvolv/isbn/.git/worktrees/isbn-layout-claro`; a criação da branch exigiu execução fora do sandbox, sem alterar a base.
+- Fluxo ISBN: `App.handleSearch` consulta os serviços existentes e preserva sua complementação por ISBN exato, histórico, auditoria e galerias. Não foi reutilizado para título, pois isso dispararia outras fontes e combinaria dados.
+- Google Books existente: `src/services/googleBooks.ts` → `/api/google-books` (`api/google-books.ts` e middleware local já existentes) → `server/googleBooksFunction.ts` → normalização em `shared/googleBooks.ts`.
+- Cadastro: `createRegistrationDraft` → `ProductRegistrationForm`, com edição, validação, revisão e simulador existentes. Nenhum formulário paralelo foi criado.
+- Não houve alterações em autenticação, banco, categorias, produtos reais ou serviços externos. Nenhum cadastro real na Magazord foi executado.
+
+### Implementação
+
+1. Seletor Por ISBN / Por título no espaço claro existente; ISBN continua sendo o modo inicial.
+2. Título consulta exclusivamente Google Books, por GET no endpoint existente, com `intitle:"..."`, `printType=books` e até 20 volumes. Não há pesquisa automática, paginação ou consultas Curitiba/Amazon neste fluxo.
+3. Cada candidato conserva fonte, volumeId, metadados e proveniência próprios. Não se juntam autores, editoras, datas ou ISBNs de edições diferentes. IDs repetidos são removidos apenas dentro da resposta da mesma fonte.
+4. Quadros mostram capa disponível como referência, título/subtítulo, autores, editora, ano, ISBN-10/13 e fonte; campos ausentes são identificados. ISBN-10 válido pode gerar seu ISBN-13 equivalente; ISBN ausente/inválido não é inventado e identificadores contraditórios são omitidos com aviso.
+5. As opções Todos e Google Books filtram candidatos. Distribuidora Curitiba e Amazon ficam desabilitadas e marcadas “em breve”; contrato de candidatos já distingue as fontes.
+6. Selecionar uma edição apenas prepara a confirmação. Confirmar abre o formulário existente com `createRegistrationDraft`, sem consultar outras APIs, sem complementar a edição e sem cadastrar. ISBN é opcional conforme as regras atuais. Edição manual e navegação preservam o rascunho.
+7. Mudança de texto, troca de modo/aba, identidade ou desmontagem descarta respostas atrasadas. A confirmação cancela enriquecimentos ISBN pendentes antes de criar o rascunho da edição escolhida.
+8. A normalização bibliográfica compartilhada foi extraída para uma função por volume. O filtro de identidade exata da consulta ISBN continua no caminho original.
+9. Tratamentos distintos para nenhum resultado utilizável, consulta inválida, indisponibilidade/timeout e resposta malformada; mantidos limites de resposta, origem, método, chave exclusivamente no servidor e cookies de Preview somente na chamada de mesma origem.
+10. Capa e descrição Google Books continuam referências para conferência, conforme a política preexistente; não viram automaticamente imagem comercial ou sinopse. Categorias comerciais, preço, conservação e demais requisitos continuam sob as regras atuais do cadastro.
+
+Referência técnica consultada: [Google Books — Performing a search](https://developers.google.com/books/docs/v1/using#PerformingSearch), operadores `intitle`, `isbn` e filtro `printType`.
+
+### Arquivos e intervalos de linhas finais desta etapa
+
+Os intervalos abaixo correspondem ao estado final do worktree. Em arquivos existentes, linhas não relacionadas dentro do intervalo abrangente foram preservadas.
+
+| Arquivo | Linhas inicial–final | Alterações |
+| --- | --- | --- |
+| `server/googleBooksFunction.ts` | 2–62 | Contrato de título, validação exclusiva de modo, query Google e retorno múltiplo; transporte existente reutilizado |
+| `shared/googleBooks.ts` | 52–132 | Mapeamento de volume reutilizável, contrato por fonte, consulta por título e normalização de múltiplos volumes |
+| `src/services/googleBooks.ts` | 3–25 | Cliente por título e validação da resposta; cliente ISBN preservado |
+| `src/App.tsx` | 11–828 | Pontos modificados: 11, 64, 186, 453–472, 811–816, 825 e 828; seletor e confirmação no cadastro existente |
+| `src/components/TitleSearch.tsx` | 1–84 | Novo componente de pesquisa, quadros, fontes e confirmação |
+| `tests/manualRegistration.test.mjs` | 91–107 | Integração App → formulário existente, com/sem ISBN, sem requisições na confirmação, edição e navegação |
+| `tests/titleSearch.test.mjs` | 1–126 | Novos testes de servidor, cliente, normalização e interação do componente |
+| `scripts/test-title-search-browser.mjs` | 1–126 | Teste com React/App reais no Edge, fixtures, rede bloqueada e persistência proibida |
+| `RELATORIO_CODEX.md` | 1478–1553 | Seção adicionada; conteúdo anterior mantido |
+
+### Testes e resultados
+
+- Dependências não estavam instaladas inicialmente: `npm.cmd ci --no-audit --no-fund` concluiu; package.json e lockfile não foram alterados.
+- Ambiente disponível: Node `26.13.0`; package.json solicita `24.x`. Houve aviso de engine. Homologar também com Node 24.
+- `node --test tests/titleSearch.test.mjs tests/googleBooks.test.mjs tests/manualRegistration.test.mjs`: 46 aprovados, zero falhas. Abrange múltiplas edições, ISBN-10/13, ausência/conflito de identificadores, dados incompletos, erros, origem, cookies, cancelamento, duas fases de seleção, formulário existente e cadastro simulado NOVO/USADO.
+- `node node_modules/typescript/bin/tsc --noEmit`: aprovado no estado final. Uma falha inicial de JSX key foi corrigida antes da verificação final.
+- `npm.cmd run build` e execução final direta `node node_modules/vite/bin/vite.js build`: aprovadas. Avisos existentes de chunk acima de 500 kB e importação estática/dinâmica do cliente Supabase. Uma execução concorrente adicional encontrou falta de memória do esbuild; a repetição sequencial concluiu.
+- `npm.cmd test`: executado, com falhas. Para eliminar instabilidade por concorrência/memória, a suíte completa foi repetida como `node --test --test-concurrency=1 tests/*.test.mjs`: **970 testes, 919 aprovados, 51 falhas**.
+- Comparação: exportado o commit base para diretório temporário, sem modificar este worktree, compartilhando somente as dependências instaladas. A mesma suíte sequencial na base, com acesso de leitura ao Git para os testes históricos, produziu **960 testes, 909 aprovados, 51 falhas**. A comparação dos nomes normalizados das falhas foi idêntica: **nenhuma nova falha; os 10 testes adicionados passaram**.
+- As falhas preexistentes concentram-se em fixtures/revisão de cadastro, histórico, cenários de galerias SP-API, autorização/provisionamento SP-API, infraestrutura e teste de escopo preso a commit histórico. Não foram mascaradas nem corrigidas fora desta etapa. Logs locais ignorados pelo Git: `.test-title-search-sequential.log`, `.test-title-search.log` e `.test-title-search-direct.log`.
+- `node scripts/test-title-search-browser.mjs`: **aprovado no Edge headless**, React StrictMode + App + formulário reais. Cenários `multiple`, `without-isbn`, `empty`, `failure`; quatro chamadas simuladas, zero requisições externas, zero cadastros, zero erros de página. Verifica escolha da segunda edição, campos transferidos, ISBN opcional, edição manual e retorno ao rascunho. O sandbox impediu a inicialização da página via CDP; o teste isolado foi concluído fora dele, com rede e persistência bloqueadas. Uma espera entre montagens dos cenários foi corrigida no próprio teste.
+- `git diff --check`: aprovado.
+- Revisão com `vercel:react-best-practices`: hooks no topo, controles rotulados, estados acessíveis, seleção por identidade, cancelamento na desmontagem e sem novas bibliotecas ou CSS global. Não houve teste visual humano de aprovação do layout.
+
+### Pendências, riscos e homologação
+
+- **Pronta para homologação funcional no navegador**, com a ressalva das 51 falhas já presentes na base e a necessidade de conferir o visual e a consulta real com a configuração existente de `GOOGLE_BOOKS_API_KEY`. Nenhum deploy foi feito e não se declarou validação real da API Google em ambiente autenticado.
+- Passos sugeridos: abrir Consultar → Por título, buscar uma obra com várias edições, conferir editora/ano/ISBN, selecionar e confirmar, ajustar campos no formulário e alternar NOVO/USADO. Repetir com obra sem ISBN e com título inexistente. Voltar a Por ISBN e conferir o fluxo habitual. Não concluir gravações reais na Magazord.
+- Limite intencional: primeiros 20 resultados. Busca por frase pode exigir tentativa com um título mais curto; paginação/refinamento por autor/editora ficam para evolução posterior.
+- Ausências e divergências da API continuam exigindo conferência humana. Fonte original permanece no candidato e no originalBook; links do cadastro continuam sujeitos à validação preexistente por ISBN, inclusive quando ele está ausente.
+- Nenhum evento de título é registrado falsamente como `pesquisa_isbn`; histórico e auditoria existentes não foram remodelados. Histórico próprio de pesquisa por título pode ser especificado em etapa posterior.
+- A suíte global permanece vermelha na base e na funcionalidade. Corrigir suas 51 falhas em trabalho separado antes de usá-la como bloqueio confiável de entrega.
+- Revalidar em Node 24 e com contas de homologação; nenhum login ou escrita real foi usado nos testes.
+
+### Próximas etapas: Curitiba e Amazon
+
+- Implementar adaptadores exclusivos de pesquisa por título com o contrato `TitleSearchCandidate`, chave por volume/produto e fonte original; verificar capacidades, limites e autenticação das APIs oficiais de cada serviço.
+- Cada fonte deverá ter estados e testes próprios de disponibilidade, resultados incompletos, múltiplas edições, limites e cancelamento; não reutilizar automaticamente complementação por ISBN no fluxo de título.
+- Habilitar cada aba somente após implementação e homologação. Todos deverá agregar candidatos identificados por fonte, sem fundir metadados entre APIs; estender seleção para identidade composta fonte + chave.
+- Preservar a confirmação manual e o mesmo formulário. Nenhuma integração de título Curitiba/Amazon foi ativada nesta etapa.
+
+## Preparação para homologação da pesquisa por título — 11/11/2026
+
+### Revisão antes da publicação
+
+- Branch conferida: `feature/isbn-pesquisa-titulo`, derivada de `feature/isbn-layout-claro` no commit `ca5d82b4900668b51f301ed48f0d6a9fbd604c85`.
+- Revisados integralmente os nove arquivos desta etapa: `RELATORIO_CODEX.md`, `server/googleBooksFunction.ts`, `shared/googleBooks.ts`, `src/App.tsx`, `src/services/googleBooks.ts`, `src/components/TitleSearch.tsx`, `tests/manualRegistration.test.mjs`, `tests/titleSearch.test.mjs` e `scripts/test-title-search-browser.mjs`. Nenhum arquivo fora do escopo será incluído.
+- A conferência manual e a varredura de padrões de chaves, tokens, JWTs, senhas e chaves privadas não identificaram credenciais reais nesses arquivos. A ocorrência em `tests/manualRegistration.test.mjs:20` é `synthetic-session`, fixture já existente. Referências a nomes de variáveis de ambiente não contêm seus valores; IDs de fixtures são sintéticos. Arquivos `.env`, cache, dependências e artefatos de build não são incluídos.
+- Nenhuma configuração de produção, variável de ambiente, autenticação ou integração externa foi alterada. Não houve cadastro real na Magazord, merge ou promoção de deployment.
+
+### Revalidação com Node 24
+
+- Runtime temporário no cache npm: Node `v24.22.2`, sem modificar dependências, lockfile, configuração global ou versão padrão do sistema.
+- `node24 node_modules/typescript/bin/tsc --noEmit`: aprovado.
+- `node24 --test --test-concurrency=1 tests/titleSearch.test.mjs tests/googleBooks.test.mjs tests/manualRegistration.test.mjs`: **46 testes aprovados, zero falhas**.
+- `node24 node_modules/vite/bin/vite.js build`: aprovado, 2046 módulos transformados. Persistem os avisos de bundle acima de 500 kB e importação estática/dinâmica do cliente Supabase.
+- `node24 scripts/test-title-search-browser.mjs`: aprovado no Edge headless, cenários `multiple`, `without-isbn`, `empty` e `failure`; quatro chamadas simuladas, zero requisições externas, zero cadastros e zero erros de página.
+- `git diff --check`: aprovado.
+- A suíte global não foi repetida nesta preparação; mantém-se a comparação documentada acima: as mesmas 51 falhas na base e na funcionalidade, sem novas falhas na etapa anterior.
+
+### Destino e acompanhamento
+
+- Remoto confirmado: `https://github.com/silveira8393-svg/isbn.git`. A nova branch ainda não existia no remoto no início desta preparação. A publicação usará explicitamente apenas `refs/heads/feature/isbn-pesquisa-titulo`, sem force push.
+- Vercel inspecionada somente por leitura, usando a conta Pessoal: projeto `isbn`, ID `prj_pvcmEP52OoMKQhhvb5FJRWrGZv1e`, equipe `team_6Mb3ib4RldlG91XsfpCCDvYF`, runtime configurado `24.x`. O Preview existente da base confirma a integração com `silveira8393-svg/isbn`.
+- Última implantação de produção observada antes do push: `dpl_4pwx2HrjCuZNCe4xWUi62HDTeH6x`, branch `main`, commit `93ff20473ca68b50d42d075276e07c624772c9e0`. Nenhuma operação será feita sobre ela.
+- Esta atualização acompanha o commit funcional. Após o push, o resultado da criação automática do Preview será acrescentado ao relatório em commit exclusivamente documental, sem modificar o código homologável.

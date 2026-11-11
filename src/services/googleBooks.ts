@@ -1,6 +1,28 @@
 import type { BookInfo } from '../types';
 import { canonicalBookIsbn } from '../utils/isbn';
-import { GOOGLE_BOOKS_SOURCE, type GoogleBooksResult } from '../../shared/googleBooks';
+import { GOOGLE_BOOKS_SOURCE, normalizeTitleQuery, type GoogleBooksTitleResult, type GoogleBooksResult } from '../../shared/googleBooks';
+
+export async function searchGoogleBooksByTitle(title: string, signal?: AbortSignal): Promise<GoogleBooksTitleResult> {
+  const query = normalizeTitleQuery(title);
+  if (!query) return { status: 'invalid_query', candidates: [], diagnostic: { code: 'invalid_title' } };
+  try {
+    const timeout = AbortSignal.timeout(5000);
+    const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
+    const response = await fetch('/api/google-books?title=' + encodeURIComponent(query), { method: 'GET', signal: combined,
+      credentials: 'same-origin', redirect: 'error', cache: 'no-store', headers: { Accept: 'application/json' } });
+    if (!response.ok) throw new Error('http');
+    const result = await response.json() as GoogleBooksTitleResult;
+    if (combined.aborted || !result?.diagnostic || typeof result.diagnostic.code !== 'string'
+      || !['success', 'not_found', 'unavailable', 'invalid_query'].includes(result.status)
+      || !Array.isArray(result.candidates) || result.candidates.length > 20
+      || (result.status === 'success' ? !result.candidates.length : result.candidates.length !== 0)
+      || result.candidates.some(candidate => candidate.source !== 'google_books' || typeof candidate.key !== 'string'
+        || !/^[\w-]+$/.test(candidate.key) || candidate.book?.provider !== GOOGLE_BOOKS_SOURCE
+        || typeof candidate.book.title !== 'string' || !candidate.book.title.trim()
+        || candidate.book.googleBooksReference?.volumeId !== candidate.key)) throw new Error('invalid_response');
+    return result;
+  } catch { return { status: 'unavailable', candidates: [], diagnostic: { code: 'transport_or_response' } }; }
+}
 
 export async function searchGoogleBooks(isbn: string, signal?: AbortSignal): Promise<GoogleBooksResult> {
   const canonical = canonicalBookIsbn(isbn);

@@ -49,9 +49,17 @@ export function mapGoogleBooksResponse(payload: unknown, searchedIsbn: string): 
       || canonicalBookIsbn(identifier.identifier) !== expected)) continue;
     const title = text(info.title);
     if (!title) continue;
-    const book: BookInfo = { id: `google-books-${id}`, title, isbn13: expected, provider: GOOGLE_BOOKS_SOURCE, provenance: {} };
+    const book = mapVolumeFacts(info, id, title, expected);
     const isbn10 = ids.find(identifier => identifier.type === 'ISBN_10');
-    if (isbn10) book.isbn10 = cleanIsbn(String(isbn10.identifier));
+    if (isbn10) { book.isbn10 = cleanIsbn(String(isbn10.identifier)); book.provenance!.isbn10 = GOOGLE_BOOKS_SOURCE; }
+    return { status: 'success', book, diagnostic: { code: 'exact_isbn' } };
+  }
+  return { status: 'not_found', book: null, diagnostic: { code: Number(data.totalItems) === 0 ? 'no_results' : 'no_exact_isbn' } };
+}
+
+/** Map a single volume, without combining editions or sources. */
+function mapVolumeFacts(info: RecordValue, id: string, title: string, expected = ''): BookInfo {
+    const book: BookInfo = { id: `google-books-${id}`, title, ...(expected ? { isbn13: expected } : {}), provider: GOOGLE_BOOKS_SOURCE, provenance: {} };
     const subtitle = text(info.subtitle), publisher = text(info.publisher);
     const authors = [...new Set((Array.isArray(info.authors) ? info.authors : []).map(author => text(author)).filter((v): v is string => !!v))];
     if (subtitle) book.subtitle = subtitle;
@@ -81,7 +89,45 @@ export function mapGoogleBooksResponse(payload: unknown, searchedIsbn: string): 
     if (previewLink) links.push({ source: 'google_books', kind: 'preview', url: previewLink, isbn: expected });
     if (links.length) book.sourceLinks = links;
     for (const field of Object.keys(book)) if (!['id', 'provider', 'provenance'].includes(field)) book.provenance![field] = GOOGLE_BOOKS_SOURCE;
-    return { status: 'success', book, diagnostic: { code: 'exact_isbn' } };
+    return book;
+}
+
+export type TitleSearchSource = 'google_books' | 'curitiba' | 'amazon';
+export type TitleSearchCandidate = { source: TitleSearchSource; key: string; book: BookInfo };
+export type GoogleBooksTitleResult = {
+  status: GoogleBooksResult['status']; candidates: TitleSearchCandidate[];
+  diagnostic: GoogleBooksResult['diagnostic'];
+};
+
+export function normalizeTitleQuery(value: unknown): string | undefined {
+  const title = text(value, 200)?.replace(/\s+/g, ' ');
+  return title && title.length >= 2 ? title : undefined;
+}
+
+export function mapGoogleBooksTitleResponse(payload: unknown): GoogleBooksTitleResult {
+  const data = object(payload);
+  if (data.kind !== 'books#volumes' || !Number.isSafeInteger(data.totalItems) || Number(data.totalItems) < 0
+    || (data.items !== undefined && !Array.isArray(data.items)) || (Number(data.totalItems) > 0 && !Array.isArray(data.items)))
+    return { status: 'unavailable', candidates: [], diagnostic: { code: 'invalid_response' } };
+  const candidates: TitleSearchCandidate[] = [];
+  for (const item of (Array.isArray(data.items) ? data.items : []).slice(0, 20)) {
+    const volume = object(item), info = object(volume.volumeInfo), id = text(volume.id, 100), title = text(info.title);
+    if (!id || !/^[\w-]+$/.test(id) || !title || candidates.some(candidate => candidate.key === id)) continue;
+    const ids = (Array.isArray(info.industryIdentifiers) ? info.industryIdentifiers : []).map(object)
+      .filter(identifier => ['ISBN_10', 'ISBN_13'].includes(String(identifier.type)))
+      .filter(identifier => typeof identifier.identifier === 'string'
+        && cleanIsbn(identifier.identifier).length === (identifier.type === 'ISBN_10' ? 10 : 13)
+        && canonicalBookIsbn(identifier.identifier));
+    const canonical = [...new Set(ids.map(identifier => canonicalBookIsbn(String(identifier.identifier))))];
+    const book = mapVolumeFacts(info, id, title, canonical.length === 1 ? canonical[0] : undefined);
+    if (canonical.length === 1) {
+      const isbn10 = ids.find(identifier => identifier.type === 'ISBN_10');
+      if (isbn10) book.isbn10 = cleanIsbn(String(isbn10.identifier));
+    }
+    if (canonical.length > 1) book.bibliographicWarnings = [...(book.bibliographicWarnings || []), 'ISBNs conflitantes nesta edição; confira manualmente.'];
+    if (book.isbn10) book.provenance!.isbn10 = GOOGLE_BOOKS_SOURCE;
+    candidates.push({ source: 'google_books', key: id, book });
   }
-  return { status: 'not_found', book: null, diagnostic: { code: Number(data.totalItems) === 0 ? 'no_results' : 'no_exact_isbn' } };
+  return { status: candidates.length ? 'success' : 'not_found', candidates,
+    diagnostic: { code: candidates.length ? 'title_candidates' : Number(data.totalItems) > 0 ? 'no_usable_results' : 'no_results' } };
 }

@@ -1,5 +1,5 @@
 import { canonicalBookIsbn } from '../src/utils/isbn.js';
-import { mapGoogleBooksResponse, type GoogleBooksResult } from '../shared/googleBooks.js';
+import { mapGoogleBooksResponse, mapGoogleBooksTitleResponse, normalizeTitleQuery, type GoogleBooksResult, type GoogleBooksTitleResult } from '../shared/googleBooks.js';
 
 export const GOOGLE_BOOKS_TIMEOUT_MS = 4000;
 const MAX_RESPONSE_BYTES = 1024 * 1024;
@@ -7,18 +7,22 @@ export function createGoogleBooksFunction(options: { fetcher?: typeof fetch; env
   const fetcher = options.fetcher || fetch, env = options.env || process.env;
   return async (request: Request): Promise<Response> => {
     const started = performance.now();
-    const reply = (result: GoogleBooksResult, status = 200) => Response.json({ ...result,
+    const url = new URL(request.url);
+    const titleMode = url.searchParams.has('title');
+    const reply = (result: GoogleBooksResult | GoogleBooksTitleResult, status = 200) => Response.json({ ...result,
+      ...(titleMode ? { candidates: 'candidates' in result ? result.candidates : [] } : {}),
       diagnostic: { ...result.diagnostic, durationMs: Math.round(performance.now() - started) } },
       { status, headers: { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', ...(status === 405 ? { Allow: 'GET' } : {}) } });
     const fail = (code: string, httpStatus?: number) => reply({ status: 'unavailable', book: null, diagnostic: { code, httpStatus } });
-    const url = new URL(request.url);
     if (request.method !== 'GET') return reply({ status: 'invalid_query', book: null, diagnostic: { code: 'method_not_allowed' } }, 405);
-    if (url.pathname !== '/api/google-books' || [...url.searchParams.keys()].some(k => k !== 'isbn')
-      || url.searchParams.getAll('isbn').length !== 1 || (url.searchParams.get('isbn') || '').length > 40) {
+    const queryKey = titleMode ? 'title' : 'isbn';
+    if (url.pathname !== '/api/google-books' || [...url.searchParams.keys()].some(k => k !== queryKey)
+      || url.searchParams.getAll(queryKey).length !== 1 || (url.searchParams.get(queryKey) || '').length > (titleMode ? 200 : 40)) {
       return reply({ status: 'invalid_query', book: null, diagnostic: { code: 'invalid_query' } }, 400);
     }
     const isbn = canonicalBookIsbn(url.searchParams.get('isbn') || '');
-    if (!isbn) return reply({ status: 'invalid_query', book: null, diagnostic: { code: 'invalid_isbn' } }, 422);
+    const title = normalizeTitleQuery(url.searchParams.get('title'));
+    if (titleMode ? !title : !isbn) return reply({ status: 'invalid_query', book: null, diagnostic: { code: titleMode ? 'invalid_title' : 'invalid_isbn' } }, 422);
     if ((request.headers.get('origin') && request.headers.get('origin') !== url.origin) || request.headers.get('sec-fetch-site') === 'cross-site') {
       return reply({ status: 'invalid_query', book: null, diagnostic: { code: 'origin_denied' } }, 403);
     }
@@ -31,7 +35,8 @@ export function createGoogleBooksFunction(options: { fetcher?: typeof fetch; env
     if (request.signal.aborted) controller.abort();
     try {
       const endpoint = new URL('https://www.googleapis.com/books/v1/volumes');
-      endpoint.searchParams.set('q', `isbn:${isbn}`); endpoint.searchParams.set('maxResults', '10');
+      endpoint.searchParams.set('q', titleMode ? `intitle:"${title!.replace(/["\\]/g, ' ')}"` : `isbn:${isbn}`);
+      endpoint.searchParams.set('maxResults', titleMode ? '20' : '10');
       endpoint.searchParams.set('printType', 'books'); endpoint.searchParams.set('key', key);
       // Fixed official host, no user credentials, redirects, pagination or retries.
       const response = await fetcher(endpoint, { method: 'GET', headers: { Accept: 'application/json' },
@@ -53,7 +58,8 @@ export function createGoogleBooksFunction(options: { fetcher?: typeof fetch; env
       } finally { reader.releaseLock(); }
       const bytes = new Uint8Array(length); let offset = 0;
       for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-      const result = mapGoogleBooksResponse(JSON.parse(new TextDecoder().decode(bytes)), isbn);
+      const payload = JSON.parse(new TextDecoder().decode(bytes));
+      const result = titleMode ? mapGoogleBooksTitleResponse(payload) : mapGoogleBooksResponse(payload, isbn);
       return reply({ ...result, diagnostic: { ...result.diagnostic, httpStatus: response.status } });
     } catch { return fail(controller.signal.aborted ? 'aborted_or_timeout' : 'transport_or_response'); }
     finally { clearTimeout(timer); request.signal.removeEventListener('abort', abort); }

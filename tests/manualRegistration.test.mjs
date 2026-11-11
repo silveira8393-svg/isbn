@@ -88,6 +88,23 @@ function form(draft, service, events = []) {
 }
 function openReview(view) { view.find(node => node.props.id === 'btn-submit-magazord-registration').props.onClick(); view.render(); }
 
+for (const withIsbn of [true, false]) test(`confirmed title selection opens the existing editable form, ISBN ${withIsbn}, without other API lookups`, t => {
+  t.mock.method(globalThis, 'fetch', () => assert.fail('Confirmation must not fetch or register'));
+  const view = mountApp();
+  view.all().find(node => node.type === 'button' && imageText(node) === 'Por título').props.onClick(); view.render();
+  const selected = { id: 'google-books-edition2', title: 'Selected edition', publisher: 'Selected publisher', year: 2020,
+    provider: 'Google Books', ...(withIsbn ? { isbn13: isbn } : {}) };
+  view.find('TitleSearch').props.onConfirm(selected); view.render();
+  let props = view.find('ProductRegistrationForm').props;
+  assert.equal(props.originalBook.id, selected.id); assert.equal(props.draft.title, selected.title);
+  assert.equal(props.draft.publisher, selected.publisher); assert.equal(props.draft.year, '2020');
+  assert.equal(props.draft.isbn13, withIsbn ? isbn : ''); assert.equal(props.draft.synopsis, '');
+  props.onUpdateDraft({ title: 'Manual correction' }); view.render();
+  props = view.find('ProductRegistrationForm').props; assert.equal(props.draft.title, 'Manual correction');
+  props.onBackToSearch(); view.render(); view.find('Header').props.onTabChange('cadastro'); view.render();
+  assert.equal(view.find('ProductRegistrationForm').props.draft.title, 'Manual correction');
+});
+
 for (const role of ['developer', 'admin', 'operator']) test(`${role}: direct manual entry opens the existing empty form without any API lookup`, t => {
   t.mock.method(globalThis, 'fetch', () => assert.fail('Manual entry must not fetch'));
   const view = mountApp({ user: { currentUser: { ...user, role }, operationEnvironment: role === 'developer' ? 'development' : 'production' } });

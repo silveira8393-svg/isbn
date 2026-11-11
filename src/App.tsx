@@ -8,6 +8,7 @@ import { updateDraftWithMetaDescription } from './utils/metaDescription';
 import { useState, useEffect, useRef } from 'react';
 import Header, { NavigationTab } from './components/Header';
 import SearchForm from './components/SearchForm';
+import TitleSearch from './components/TitleSearch';
 import BookDetailsCard from './components/BookDetailsCard';
 import SearchHistoryGroup from './components/SearchHistoryGroup';
 import CameraScannerModal from './components/CameraScannerModal';
@@ -60,6 +61,7 @@ import {
 export default function App() {
   const { currentUser, canViewProduction, canViewSettings, operationEnvironment } = useUser();
   const [isbnValue, setIsbnValue] = useState('');
+  const [searchMode, setSearchMode] = useState<'isbn' | 'title'>('isbn');
   const [isLoading, setIsLoading] = useState(false);
   const [foundBook, setFoundBook] = useState<BookInfo | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -181,6 +183,7 @@ export default function App() {
   // Handler to carry out lookup
   const handleSearch = async (targetIsbn: string) => {
     if (searchInFlight.current || imageUploadInFlight.current) return;
+    setSearchMode('isbn');
     const cleaned = cleanIsbn(targetIsbn);
     if (!cleaned) {
       setErrorText('Por favor, informe um código ISBN válido.');
@@ -443,6 +446,26 @@ export default function App() {
     setSearchedTerm('');
     setRawSearchedTerm('');
     setIsbnValue('');
+    setResearchStates(initialResearchStates());
+    setActiveTab('cadastro');
+  };
+
+  const handleConfirmTitleResult = (book: BookInfo) => {
+    if (searchInFlight.current || imageUploadInFlight.current || registrationReviewOpen.current) return;
+    galleryGeneration.current++;
+    galleryRequest.current?.abort();
+    deferredGalleryDraft.current = null;
+    setFoundBook(book);
+    setRegistrationDraft(createRegistrationDraft(book));
+    registrationCompleted.current = false;
+    setMagazordCheckResult(null);
+    setMagazordCheckError(null);
+    setBibliographicState('found');
+    setErrorText(null);
+    const isbn = book.isbn13 || book.isbn10 || '';
+    setSearchedTerm(isbn);
+    setRawSearchedTerm('');
+    setIsbnValue(isbn);
     setResearchStates(initialResearchStates());
     setActiveTab('cadastro');
   };
@@ -785,6 +808,12 @@ export default function App() {
           <details><summary className="cursor-pointer">IDs pendentes para evidência</summary><ul>{pendingAudit.map(entry => <li key={entry.input.id}>{entry.input.id} · {entry.input.operationType} · {entry.input.completedAt}</li>)}</ul></details>
         </div>}
         {operationalView && <div className="isbn-shared-search">
+          <div className="mb-3 flex gap-2" aria-label="Modo de pesquisa">
+            <button type="button" disabled={isLoading} aria-pressed={searchMode === 'isbn'} onClick={() => setSearchMode('isbn')} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700">Por ISBN</button>
+            <button type="button" disabled={isLoading} aria-pressed={searchMode === 'title'} onClick={() => setSearchMode('title')} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700">Por título</button>
+          </div>
+          {searchMode === 'title' && activeTab === 'consultar' && <div key={`${currentUser.id}:${currentUser.storeId}:${currentUser.role}:${currentUser.active}:${operationEnvironment}`}><TitleSearch onConfirm={handleConfirmTitleResult} disabled={isLoading} /></div>}
+          {searchMode === 'isbn' && <>
           <SearchForm
             onSearch={handleSearch}
             isLoading={isLoading}
@@ -793,9 +822,10 @@ export default function App() {
             onOpenScanner={() => setIsScannerOpen(true)}
           />
           <ResearchSourcesPanel states={researchStates} />
+          </>}
         </div>}
         {/* ABA 1: CONSULTAR */}
-        {activeTab === 'consultar' && (
+        {activeTab === 'consultar' && searchMode === 'isbn' && (
           <div className="isbn-query-layout grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* Main Area: Pesquisa e Resultado (8 cols no desktop) */}
             <div className="isbn-query-main space-y-6 lg:col-span-8">
