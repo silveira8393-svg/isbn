@@ -1677,3 +1677,66 @@ Validação com Node **24.22.2**:
 - Revisão React: requisições concorrentes e independentes, atualizações funcionais de estado, descarte de respostas antigas, identidade por fonte e modal acessível preservado. Nenhuma suíte global executada.
 
 Pendências e limites: validação oficial real e confirmação do escopo de autorização continuam para etapa autorizada posterior; integração sem liberação comercial. Desenvolvimento real requer origem HTTPS já autorizada e configuração existente válida; localhost HTTP continua bloqueado, sem relaxar segurança. Paginação além dos primeiros 20 não faz parte desta entrega. Sem push, merge, Preview ou alterações em produção, Vercel, Supabase, Magazord, credenciais ou OAuth.
+
+## Etapa 3 — bibliografia, referências e Curitiba por título (2026-11-12)
+
+- Branch exclusiva: `feature/isbn-etapa3-bibliografia-referencias`, derivada de `f5ae3eda01b70fa1a41908838e80162afadfdeb6`.
+- Commit funcional publicado: `033bd35c59c3916576b89b58cd52c5e5b778ddeb`. A alteração documental anterior foi preservada fora dos commits desta entrega.
+- Amazon: paperback/softcover e hardcover/hardback passam aos valores CC/CD já aceitos pelo cadastro (`CC - Capa Convencional`, equivalente à capa comum, e `CD - Capa Dura`). Formatos desconhecidos ficam vazios para edição manual; outros formatos reconhecidos do fluxo ISBN foram preservados. Autores pessoais inequivocamente invertidos são normalizados, preservando partículas, nomes compostos e créditos ambíguos.
+- Editora: somente atributos explicitamente bibliográficos do ASIN, incluindo `book_publisher` e `publishing_company` quando presentes; fabricante e marca não são usados. Nenhuma consulta Amazon nova para enriquecimento.
+- Referência da obra no início do cadastro, após a identificação bibliográfica: fonte, ASIN/volume/produto e link HTTPS validado, aberto em outra aba. Amazon usa ASIN real; Google usa o URL retornado do volume; Curitiba reaproveita somente URLs atestadas pela infraestrutura existente. Referências funcionam sem ISBN quando a identidade da fonte permite. Nenhuma busca genérica ou URL inventada.
+- Referências e fonte são preservadas no histórico local existente, incluindo seleções por título e eventos do cadastro simulado. Registros antigos sem URL continuam válidos; referências existentes não são substituídas. CSV, chaves do armazenamento, exportação comercial e snapshots permanecem sem novos links. Não houve migração ou gravação real na Magazord.
+- Curitiba por título implementada: lista de até 20 candidatos identificados por código, sem seleção automática, fontes independentes e ficha individual somente após escolha manual. Fichas são reutilizadas dentro da mesma pesquisa; timeout, serviço indisponível, vazio, dados inválidos e falha individual têm tratamento. Uma ficha Curitiba pendente não bloqueia seleção Google/Amazon nem pode substituir uma seleção posterior.
+- A liberação Amazon em Preview inclui explicitamente esta nova branch e mantém a anterior; produção segue bloqueada para Amazon por título. Nenhuma variável, credencial, permissão ou configuração externa foi alterada.
+
+### Validação pontual da Distribuidora Curitiba
+
+- Fonte: `https://distribuidoracuritiba.com.br/up-server/public/service`; não foi usada a busca VTEX das Livrarias Curitiba.
+- Bootstrap público `POST /auth/loginAcessoPublico`: HTTP 200, sessão mantida somente em memória.
+- Configuração pública 41 obtida por `POST /query/execute/upConfiguracaoController/getConfiguracao`, conforme JavaScript oficial: opção 1 = **Cód. ou Descrição**, opção 4 = **ISBN ou Cód. Barras**.
+- ISBN `9788584390670`, filtro 4: HTTP 200, produto `LV415976`. Título `O Alquimista`, filtro 4: vazio, confirmando que o filtro ISBN não serve para título.
+- Título `O Alquimista`, filtro 1: HTTP 200, **cinco códigos de produto distintos**, entre eles `LV415976`, `LV554823`, `LV544191` e `LV556476`. Uma ficha individual por `POST /query/execute/produtoController/findProdutoByPrimaryKey`: HTTP 200, com autor, editora, ano, edição, ISBN, formato, idioma e páginas nos campos AD_.
+- Preflight OPTIONS: HTTP 200, origem `*`, método POST e content-type permitidos. Nenhuma coleta massiva, contorno de bloqueio ou persistência de sessão. Não houve novas consultas reais Amazon.
+
+### Arquivos e intervalos do commit funcional
+
+Os intervalos abaixo indicam as linhas adicionadas/alteradas; trechos não relacionados entre intervalos não foram modificados.
+
+| Arquivo | Linhas |
+|---|---|
+| `scripts/test-title-search-browser.mjs` | 16–17, 25, 32–41, 45–46, 73–76, 86, 89, 98–99, 101–107, 109–113, 117 |
+| `server/spapi/catalog.ts` | 110 |
+| `shared/amazonBibliography.ts` | 1–19 |
+| `shared/amazonTitle.ts` | 6, 37, 40 |
+| `shared/amazonTitleEnvironment.ts` | 5 |
+| `src/App.tsx` | 12, 301–306, 333–334, 475–479, 574–575, 626–627 |
+| `src/components/EditionReferenceLinks.tsx` | 1–19 |
+| `src/components/SearchHistoryGroup.tsx` | 8, 85, 90, 204–205 |
+| `src/components/TitleSearch.tsx` | 7, 9–10, 15, 22–25, 51–65, 72–73, 100–112, 118, 129, 132, 156–157 |
+| `src/components/magazord/ProductRegistrationForm.tsx` | 20, 430 |
+| `src/services/amazonOfficial.ts` | 9, 340, 342 |
+| `src/services/distribuidoraCuritiba.ts` | 5–7, 106, 109, 219–225, 349–415 |
+| `src/types.ts` | 20–21, 97, 232–233, 255–262 |
+| `src/utils/draft.ts` | 12, 108 |
+| `src/utils/editionReferences.ts` | 1–48 |
+| `tests/spapiIntegrated.test.mjs` | 124, 171, 188, 278, 473–474, 530, 1195 |
+| `tests/spapiOfficial.test.mjs` | 358–359 |
+| `tests/stage3Bibliography.test.mjs` | 1–118 |
+| `tests/titleSearch.test.mjs` | 89, 91, 95, 111, 179–216 |
+| `RELATORIO_CODEX.md` | 1691–1752 (seção documental desta etapa na cópia de trabalho) |
+
+### Testes e pendências
+
+- Runtime: **Node 24.22.2**, sem instalação de dependências.
+- `stage3Bibliography`, `titleSearch`, `amazonTitle` e `sourceLinks`: **35 aprovados**. `curitibaProductLink`: **10 aprovados**. `manualRegistration`: **19 aprovados**. Seleção focada de `spapiIntegrated`: **8 aprovados**. Seleção focada de `spapiOfficial`: **9 aprovados**. Persistência/isolamento do `history`: **5 aprovados**. Total: **86 testes focados aprovados**; suíte global não executada.
+- TypeScript `tsc --noEmit` e `vite build`: aprovados. Avisos de bundle grande e importação estática/dinâmica da biblioteca de sessão permanecem, sem erro de build.
+- Navegador Edge isolado, desktop 1280 px: `scripts/test-title-search-browser.mjs --amazon` e `--curitiba` aprovados. Normalização Amazon, múltiplas edições, ausência de ISBN, seleção/cancelamento/Escape, ficha sob demanda, referências no cadastro/histórico e edição manual validadas. Respectivamente 16 e 14 respostas simuladas, **zero consultas externas e zero cadastros reais**, sem erros de página.
+- A execução expandida de `tests/history.test.mjs` encontrou falhas antigas no harness de confirmação do cadastro simulado (`btn-confirm-magazord-registration` ausente). O caso “Search continuation: normal” foi reproduzido carregando App e formulário do commit-base `f5ae3ed`, sem substituir arquivos de trabalho. Não foi ampliado o escopo para reparar esse harness; os cinco casos direcionados de persistência e os 19 testes atuais de cadastro passaram.
+- Revisão React: fontes concorrentes, estado atualizado funcionalmente, rejeição de respostas atrasadas, identificação por fonte/produto, links fora dos botões do histórico e modal existente preservado.
+
+### Publicação
+
+- Preview funcional **READY**: **https://isbn-kmbtb4rg6-silveira8393-svgs-projects.vercel.app**; deployment `dpl_GNoWr5h9ysUfRxGfW5GcR2WF6XV3`, metadados confirmando a branch e o SHA funcional acima. A URL é fixa para esse commit; o commit documental posterior mantém o mesmo código funcional.
+- Projeto `isbn`, equipe `silveira8393-svgs-projects`, proteção `all_except_custom_domains` conferida por leitura. Produção de referência: `dpl_4pwx2HrjCuZNCe4xWUi62HDTeH6x`, SHA `93ff20473ca68b50d42d075276e07c624772c9e0`.
+- Reinspeção após publicação: produção permaneceu com esse mesmo ID e SHA. HEAD sem autenticação do Preview retornou HTTP 302 para a proteção Vercel; nenhuma proteção foi alterada.
+- Somente a nova branch foi publicada, sem merge, force push, promoção ou alteração de produção. Homologação humana no Preview é recomendada; paginação além dos primeiros 20 e manutenção do harness antigo de histórico permanecem fora desta entrega.
