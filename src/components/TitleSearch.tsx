@@ -5,6 +5,8 @@ import { searchGoogleBooksByTitle } from '../services/googleBooks';
 import { searchAmazonByTitle } from '../services/amazonTitle';
 import { canSearchAmazonTitle } from '../../shared/amazonTitle';
 import { searchCuritibaByTitle, type CuritibaTitleResult } from '../services/distribuidoraCuritiba';
+import { completeTitleEdition } from '../services/titleEditionDetails';
+import { canonicalBookIsbn } from '../utils/isbn';
 const candidateId = (candidate: TitleSearchCandidate) => candidate.source + ':' + candidate.key;
 const coverOf = (book: BookInfo) => book.amazonTitleReference?.coverUrl || book.googleBooksReference?.coverUrl
   || (book.curitibaTitleReference ? book.thumbnailUrl || book.coverUrl : undefined);
@@ -21,6 +23,8 @@ export default function TitleSearch({ onConfirm, disabled = false, user, environ
   const [amazonMessage, setAmazonMessage] = useState('');
   const [curitibaMessage, setCuritibaMessage] = useState('');
   const [selecting, setSelecting] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const completion = useRef<AbortController | null>(null);
   const detailGeneration = useRef(0);
   const curitibaDetail = useRef<CuritibaTitleResult['loadDetail']>(undefined);
   const [query, setQuery] = useState('');
@@ -34,7 +38,7 @@ export default function TitleSearch({ onConfirm, disabled = false, user, environ
   const confirmationDialog = useRef<HTMLDialogElement | null>(null);
   const selectionTrigger = useRef<HTMLButtonElement | null>(null);
   const chosen = candidates.find(candidate => candidateId(candidate) === selected);
-  useEffect(() => () => { generation.current++; request.current?.abort(); }, []);
+  useEffect(() => () => { generation.current++; request.current?.abort(); completion.current?.abort(); }, []);
   useEffect(() => {
     const dialog = confirmationDialog.current;
     if (!dialog) return;
@@ -43,13 +47,14 @@ export default function TitleSearch({ onConfirm, disabled = false, user, environ
   }, [chosen, disabled]);
 
   const cancelSelection = () => {
+    completion.current?.abort(); completion.current = null; setCompleting(false);
     confirmationDialog.current?.close();
     setSelected(null);
     selectionTrigger.current?.focus({ preventScroll: true });
   };
 
   const selectEdition = async (candidate: TitleSearchCandidate, trigger: HTMLButtonElement) => {
-    if (disabled || (selecting && candidate.source === 'curitiba')) return;
+    if (disabled || completion.current || (selecting && candidate.source === 'curitiba')) return;
     const selection = ++detailGeneration.current;
     selectionTrigger.current = trigger;
     if (candidate.source !== 'curitiba') { setSelecting(false); setSelected(candidateId(candidate)); return; }
@@ -61,6 +66,20 @@ export default function TitleSearch({ onConfirm, disabled = false, user, environ
     if (!result) { setCuritibaMessage('Distribuidora Curitiba: Ficha indisponível. Selecione novamente para tentar outra vez.'); return; }
     setCandidates(previous => previous.map(item => candidateId(item) === candidateId(candidate) ? result : item));
     setSelected(candidateId(result)); setCuritibaMessage('Distribuidora Curitiba: Ficha carregada. Confira a edição.');
+  };
+
+  const confirmEdition = async () => {
+    if (disabled || !chosen || completion.current) return;
+    const selectedEdition = structuredClone(chosen);
+    if (!canonicalBookIsbn(chosen.book.isbn13) && !canonicalBookIsbn(chosen.book.isbn10)) {
+      confirmationDialog.current?.close(); onConfirm(selectedEdition.book); return;
+    }
+    const current = generation.current;
+    const controller = new AbortController(); completion.current = controller; setCompleting(true);
+    const book = await completeTitleEdition(selectedEdition, user, controller.signal);
+    if (controller.signal.aborted || current !== generation.current || completion.current !== controller) return;
+    completion.current = null; setCompleting(false);
+    confirmationDialog.current?.close(); onConfirm(book);
   };
 
   const search = async () => {
@@ -115,10 +134,10 @@ export default function TitleSearch({ onConfirm, disabled = false, user, environ
   return <section aria-label="Pesquisa por título" className="mb-6 rounded-xl border border-slate-200 bg-white p-4 space-y-4">
     <form onSubmit={event => { event.preventDefault(); void search(); }} className="flex flex-wrap items-end gap-3">
       <label className="flex-1 min-w-48 text-sm font-semibold text-slate-700">Título do livro
-        <input value={query} onChange={event => { setQuery(event.target.value); setSelected(null); setCandidates([]); setMessage(''); setAmazonMessage(''); setCuritibaMessage(''); setSelecting(false); curitibaDetail.current = undefined; generation.current++; request.current?.abort(); setLoading(false); }}
+        <input value={query} onChange={event => { completion.current?.abort(); completion.current = null; setCompleting(false); setQuery(event.target.value); setSelected(null); setCandidates([]); setMessage(''); setAmazonMessage(''); setCuritibaMessage(''); setSelecting(false); curitibaDetail.current = undefined; generation.current++; request.current?.abort(); setLoading(false); }}
           minLength={2} maxLength={200} required disabled={disabled} className="mt-1 w-full rounded-lg border border-slate-300 p-3" />
       </label>
-      <button disabled={disabled || loading} className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">{loading ? 'Pesquisando...' : 'Pesquisar título'}</button>
+      <button disabled={disabled || loading || completing} className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">{loading ? 'Pesquisando...' : 'Pesquisar título'}</button>
     </form>
     <div aria-label="Fontes de pesquisa por título" className="flex flex-wrap gap-2">
       {sources.map(item => { const enabled = item.id === 'amazon' ? amazonEnabled : item.enabled; return <button key={item.id} type="button" disabled={!enabled} aria-pressed={source === item.id}
@@ -189,10 +208,8 @@ export default function TitleSearch({ onConfirm, disabled = false, user, environ
       </div>
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
         <button type="button" autoFocus onClick={cancelSelection} className="rounded-lg border border-slate-300 px-4 py-3 font-semibold text-slate-700">Cancelar</button>
-        <button type="button" disabled={disabled} onClick={() => {
-          if (disabled) return;
-          confirmationDialog.current?.close(); onConfirm(structuredClone(chosen.book));
-        }} className="rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white disabled:opacity-50">Confirmar edição e abrir cadastro</button>
+        {completing && <p role="status">Consultando detalhes da edição…</p>}
+        <button type="button" disabled={disabled || completing} onClick={() => { void confirmEdition(); }} className="rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white disabled:opacity-50">Confirmar edição e abrir cadastro</button>
       </div>
     </dialog>}
   </section>;

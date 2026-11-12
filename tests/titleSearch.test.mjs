@@ -86,13 +86,13 @@ test('title failures and incomplete upstream stay unavailable; client integrates
 
 const uiBundle = await build({ entryPoints: ['src/components/TitleSearch.tsx'], bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic', define: { 'import.meta.env.DEV': 'false', 'import.meta.env.ISBN_AMAZON_TITLE_PREVIEW': 'true' },
   plugins: [{ name: 'title-ui', setup(b) {
-    b.onResolve({ filter: /^(react|react\/jsx-runtime)$|\/services\/(googleBooks|amazonTitle|distribuidoraCuritiba)$/ }, args => ({ path: args.path, namespace: 'mock' }));
+    b.onResolve({ filter: /^(react|react\/jsx-runtime)$|\/services\/(googleBooks|amazonTitle|distribuidoraCuritiba|titleEditionDetails)$/ }, args => ({ path: args.path, namespace: 'mock' }));
     b.onLoad({ filter: /.*/, namespace: 'mock' }, args => ({ contents: args.path === 'react' ? 'module.exports=deps.react'
-      : args.path === 'react/jsx-runtime' ? 'exports.jsx=exports.jsxs=(type,props)=>({type,props})' : args.path.endsWith('/distribuidoraCuritiba') ? 'exports.searchCuritibaByTitle=(...args)=>deps.curitibaSearch(...args)' : args.path.endsWith('/amazonTitle') ? 'exports.searchAmazonByTitle=(...args)=>deps.amazonSearch(...args)' : 'exports.searchGoogleBooksByTitle=(...args)=>deps.search(...args)' }));
+      : args.path === 'react/jsx-runtime' ? 'exports.jsx=exports.jsxs=(type,props)=>({type,props})' : args.path.endsWith('/titleEditionDetails') ? 'exports.completeTitleEdition=(...args)=>deps.complete(...args)' : args.path.endsWith('/distribuidoraCuritiba') ? 'exports.searchCuritibaByTitle=(...args)=>deps.curitibaSearch(...args)' : args.path.endsWith('/amazonTitle') ? 'exports.searchAmazonByTitle=(...args)=>deps.amazonSearch(...args)' : 'exports.searchGoogleBooksByTitle=(...args)=>deps.search(...args)' }));
   } }] });
 function mountTitle(search, options = {}) {
   let cursor = 0, tree; const slots = [], confirmed = [], cleanups = [];
-  const deps = { search, amazonSearch: options.amazonSearch, curitibaSearch: options.curitibaSearch || (async()=>({status:'not_found',candidates:[]})), react: {
+  const deps = { search, complete: options.complete || (async candidate => candidate.book), amazonSearch: options.amazonSearch, curitibaSearch: options.curitibaSearch || (async()=>({status:'not_found',candidates:[]})), react: {
     useState(value) { const i = cursor++; if (!(i in slots)) slots[i] = value; return [slots[i], next => { slots[i] = typeof next === 'function' ? next(slots[i]) : next; }]; },
     useRef(value) { const i = cursor++; return slots[i] ??= { current: value }; },
     useEffect(fn) { const i = cursor++; if (!(i in slots)) { slots[i] = true; cleanups.push(fn()); } },
@@ -114,7 +114,7 @@ test('UI displays editions, disables future sources and requires selection plus 
   const dialog = view.all().find(n => n.type === 'dialog'); assert.ok(dialog);
   assert.equal(dialog.props['aria-labelledby'], 'edition-confirmation-title');
   assert.match(text(dialog), /Editora B/); assert.match(text(dialog), /2020/); assert.match(text(dialog), /Google Books/);
-  view.all().find(n => n.type === 'button' && text(n) === 'Confirmar edição e abrir cadastro').props.onClick();
+  view.all().find(n => n.type === 'button' && text(n) === 'Confirmar edição e abrir cadastro').props.onClick(); await new Promise(resolve => setImmediate(resolve));
   assert.equal(view.confirmed[0].publisher, 'Editora B'); assert.equal(view.confirmed[0].year, 2020);
 });
 test('modal cancel and Escape retain results, restore trigger focus and do not fetch or confirm', async () => {
@@ -147,6 +147,39 @@ test('UI discards late results after query edit or unmount', async () => {
 });
 
 const development = { user: { id: 'synthetic', active: true, role: 'developer', storeId: 'synthetic-store' }, environment: 'development' };
+test('confirmation waits once for same-source details and opens the existing callback without another confirmation', async () => {
+  let finish, calls = 0;
+  const view = mountTitle(async () => api.mapGoogleBooksTitleResponse(editions), { complete: candidate => {
+    calls++; assert.equal(candidate.source, 'google_books');
+    return new Promise(resolve => { finish = () => resolve({ ...candidate.book, pageCount: 321 }); });
+  } });
+  view.query('Título'); await view.submit();
+  view.all().filter(n => n.type === 'button' && text(n) === 'Selecionar esta edição')[1].props.onClick({ currentTarget: { focus() {} } }); view.render();
+  const confirm = view.all().find(n => n.type === 'button' && text(n) === 'Confirmar edição e abrir cadastro');
+  confirm.props.onClick(); confirm.props.onClick(); view.render();
+  assert.equal(calls, 1); assert.equal(view.confirmed.length, 0);
+  assert.ok(text(view.all()).includes('Consultando detalhes da edição'));
+  assert.equal(view.all().filter(n => n.type === 'article').length, 2);
+  finish(); await new Promise(resolve => setImmediate(resolve)); view.render();
+  assert.equal(view.confirmed.length, 1); assert.equal(view.confirmed[0].pageCount, 321);
+  assert.equal(view.confirmed[0].googleBooksReference.volumeId, 'second');
+});
+test('cancel, query change and unmount discard late ISBN complements', async () => {
+  for (const action of ['cancel', 'query', 'unmount']) {
+    let finish, signal;
+    const view = mountTitle(async () => api.mapGoogleBooksTitleResponse(editions), { complete: (candidate, _user, requestSignal) => {
+      signal = requestSignal; return new Promise(resolve => { finish = () => resolve({ ...candidate.book, pageCount: 321 }); });
+    } });
+    view.query('Título'); await view.submit();
+    view.all().filter(n => n.type === 'button' && text(n) === 'Selecionar esta edição')[1].props.onClick({ currentTarget: { focus() {} } }); view.render();
+    view.all().find(n => n.type === 'button' && text(n) === 'Confirmar edição e abrir cadastro').props.onClick(); view.render();
+    if (action === 'cancel') view.all().find(n => n.type === 'button' && text(n) === 'Cancelar').props.onClick();
+    else if (action === 'query') view.query('Outro título');
+    else view.unmount();
+    assert.equal(signal.aborted, true); finish(); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(view.confirmed.length, 0);
+  }
+});
 const amazonCandidate = { source: 'amazon', key: 'br:ASIN000001', book: { id: 'amazon:br:ASIN000001', title: 'Edição Amazon', publisher: 'Editora Amazon', provider: 'Amazon SP-API', edition: '2', amazonTitleReference: { asin: 'ASIN000001', marketplaceId: 'A2Q3Y263D00KWC' } } };
 test('Amazon development results coexist with Google, select their own edition through existing modal', async () => {
   const view = mountTitle(async () => api.mapGoogleBooksTitleResponse(editions), { ...development, amazonSearch: async () => ({status:'success', candidates:[amazonCandidate]}) });
@@ -156,7 +189,7 @@ test('Amazon development results coexist with Google, select their own edition t
   const article = view.all().find(n => n.type === 'article' && text(n).includes('Edição Amazon'));
   const button = article.props.children.find(n => n?.type === 'button'); button.props.onClick({currentTarget:{focus(){}}}); view.render();
   assert.match(text(view.all().find(n => n.type === 'dialog')), /Editora Amazon/);
-  view.all().find(n => n.type === 'button' && text(n) === 'Confirmar edição e abrir cadastro').props.onClick();
+  view.all().find(n => n.type === 'button' && text(n) === 'Confirmar edição e abrir cadastro').props.onClick(); await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(view.confirmed[0], amazonCandidate.book);
 });
 test('Amazon failure or pending request never prevents Google selection and confirmation', async () => {
@@ -166,7 +199,7 @@ test('Amazon failure or pending request never prevents Google selection and conf
     assert.equal(view.all().filter(n=>n.type==='article').length,2);
     const button=view.all().find(n=>n.type==='button' && text(n)==='Selecionar esta edição');
     assert.equal(button.props.disabled,false);button.props.onClick({currentTarget:{focus(){}}});view.render();
-    view.all().find(n=>n.type==='button' && text(n)==='Confirmar edição e abrir cadastro').props.onClick();
+    view.all().find(n=>n.type==='button' && text(n)==='Confirmar edição e abrir cadastro').props.onClick(); await new Promise(resolve => setImmediate(resolve));
     assert.equal(view.confirmed.length,1);view.unmount();
   }
 });
@@ -200,7 +233,7 @@ test('Curitiba keeps multiple candidates and loads only the manually selected ed
   view.all().filter(n => n.type === 'button' && text(n) === 'Selecionar esta edição')[1].props.onClick({ currentTarget: { focus() {} } });
   await new Promise(resolve => setImmediate(resolve)); view.render(); assert.deepEqual(calls, ['LV2']);
   assert.match(text(view.all().find(n => n.type === 'dialog')), /Editora selecionada/); assert.equal(view.confirmed.length, 0);
-  view.all().find(n => n.type === 'button' && text(n) === 'Confirmar edição e abrir cadastro').props.onClick();
+  view.all().find(n => n.type === 'button' && text(n) === 'Confirmar edição e abrir cadastro').props.onClick(); await new Promise(resolve => setImmediate(resolve));
   assert.equal(view.confirmed[0].id, 'curitiba:LV2'); assert.equal(view.confirmed[0].publisher, 'Editora selecionada');
 });
 test('Curitiba list/detail failure cannot block another source or open an incomplete selected edition', async () => {

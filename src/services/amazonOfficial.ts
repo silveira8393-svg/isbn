@@ -276,7 +276,8 @@ export async function complementAmazonImages(book: BookInfo | null, isbn: string
   } catch { return book; } // No retries or bypass when the existing extractor is unavailable or blocked.
 }
 export type AmazonOfficialResult = { candidates?: CatalogItem[]; book: BookInfo | null; status: 'success' | 'not_found' | 'ambiguous' | 'unavailable' | 'skipped' };
-export async function searchAmazonOfficial(isbn: string, user: User, signal?: AbortSignal): Promise<AmazonOfficialResult> {
+export async function searchAmazonOfficial(isbn: string, user: User, signal?: AbortSignal,
+  selected?: { asin: string; marketplaceId: string }): Promise<AmazonOfficialResult> {
   if (!canUseAmazonOfficial(user)) return { book: null, status: 'skipped' };
   try {
     const { supabase } = await import('../lib/supabase');
@@ -304,7 +305,9 @@ export async function searchAmazonOfficial(isbn: string, user: User, signal?: Ab
     if (items.some(item => canonicalBookIsbn(item.isbn) !== canonicalBookIsbn(isbn)))
       return { book: null, status: 'ambiguous', candidates };
     if (result.hasMore === true) return { book: null, status: 'ambiguous', candidates };
-    const item = items.length === 1 ? items[0] : selectEquivalentAmazonRecord(items, isbn);
+    const matches = selected ? items.filter(item => item.asin === selected.asin && item.marketplaceId === selected.marketplaceId) : items;
+    const item = selected ? (matches.length === 1 ? matches[0] : undefined)
+      : items.length === 1 ? items[0] : selectEquivalentAmazonRecord(items, isbn);
     if (!item) return { book: null, status: 'ambiguous', candidates };
     const ids = [item.isbn10, item.isbn13, ...(item.identifiers || [])
       .filter(id => /^(ISBN(?:_10|_13)?|EAN|EAN_13|GTIN|GTIN_13|GTIN_14)$/.test(id.type)).map(id => id.identifier)].filter(Boolean);

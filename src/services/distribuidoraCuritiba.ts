@@ -135,7 +135,7 @@ function unavailableResult(startTime: number, status: number | string, errorMess
   };
 }
 
-export async function searchBookByIsbnDistribuidoraCuritiba(isbn: string): Promise<DistribuidoraSearchResult> {
+export async function searchBookByIsbnDistribuidoraCuritiba(isbn: string, signal?: AbortSignal, selectedProduct?: string): Promise<DistribuidoraSearchResult> {
   const startTime = performance.now();
   const sanitizedIsbn = isbn.replace(/[\s-]/g, '').trim();
 
@@ -147,7 +147,7 @@ export async function searchBookByIsbnDistribuidoraCuritiba(isbn: string): Promi
     const bootstrap = await postJson(`${BASE_URL}/auth/loginAcessoPublico`, {
       host: 'https:',
       usuario: { cdSistema: 50, flAtivo: 'S' },
-    });
+    }, signal);
 
     if (!bootstrap.response.ok || !bootstrap.data || typeof bootstrap.data !== 'object') {
       return unavailableResult(startTime, bootstrap.response.status, 'Bootstrap público indisponível.');
@@ -177,13 +177,17 @@ export async function searchBookByIsbnDistribuidoraCuritiba(isbn: string): Promi
       pageLines: 16,
       session,
       sortColumns: '[1,PRODUTO,2]',
-    });
+    }, signal);
 
     if (!search.response.ok) {
       return unavailableResult(startTime, search.response.status, `Pesquisa indisponível (HTTP ${search.response.status}).`);
     }
 
-    const product = findProduct(search.data);
+    let product = findProduct(search.data);
+    if (selectedProduct) {
+      product = null;
+      walkJson(search.data, record => { if (String(record.cdProduto) === selectedProduct) product = record; });
+    }
     if (!product?.cdProduto) {
       return {
         book: null,
@@ -210,12 +214,19 @@ export async function searchBookByIsbnDistribuidoraCuritiba(isbn: string): Promi
       isUsuarioAnomimo: true,
       session,
       sortColumns: 'TB.CDCATEGORIA3 DESC, TB.CDCATEGORIA2 DESC, LOCALESTOQUE.NUORDEM, LOCALESTOQUE.DSLOCALESTOQUE',
-    });
+    }, signal);
 
     if (!detail.response.ok) {
       return unavailableResult(startTime, detail.response.status, `Ficha indisponível (HTTP ${detail.response.status}).`);
     }
 
+    if (selectedProduct) {
+      const actual = findProduct(detail.data), fields = getDynamicFields(detail.data);
+      const ids = [actual?.nuCdBarras, fields.AD_CDISBN].filter(Boolean).map(String);
+      if (String(actual?.cdProduto) !== selectedProduct || !ids.length
+        || ids.some(id => canonicalBookIsbn(id) !== canonicalBookIsbn(isbn)))
+        return unavailableResult(startTime, 'EDICAO_DIVERGENTE', 'Ficha sem correspondência segura com a edição selecionada.');
+    }
     return mapProductDetail(detail, product, sanitizedIsbn, startTime);
   } catch {
     return unavailableResult(startTime, 'FALHA_CONEXAO', 'Não foi possível consultar a Distribuidora Curitiba.');
