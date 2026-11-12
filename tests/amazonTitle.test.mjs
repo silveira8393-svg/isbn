@@ -29,15 +29,27 @@ test('title client uses official same-origin route, session and store, maps each
   assert.equal(result.candidates[0].book.amazonTitleReference.coverUrl, item.images[0].link);
   assert.equal(result.candidates[0].book.coverUrl, undefined); assert.equal(result.candidates[1].book.authors, undefined);
 });
-test('title client blocks production, nondevelopers, inactive users, absent sessions and invalid titles without fetch', async t => {
+test('title client blocks production deployments, invalid roles, inactive users, missing stores and absent sessions without fetch', async t => {
   let calls = 0; t.mock.method(globalThis, 'fetch', async () => { calls++; throw Error('forbidden'); });
   const api = await client();
-  for (const [principal, environment] of [[user, 'production'], [{ ...user, role: 'operator' }, 'development'], [{ ...user, active: false }, 'development'], [undefined, 'development']])
+  for (const [principal, environment] of [[{ ...user, role: 'unknown' }, 'production'], [{ ...user, storeId: '' }, 'development'], [{ ...user, active: false }, 'development'], [undefined, 'development']])
     assert.equal((await api.searchAmazonByTitle('O Alquimista', principal, environment)).status, 'unauthorized');
   assert.equal((await (await client(false)).searchAmazonByTitle('O Alquimista', user, 'development')).status, 'unauthorized');
   assert.equal((await api.searchAmazonByTitle('x', user, 'development')).status, 'invalid_query');
   api.deps.session = { data: { session: null } };
   assert.equal((await api.searchAmazonByTitle('O Alquimista', user, 'development')).status, 'unauthorized'); assert.equal(calls, 0);
+});
+
+test('Preview accepts exactly the existing catalog roles regardless of their operational simulation environment', async t => {
+  const api = await client(false, true); let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => { calls++; return Response.json({ query: 'O Alquimista', items: [item] }); });
+  for (const role of ['developer', 'admin', 'operator']) {
+    assert.equal((await api.searchAmazonByTitle('O Alquimista', { ...user, role }, role === 'developer' ? 'development' : 'production')).status, 'success');
+  }
+  assert.equal(calls, 3);
+  const production = await client(false, false);
+  for (const role of ['developer', 'admin', 'operator']) assert.equal((await production.searchAmazonByTitle('O Alquimista', { ...user, role }, 'development')).status, 'unauthorized');
+  assert.equal(calls, 3);
 });
 test('title client handles authorization, throttling, transport, empty and malformed payloads', async t => {
   const api = await client();

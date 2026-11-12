@@ -88,6 +88,17 @@ function form(draft, service, events = []) {
 }
 function openReview(view) { view.find(node => node.props.id === 'btn-submit-magazord-registration').props.onClick(); view.render(); }
 
+for (const [format, expected] of [['brochura', 'CC — Capa Comum'], ['hardcover', 'CD — Capa Dura'], ['Espiral manual', 'Espiral manual']])
+  test(`manual format ${format} stays editable and is normalized conservatively on submission`, async t => {
+    const service = setupStore(t), submitted = [], events = [];
+    const create = service.createProduct.bind(service);
+    service.createProduct = async draft => { submitted.push(draft); return create(draft); };
+    const draft = { ...initial(), ...selectedCategory, title: 'Obra manual', parentCode: 'FORMAT-P', childCode: 'FORMAT-1', price: '20', format };
+    const before = structuredClone(draft), view = form(draft, service, events); openReview(view);
+    await view.find(node => node.props.id === 'btn-confirm-magazord-registration').props.onClick();
+    assert.equal(submitted.length, 1); assert.equal(submitted[0].format, expected); assert.deepEqual(draft, before);
+  });
+
 for (const withIsbn of [true, false]) test(`confirmed title selection opens the existing editable form, ISBN ${withIsbn}, without other API lookups`, t => {
   t.mock.method(globalThis, 'fetch', () => assert.fail('Confirmation must not fetch or register'));
   const view = mountApp();
@@ -218,5 +229,15 @@ test('a valid lookup with no provider results still opens manual NEW/USED with i
     assert.equal(draft.isbn13, isbn); assert.equal(draft.condition, condition); assert.equal(draft.quantity, 1);
     view.find('ProductRegistrationForm').props.onBackToSearch(); view.render();
   }
+});
+
+for (const provider of ['BrasilAPI', 'Distribuidora Curitiba']) test(`ISBN flow cannot overwrite the normalized ${provider} format with the raw source value`, async t => {
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ isbn, items: [] }));
+  const book = { id: 'raw-source', title: 'Obra', provider, isbn13: isbn, format: 'brochura' };
+  const view = mountApp({ brasil: { book: provider === 'BrasilAPI' ? book : null, diagnostic: { status: provider === 'BrasilAPI' ? 200 : 404 } },
+    curitiba: { book: provider === 'Distribuidora Curitiba' ? book : null, diagnostic: { status: provider === 'Distribuidora Curitiba' ? 200 : 404 } } });
+  await view.search(isbn); view.render();
+  view.find('MagazordStatusCard').props.onOpenRegistration('novo'); view.render();
+  assert.equal(view.find('ProductRegistrationForm').props.draft.format, 'CC — Capa Comum'); assert.equal(book.format, 'brochura');
 });
 

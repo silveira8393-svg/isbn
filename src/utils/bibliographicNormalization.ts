@@ -1,4 +1,4 @@
-export const COVER_FORMATS = ['CC - Capa Convencional', 'CD - Capa Dura'] as const;
+export const COVER_FORMATS = ['CC — Capa Comum', 'CD — Capa Dura'] as const;
 
 /** Operational g/cm precision. Raw Amazon measurements remain in amazonPhysical. */
 export function roundPhysicalMeasurement(value: number): number {
@@ -17,7 +17,7 @@ function lookupKey(value: string): string {
 }
 
 const coverFormats = new Map<string, string>([
-  ...['cc', 'cc - capa convencional', 'capa convencional', 'brochura', 'capa comum', 'capa mole',
+  ...['cc', 'cc - capa comum', 'cc - capa convencional', 'capa convencional', 'brochura', 'capa comum', 'capa mole',
     'capa flexivel', 'paperback', 'softcover', 'soft cover', 'softback'].map(value => [value, COVER_FORMATS[0]] as [string, string]),
   ...['cd', 'cd - capa dura', 'capa dura', 'hardcover', 'hard cover', 'hardback',
     'encadernacao dura', 'encadernacao rigida'].map(value => [value, COVER_FORMATS[1]] as [string, string]),
@@ -44,7 +44,8 @@ for (const [name, aliases] of languageAliases) {
 /** Normalize only identified bindings; retain other source text for manual review. */
 export function normalizeCoverFormat(value?: string | null): string {
   if (!value?.trim()) return '';
-  return coverFormats.get(lookupKey(value)) ?? value;
+  const key = lookupKey(value).replace(/[\u2010-\u2015\u2212]/g, '-').replace(/^(cc|cd)\s*-\s*/, '$1 - ');
+  return coverFormats.get(key) ?? value;
 }
 
 /** Known language codes may include regional/script subtags; unknown values stay intact. */

@@ -10,7 +10,7 @@ import { canonicalBookIsbn, cleanIsbn } from './isbn';
 import { imageReferences, isImageReference } from './imageUrls';
 import { bookSourceLinks } from './bookSourceLinks';
 import { editionReferences } from './editionReferences';
-import { formatPhysicalMeasurement, normalizeLanguage, roundPhysicalMeasurement } from './bibliographicNormalization';
+import { formatPhysicalMeasurement, normalizeCoverFormat, normalizeLanguage, roundPhysicalMeasurement } from './bibliographicNormalization';
 
 export function registrationModeForCondition(condition: BookCondition, mode?: RegistrationMode): RegistrationMode {
   if (condition === 'usado') return 'new_used_from_known_edition';
@@ -126,7 +126,7 @@ export function createRegistrationDraft(
     edition: book.edition ? book.edition.trim() : undefined,
     language: normalizeLanguage(book.language),
     pageCount: typeof book.pageCount === 'number' && book.pageCount > 0 ? book.pageCount : undefined,
-    format: book.format ? book.format.trim() : '',
+    format: normalizeCoverFormat(book.format),
 
     weight: normalizeWeightToGrams(book),
     weightUnit: 'g',

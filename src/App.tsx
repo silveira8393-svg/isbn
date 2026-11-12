@@ -288,7 +288,6 @@ export default function App() {
       setFoundBook(lookupBook);
       if (lookupBook) {
         const draft = createRegistrationDraft(lookupBook);
-        draft.format = lookupBook.format || '';
         setRegistrationDraft(draft);
       }
       // Secondary links never delay the bibliographic result, audit, simulated lookup or opening a form.

@@ -12,10 +12,13 @@ await access(browser);
 const cover = 'https://books.google.com/books/content?id=second&img=1';
 const images = [cover];
 const viewportWidth = process.argv.includes('--mobile') ? 390 : 1280;
-const amazon = process.argv.includes('--amazon');
-const curitiba = process.argv.includes('--curitiba');
+const allSources = process.argv.includes('--all-sources');
+const amazon = process.argv.includes('--amazon') || allSources;
+const curitiba = process.argv.includes('--curitiba') || allSources;
+const operator = process.argv.includes('--operator');
 const externalSource = amazon || curitiba;
-const user = { id: '11111111-1111-4111-8111-111111111111', storeId: '22222222-2222-4222-8222-222222222222', role: amazon ? 'developer' : 'operator', active: true, name: 'Teste offline' };
+const expectedCards = 20 + (amazon ? 2 : 0) + (curitiba ? 2 : 0);
+const user = { id: '11111111-1111-4111-8111-111111111111', storeId: '22222222-2222-4222-8222-222222222222', role: amazon && !operator ? 'developer' : 'operator', active: true, name: 'Teste offline' };
 const bundle = await build({ stdin: { resolveDir: process.cwd(), loader: 'tsx', contents: `
 import React from 'react'; import { createRoot } from 'react-dom/client';
 import App from './src/App'; import { mapGoogleBooksTitleResponse } from './shared/googleBooks';
@@ -36,7 +39,7 @@ window.fetch=async(url,init)=>{
    {cdProduto:'LV2',dsProduto:'Obra sintética'}]]});
   if(String(url).endsWith('/findProdutoByPrimaryKey')) {const key=JSON.parse(init.body).cdProduto;return Response.json({cdProduto:key,dsProduto:'Obra sintética',nuCdBarras:key==='LV1'?'9788550303628':undefined,
    urlProduto:key==='LV1'?'https://www.distribuidoracuritiba.com.br/obra-LV1/p':undefined,
-   camposDinamicos:[{AD_DSEDITORA:key==='LV1'?'Editora Curitiba':'Editora Curitiba sem ISBN',AD_ANOEDICAO:key==='LV1'?'2024':'2023',AD_NUEDICAO:'2'}]});}
+   camposDinamicos:[{AD_DSEDITORA:key==='LV1'?'Editora Curitiba':'Editora Curitiba sem ISBN',AD_ANOEDICAO:key==='LV1'?'2024':'2023',AD_NUEDICAO:'2',AD_DSFORMATO:'brochura'}]});}
   throw Error('Unexpected Curitiba request');
  }
  if(${amazon} && String(url).startsWith('/api/amazon/spapi/catalog?title=') && init.method==='GET') {
@@ -70,10 +73,12 @@ async function run(){
    await wait(()=>section.textContent.includes(scenario==='empty'?'Nenhum resultado':'indisponível'),'failure state');
    check(section.querySelectorAll('article').length===0,'no stale cards');window.__completed.push(scenario);continue;
   }
-  await wait(()=>section.querySelectorAll('article').length===${externalSource?22:20},'multiple cards');
+  await wait(()=>section.querySelectorAll('article').length===${expectedCards},'multiple cards');
   for(const source of ${JSON.stringify(amazon?[]:['Amazon'])})check([...section.querySelectorAll('button')].find(b=>b.textContent.includes(source)).disabled,'disabled '+source);
   check(![...section.querySelectorAll('button')].find(b=>b.textContent.includes('Distribuidora Curitiba')).disabled,'Curitiba enabled');
-  const trigger=section.querySelectorAll('article button')[scenario==='multiple'?${externalSource?20:1}:${externalSource?21:0}];trigger.focus();trigger.click();
+  const cards=[...section.querySelectorAll('article')];
+  const sourceCards=${externalSource}?cards.filter(card=>card.textContent.includes('Fonte: '+${JSON.stringify(amazon?'Amazon SP-API':'Distribuidora Curitiba')})):cards;
+  const trigger=sourceCards[scenario==='multiple'?${externalSource?0:1}:${externalSource?1:0}].querySelector('button');trigger.focus();trigger.click();
   await wait(()=>section.querySelector('dialog[open]'),'modal opens near selected edition');
   let dialog=section.querySelector('dialog[open]');
   check(dialog.matches(':modal'),'native modal with inert background');
@@ -86,7 +91,7 @@ async function run(){
   if(scenario==='multiple'&&!${externalSource})check(dialog.querySelector('img')?.src===${JSON.stringify(cover)},'cover reference in modal');
   click('Cancelar');await wait(()=>!section.querySelector('dialog'),'cancel closes modal');
   check(document.activeElement===trigger,'cancel restores selection trigger focus');
-  check(section.querySelectorAll('article').length===${externalSource?22:20},'cancel preserves results');
+  check(section.querySelectorAll('article').length===${expectedCards},'cancel preserves results');
   trigger.click();await wait(()=>section.querySelector('dialog[open]'),'reopen');await keyboard('Escape');
   await wait(()=>!section.querySelector('dialog'),'Escape closes modal');check(document.activeElement===trigger,'Escape restores focus');
   trigger.click();await wait(()=>section.querySelector('dialog[open]'),'confirm dialog');
@@ -99,12 +104,17 @@ async function run(){
   check(field('year').value===(scenario==='multiple'?'${externalSource?2024:2020}':'${externalSource?2023:2001}'),'selected edition year');
   check(field('isbn13').value===(scenario==='multiple'?'9788550303628':''),'ISBN optional and canonical');
   if(${amazon}) {
-   check(field('format').value==='CC - Capa Convencional','Amazon cover code');
+   check(field('format').value==='CC — Capa Comum','Amazon cover code');
    check(field('authors').value==='Paulo Coelho','Amazon author order');
    const reference=document.querySelector('section[aria-label="Referência da obra"] a');
    check(reference?.href==='https://www.amazon.com.br/dp/'+(scenario==='multiple'?'ASIN000001':'ASIN000002'),'selected ASIN reference without ISBN');
    check(reference.target==='_blank','reference opens separate tab');
   }
+  if(${curitiba&&!amazon})check(field('format').value==='CC — Capa Comum','Curitiba brochure canonical format');
+  edit(field('format'),'softcover');field('format').dispatchEvent(new FocusEvent('focusout',{bubbles:true}));await pause();
+  check(field('format').value==='CC — Capa Comum','manual equivalent format normalized on blur');
+  edit(field('format'),'Formato artesanal');field('format').dispatchEvent(new FocusEvent('focusout',{bubbles:true}));await pause();
+  check(field('format').value==='Formato artesanal','unknown manual classification preserved');
   edit(field('title'),'Correção manual');await pause();check(field('title').value==='Correção manual','editable form');
   const referenceUrl=document.querySelector('section[aria-label="Referência da obra"] a')?.href;
   const historyButton=[...document.querySelectorAll('button')].find(button=>[...button.querySelectorAll('span')].some(span=>span.textContent==='Histórico'));
@@ -121,7 +131,7 @@ run().then(result=>document.getElementById('result').textContent=JSON.stringify(
 ` }, bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic', define: { 'import.meta.env': JSON.stringify({DEV:false,ISBN_AMAZON_TITLE_PREVIEW:amazon}), 'process.env.NODE_ENV': '"development"' },
   plugins: [{ name: 'offline-boundaries', setup(b) {
     const mocks = [
-      [/contexts\/UserContext$/, `export const useUser=()=>({currentUser:${JSON.stringify(user)},canViewProduction:false,canViewSettings:false,operationEnvironment:'${amazon?'development':'production'}'});`],
+      [/contexts\/UserContext$/, `export const useUser=()=>({currentUser:${JSON.stringify(user)},canViewProduction:false,canViewSettings:false,operationEnvironment:'${user.role==='developer'?'development':'production'}'});`],
       [/lib\/supabase(?:\.js)?$/, `export const supabaseUrl='https://database.invalid';export const supabase={auth:{getSession:async()=>({data:{session:{access_token:"synthetic-session"}}})},from:()=>{throw Error('Persistence forbidden')}};`],
       [/hooks\/useOperationAudit$/, `export const useOperationAudit=()=>({saveOperation:()=>{throw Error('Persistence forbidden')},pending:[],saving:0,retry:()=>{}});`],
       [/hooks\/useLocalHistory$/, `import{useState}from'react';export const useLocalHistory=()=>{const[history,setHistory]=useState([]);return{history,setHistory,clearHistory:()=>setHistory([])}};`],

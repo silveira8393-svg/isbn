@@ -11,8 +11,10 @@ export type AmazonTitleResult = {
   diagnostic: { code: string; httpStatus?: number };
   hasMore?: boolean;
 };
-export function canSearchAmazonTitle(user?: User, environment?: string) {
-  return user?.active === true && user.role === 'developer' && Boolean(user.storeId) && environment === 'development';
+export function canSearchAmazonTitle(user?: User, _operationEnvironment?: string) {
+  // Operational/simulation environment is not the deployment environment.
+  // Match the existing catalog roles; the server still validates session and store membership.
+  return user?.active === true && ['developer', 'admin', 'operator'].includes(user.role) && Boolean(user.storeId);
 }
 const text = (v: unknown): string | undefined => typeof v === 'string' && v.trim() && v.length <= 10000
   && !/[<>\x00-\x1f]/.test(v) ? v.trim() : undefined;

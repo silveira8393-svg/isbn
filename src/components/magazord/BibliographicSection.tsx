@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { RegistrationDraft } from '../../types';
+import { COVER_FORMATS, normalizeCoverFormat } from '../../utils/bibliographicNormalization';
 import {
   BookOpen,
   Users,
@@ -24,9 +25,7 @@ interface BibliographicSectionProps {
 }
 
 const COMMON_FORMATS = [
-  'Brochura',
-  'Capa dura',
-  'Capa comum',
+  ...COVER_FORMATS,
   'Encadernação especial',
   'Espiral',
   'Bolso',
@@ -236,7 +235,8 @@ export default function BibliographicSection({
             value={draft.format || ''}
             data-registration-field="format"
             onChange={(e) => onChange({ format: e.target.value })}
-            placeholder="Brochura"
+            onBlur={(e) => onChange({ format: normalizeCoverFormat(e.currentTarget.value) })}
+            placeholder="Selecione ou informe o formato"
             className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-600"
           />
           <datalist id="formats-list">

@@ -19,14 +19,14 @@ const amazon = { source: 'amazon_spapi_catalog_2022-04-01', marketplaceId: marke
 const render = (component, props) => api.renderToStaticMarkup(api.createElement(component, props));
 
 test('Amazon cover formats use existing CC/CD codes; unknown formats remain editable and empty', () => {
-  for (const input of ['paperback', ' softcover ', 'PAPERBACK', 'Soft  Cover']) assert.equal(api.amazonCoverFormat(input), 'CC - Capa Convencional');
-  for (const input of ['hardcover', 'HARDBACK', ' hard cover ']) assert.equal(api.amazonCoverFormat(input), 'CD - Capa Dura');
+  for (const input of ['paperback', ' softcover ', 'PAPERBACK', 'Soft  Cover']) assert.equal(api.amazonCoverFormat(input), 'CC — Capa Comum');
+  for (const input of ['hardcover', 'HARDBACK', ' hard cover ']) assert.equal(api.amazonCoverFormat(input), 'CD — Capa Dura');
   for (const binding of [undefined, '', 'unknown', 'wirebound']) {
     const book = api.mapAmazonTitleResponse({ query: 'book', items: [{ ...amazon, binding }] }).candidates[0].book;
     assert.equal(book.format, undefined); assert.equal(api.createRegistrationDraft(book).format, '');
   }
   const book = api.mapAmazonTitleResponse({ query: 'book', items: [{ ...amazon, binding: 'hardback' }] }).candidates[0].book;
-  assert.equal(api.createRegistrationDraft(book).format, 'CD - Capa Dura');
+  assert.equal(api.createRegistrationDraft(book).format, 'CD — Capa Dura');
 });
 test('Amazon personal authors normalize clear inversion and retain particles, ambiguous credits and individual identity', () => {
   for (const [input, expected] of [['Coelho, Paulo', 'Paulo Coelho'], ['da Silva, Maria', 'Maria da Silva'],
@@ -72,7 +72,7 @@ test('History keeps original references through serialization and renders old UR
 });
 
 const first = { cdProduto: 'LV1', dsProduto: 'Edição A', nuCdBarras: isbn };
-const second = { cdProduto: 'LV2', dsProduto: 'Edição B', camposDinamicos: [{ AD_DSEDITORA: 'Editora B', AD_NUEDICAO: '2' }] };
+const second = { cdProduto: 'LV2', dsProduto: 'Edição B', camposDinamicos: [{ AD_DSEDITORA: 'Editora B', AD_NUEDICAO: '2', AD_DSFORMATO: 'capa dura' }] };
 function publicCatalog(t, settings = {}) {
   const calls = [];
   t.mock.method(globalThis, 'fetch', async (url, init) => {
@@ -92,6 +92,7 @@ test('Curitiba title preserves multiple products, fetches only the chosen detail
   const calls = publicCatalog(t); const result = await api.searchCuritibaByTitle('O Alquimista');
   assert.equal(result.status, 'success'); assert.deepEqual(result.candidates.map(c => c.key), ['LV1', 'LV2']); assert.equal(calls.length, 2);
   const selected = await result.loadDetail('LV2'); assert.equal(selected.book.publisher, 'Editora B'); assert.equal(selected.book.edition, '2');
+  assert.equal(api.createRegistrationDraft(selected.book).format, 'CD — Capa Dura');
   assert.equal(selected.book.isbn13, undefined); assert.equal(selected.book.id, 'curitiba:LV2'); assert.equal(calls.length, 3);
   assert.equal(calls[2].body.cdProduto, 'LV2'); assert.equal((await result.loadDetail('LV2')).key, 'LV2'); assert.equal(calls.length, 3);
   assert.equal(await result.loadDetail('LV999'), null); assert.equal(calls.length, 3); assert.doesNotMatch(JSON.stringify(result.candidates), /sessionId|vlPrecoFinal|synthetic-public-session/);
@@ -110,9 +111,10 @@ test('Curitiba ISBN retains filter 4, exact request and the original detailed ma
     if (String(url).endsWith('/auth/loginAcessoPublico')) return Response.json({ sessionId: 'synthetic', cdSistema: 50, empresa: { cdEmpresa: 1 }, usuario: { cdUsuario: 2 } });
     if (String(url).includes('/findAllByExampleByPages')) { assert.equal(body.opcaoFiltro, 4); assert.equal(body.dsPalavraChave, isbn); assert.equal(body.pageLines, 16); return Response.json({ collections: [[first]] }); }
     assert.equal(body.cdProduto, 'LV1');
-    return Response.json({ ...first, camposDinamicos: [{ AD_DSEDITORA: 'ISBN Press', AD_DSAUTOR: 'Autor original', AD_NRPAGINA: '240', AD_ANOEDICAO: '2020' }] });
+    return Response.json({ ...first, camposDinamicos: [{ AD_DSEDITORA: 'ISBN Press', AD_DSAUTOR: 'Autor original', AD_NRPAGINA: '240', AD_ANOEDICAO: '2020', AD_DSFORMATO: 'brochura' }] });
   });
   const result = await api.searchBookByIsbnDistribuidoraCuritiba(isbn);
   assert.equal(result.diagnostic.state, 'success'); assert.equal(result.book.isbn13, isbn); assert.equal(result.book.publisher, 'ISBN Press');
   assert.equal(result.book.pageCount, 240); assert.deepEqual(result.book.authors, ['Autor original']); assert.equal(calls, 3);
+  assert.equal(result.book.format, 'brochura'); assert.equal(api.createRegistrationDraft(result.book).format, 'CC — Capa Comum');
 });

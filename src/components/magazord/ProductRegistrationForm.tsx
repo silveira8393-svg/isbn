@@ -13,7 +13,7 @@ import {
 import { magazordMockService as sharedMagazordService, type MagazordSimulationMode } from '../../services/magazordMockService';
 import { buildFinalDescription, formatRegistrationPrice, parseRegistrationPrice, registrationModeForCondition, validateRegistrationDraft } from '../../utils/draft';
 import { cleanIsbn } from '../../utils/isbn';
-import { formatPhysicalMeasurement, normalizeLanguage, roundPhysicalMeasurement } from '../../utils/bibliographicNormalization';
+import { formatPhysicalMeasurement, normalizeCoverFormat, normalizeLanguage, roundPhysicalMeasurement } from '../../utils/bibliographicNormalization';
 import RegistrationImage from '../dashboard/RegistrationImage';
 import { imageReferences } from '../../utils/imageUrls';
 import ProductIdentitySection from './ProductIdentitySection';
@@ -164,6 +164,7 @@ export default function ProductRegistrationForm({
         price: parseRegistrationPrice(draft.price)!.toFixed(2).replace('.', ','),
         ean: cleanIsbn(draft.ean), isbn13: cleanIsbn(draft.isbn13), isbn10: cleanIsbn(draft.isbn10),
         language: normalizeLanguage(draft.language),
+        format: normalizeCoverFormat(draft.format),
         weight: draft.weight == null ? undefined : roundPhysicalMeasurement(draft.weight * (draft.weightUnit === 'kg' ? 1000 : 1)), weightUnit: 'g',
       };
       const result = await magazordMockService.createProduct(draftToSubmit, actionMode);

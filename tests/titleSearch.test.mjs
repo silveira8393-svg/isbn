@@ -170,11 +170,25 @@ test('Amazon failure or pending request never prevents Google selection and conf
     assert.equal(view.confirmed.length,1);view.unmount();
   }
 });
-test('Google failure does not block Amazon; production context does not call Amazon', async () => {
+test('Google failure does not block Amazon; operational production context is allowed in authorized Preview', async () => {
   const view=mountTitle(async()=>{throw Error('offline');},{...development,amazonSearch:async()=>({status:'success',candidates:[amazonCandidate]})});
   view.query('Título');await view.submit();assert.equal(view.all().filter(n=>n.type==='article').length,1);
-  let calls=0;const production=mountTitle(async()=>api.mapGoogleBooksTitleResponse(editions),{...development,environment:'production',amazonSearch:async()=>{calls++;}});
-  production.query('Título');await production.submit();assert.equal(calls,0);
+  let calls=0;const production=mountTitle(async()=>api.mapGoogleBooksTitleResponse(editions),{...development,user:{...development.user,role:'operator'},environment:'production',amazonSearch:async()=>{calls++;return {status:'success',candidates:[amazonCandidate]};}});
+  production.query('Título');await production.submit();assert.equal(calls,1);
+});
+
+test('Todos starts all three sources independently for authorized Preview catalog roles', async () => {
+  for (const role of ['developer', 'admin', 'operator']) {
+    const calls = [];
+    const view = mountTitle(async () => { calls.push('google'); return api.mapGoogleBooksTitleResponse(editions); }, {
+      ...development, user: { ...development.user, role }, environment: role === 'developer' ? 'development' : 'production',
+      amazonSearch: async () => { calls.push('amazon'); return { status: 'success', candidates: [amazonCandidate] }; },
+      curitibaSearch: async () => { calls.push('curitiba'); return { status: 'success', candidates: [{ source: 'curitiba', key: 'LV1', book: { id: 'curitiba:LV1', title: 'Obra Curitiba', provider: 'Distribuidora Curitiba' } }] }; },
+    });
+    view.query('Obra'); await view.submit(); assert.deepEqual(calls.sort(), ['amazon', 'curitiba', 'google']);
+    assert.equal(view.all().filter(n => n.type === 'article').length, 4);
+    for (const source of ['Amazon', 'Google Books', 'Distribuidora Curitiba']) assert.equal(view.all().find(n => n.type === 'button' && text(n) === source).props.disabled, false);
+  }
 });
 
 test('Curitiba keeps multiple candidates and loads only the manually selected edition before confirmation', async () => {
