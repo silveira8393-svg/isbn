@@ -5,6 +5,7 @@
 
 import { SearchHistoryItem } from '../types';
 import { formatStoreDateTime, formatStoreTime } from '../utils/storeTime';
+import EditionReferenceLinks from './EditionReferenceLinks';
 import { History, Trash2, Download, BookOpen, Clock, User as UserIcon } from 'lucide-react';
 
 interface SearchHistoryGroupProps {
@@ -81,10 +82,12 @@ export default function SearchHistoryGroup({
       {/* List */}
       <div className="divide-y divide-slate-100 overflow-y-auto max-h-[480px] xl:max-h-[640px] custom-scrollbar">
         {items.map((item) => (
+          <div key={`${item.timestamp}-${item.isbn}`}>
           <button
             key={`${item.timestamp}-${item.isbn}`}
             type="button"
             onClick={() => onSelect(item.isbn)}
+            disabled={!item.isbn}
             id={`history-item-${item.isbn}`}
             className="isbn-history-row w-full text-left p-3 hover:bg-slate-50/80 transition-colors flex items-start gap-3 group border-l-2 border-transparent hover:border-blue-600 cursor-pointer"
           >
@@ -198,6 +201,8 @@ export default function SearchHistoryGroup({
               </div>
             </div>
           </button>
+          <EditionReferenceLinks references={item.editionReferences} compact />
+          </div>
         ))}
       </div>
     </div>

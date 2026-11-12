@@ -9,6 +9,7 @@ import { useState, useEffect, useRef } from 'react';
 import Header, { NavigationTab } from './components/Header';
 import SearchForm from './components/SearchForm';
 import TitleSearch from './components/TitleSearch';
+import { editionReferences } from './utils/editionReferences';
 import BookDetailsCard from './components/BookDetailsCard';
 import SearchHistoryGroup from './components/SearchHistoryGroup';
 import CameraScannerModal from './components/CameraScannerModal';
@@ -297,6 +298,12 @@ export default function App() {
         if (!links.length || !current()) return;
         setFoundBook(book => current() && book ? appendCuritibaProductLinks(book, links) : book);
         setRegistrationDraft(draft => current() && draft ? appendCuritibaProductLinks(draft, links) : draft);
+        const reference = distribuidoraResult.book?.reference;
+        if (reference) {
+          const incoming = editionReferences({ isbn13: cleaned, reference, sourceLinks: links });
+          setHistory(previous => previous.map(item => item.isbn === cleaned && item.userId === currentUser.id && item.storeId === currentUser.storeId
+            ? { ...item, editionReferences: [...(item.editionReferences || []), ...incoming.filter(link => !item.editionReferences?.some(prior => prior.source === link.source))] } : item));
+        }
       });
       if (galleryPending) void galleryPending.then(images => {
         const current = () => sameActor() && galleryGeneration.current === generation
@@ -323,6 +330,8 @@ export default function App() {
           historyKind: actionMode === 'auto' ? 'operational' : 'test',
           isbn: cleaned,
           title: enrichedBook.title,
+          provider: enrichedBook.provider,
+          editionReferences: editionReferences(enrichedBook),
           authors: enrichedBook.authors,
           success: true,
           thumbnailUrl: enrichedBook.thumbnailUrl || enrichedBook.coverUrl,
@@ -463,6 +472,11 @@ export default function App() {
     setBibliographicState('found');
     setErrorText(null);
     const isbn = book.isbn13 || book.isbn10 || '';
+    const titleHistoryItem: SearchHistoryItem = { timestamp: Date.now(), isbn, title: book.title, authors: book.authors,
+      provider: book.provider, editionReferences: editionReferences(book), success: true,
+      historyKind: 'operational', operationType: 'pesquisa_titulo', userId: currentUser.id, storeId: currentUser.storeId,
+      userName: currentUser.name, userRole: currentUser.role, operationEnvironment };
+    setHistory(previous => [titleHistoryItem, ...previous].slice(0, 50));
     setSearchedTerm(isbn);
     setRawSearchedTerm('');
     setIsbnValue(isbn);
@@ -557,6 +571,8 @@ export default function App() {
       historyKind: actionMode === 'auto' ? 'operational' : 'test',
       isbn: searchedTerm || ean,
       title: foundBook.title,
+      provider: foundBook.provider,
+      editionReferences: editionReferences(foundBook),
       authors: foundBook.authors,
       thumbnailUrl: foundBook.thumbnailUrl || foundBook.coverUrl,
       success: true,
@@ -607,6 +623,8 @@ export default function App() {
       historyKind: actionMode === 'auto' ? 'operational' : 'test',
       isbn: currentIsbn,
       title: savedDraft.title,
+      provider: foundBook?.provider,
+      editionReferences: savedDraft.editionReferences || (foundBook ? editionReferences(foundBook) : undefined),
       authors: foundBook?.authors || [],
       thumbnailUrl: savedDraft.mainImageUrl || foundBook?.thumbnailUrl,
       success: true,

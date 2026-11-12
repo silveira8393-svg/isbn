@@ -4,19 +4,25 @@ import type { TitleSearchCandidate, TitleSearchSource } from '../../shared/googl
 import { searchGoogleBooksByTitle } from '../services/googleBooks';
 import { searchAmazonByTitle } from '../services/amazonTitle';
 import { canSearchAmazonTitle } from '../../shared/amazonTitle';
+import { searchCuritibaByTitle, type CuritibaTitleResult } from '../services/distribuidoraCuritiba';
 const candidateId = (candidate: TitleSearchCandidate) => candidate.source + ':' + candidate.key;
-const coverOf = (book: BookInfo) => book.amazonTitleReference?.coverUrl || book.googleBooksReference?.coverUrl;
+const coverOf = (book: BookInfo) => book.amazonTitleReference?.coverUrl || book.googleBooksReference?.coverUrl
+  || (book.curitibaTitleReference ? book.thumbnailUrl || book.coverUrl : undefined);
 
 const sources: { id: 'all' | TitleSearchSource; label: string; enabled: boolean }[] = [
   { id: 'all', label: 'Todos', enabled: true },
   { id: 'google_books', label: 'Google Books', enabled: true },
-  { id: 'curitiba', label: 'Distribuidora Curitiba', enabled: false },
+  { id: 'curitiba', label: 'Distribuidora Curitiba', enabled: true },
   { id: 'amazon', label: 'Amazon', enabled: false },
 ];
 
 export default function TitleSearch({ onConfirm, disabled = false, user, environment }: { user?: User; environment?: string; onConfirm: (book: BookInfo) => void; disabled?: boolean }) {
   const amazonEnabled = (import.meta.env.DEV || import.meta.env.ISBN_AMAZON_TITLE_PREVIEW) && canSearchAmazonTitle(user, environment);
   const [amazonMessage, setAmazonMessage] = useState('');
+  const [curitibaMessage, setCuritibaMessage] = useState('');
+  const [selecting, setSelecting] = useState(false);
+  const detailGeneration = useRef(0);
+  const curitibaDetail = useRef<CuritibaTitleResult['loadDetail']>(undefined);
   const [query, setQuery] = useState('');
   const [candidates, setCandidates] = useState<TitleSearchCandidate[]>([]);
   const [source, setSource] = useState<'all' | TitleSearchSource>('all');
@@ -42,12 +48,29 @@ export default function TitleSearch({ onConfirm, disabled = false, user, environ
     selectionTrigger.current?.focus({ preventScroll: true });
   };
 
+  const selectEdition = async (candidate: TitleSearchCandidate, trigger: HTMLButtonElement) => {
+    if (disabled || (selecting && candidate.source === 'curitiba')) return;
+    const selection = ++detailGeneration.current;
+    selectionTrigger.current = trigger;
+    if (candidate.source !== 'curitiba') { setSelecting(false); setSelected(candidateId(candidate)); return; }
+    const current = generation.current;
+    setSelecting(true); setCuritibaMessage('Distribuidora Curitiba: Consultando ficha da edição...');
+    const result = await curitibaDetail.current?.(candidate.key, request.current?.signal).catch(() => null);
+    if (current !== generation.current || selection !== detailGeneration.current || request.current?.signal.aborted) return;
+    setSelecting(false);
+    if (!result) { setCuritibaMessage('Distribuidora Curitiba: Ficha indisponível. Selecione novamente para tentar outra vez.'); return; }
+    setCandidates(previous => previous.map(item => candidateId(item) === candidateId(candidate) ? result : item));
+    setSelected(candidateId(result)); setCuritibaMessage('Distribuidora Curitiba: Ficha carregada. Confira a edição.');
+  };
+
   const search = async () => {
     if (disabled) return;
     const current = ++generation.current;
     request.current?.abort();
     const controller = new AbortController(); request.current = controller;
     setLoading(true); setCandidates([]); setSelected(null); setMessage('');
+    setSelecting(false); curitibaDetail.current = undefined;
+    setCuritibaMessage('Distribuidora Curitiba: Consultando...');
     setAmazonMessage(amazonEnabled ? 'Amazon SP-API: Consultando...' : '');
     const valid = () => current === generation.current && !controller.signal.aborted;
     const google = async () => {
@@ -74,13 +97,25 @@ export default function TitleSearch({ onConfirm, disabled = false, user, environ
           : 'Amazon SP-API indisponível ou resposta incompleta. Tente novamente.');
       } catch { if (valid()) setAmazonMessage('Amazon SP-API indisponível. Tente novamente.'); }
     };
-    await Promise.allSettled([google(), ...(amazonEnabled ? [amazon()] : [])]);
+    const curitiba = async () => {
+      try {
+        const result = await searchCuritibaByTitle(query, controller.signal);
+        if (!valid()) return;
+        curitibaDetail.current = result.loadDetail;
+        setCandidates(previous => [...previous, ...result.candidates]);
+        setCuritibaMessage(result.status === 'success' ? `Distribuidora Curitiba: ${result.candidates.length} resultado(s), até 20. Confira a edição.`
+          : result.status === 'not_found' ? 'Distribuidora Curitiba: Nenhum resultado utilizável.'
+          : result.status === 'invalid_query' ? 'Distribuidora Curitiba: Informe um título entre 2 e 200 caracteres.'
+          : 'Distribuidora Curitiba indisponível ou resposta incompleta.');
+      } catch { if (valid()) setCuritibaMessage('Distribuidora Curitiba indisponível.'); }
+    };
+    await Promise.allSettled([google(), curitiba(), ...(amazonEnabled ? [amazon()] : [])]);
     if (valid()) setLoading(false);
   };
   return <section aria-label="Pesquisa por título" className="mb-6 rounded-xl border border-slate-200 bg-white p-4 space-y-4">
     <form onSubmit={event => { event.preventDefault(); void search(); }} className="flex flex-wrap items-end gap-3">
       <label className="flex-1 min-w-48 text-sm font-semibold text-slate-700">Título do livro
-        <input value={query} onChange={event => { setQuery(event.target.value); setSelected(null); setCandidates([]); setMessage(''); setAmazonMessage(''); generation.current++; request.current?.abort(); setLoading(false); }}
+        <input value={query} onChange={event => { setQuery(event.target.value); setSelected(null); setCandidates([]); setMessage(''); setAmazonMessage(''); setCuritibaMessage(''); setSelecting(false); curitibaDetail.current = undefined; generation.current++; request.current?.abort(); setLoading(false); }}
           minLength={2} maxLength={200} required disabled={disabled} className="mt-1 w-full rounded-lg border border-slate-300 p-3" />
       </label>
       <button disabled={disabled || loading} className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">{loading ? 'Pesquisando...' : 'Pesquisar título'}</button>
@@ -91,9 +126,10 @@ export default function TitleSearch({ onConfirm, disabled = false, user, environ
         {item.label}{!enabled && ' (em breve)'}
       </button>; })}
     </div>
-    <p className="text-xs text-slate-500">{amazonEnabled ? 'Google Books e Amazon SP-API são consultados separadamente. Confira a edição antes de selecionar.' : 'Somente Google Books é consultado nesta etapa.'} A seleção abre o cadastro para conferência e edição.</p>
+    <p className="text-xs text-slate-500">As fontes são consultadas separadamente. Confira a edição antes de selecionar. A seleção abre o cadastro para conferência e edição.</p>
     <p role="status" aria-live="polite" className="text-sm text-slate-700">{message}</p>
     {amazonEnabled && <p role="status" aria-live="polite" className="text-sm text-slate-700">{amazonMessage}</p>}
+    <p role="status" aria-live="polite" className="text-sm text-slate-700">{curitibaMessage}</p>
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {candidates.filter(candidate => source === 'all' || candidate.source === source).map(candidate => {
         const book = candidate.book, cover = coverOf(book);
@@ -117,8 +153,8 @@ export default function TitleSearch({ onConfirm, disabled = false, user, environ
               {book.bibliographicWarnings?.map(warning => <p key={warning} className="text-xs text-amber-800">{warning}</p>)}
             </div>
           </div>
-          <button type="button" disabled={disabled} aria-pressed={selected === candidateId(candidate)} aria-haspopup="dialog"
-            onClick={event => { selectionTrigger.current = event.currentTarget; setSelected(candidateId(candidate)); }}
+          <button type="button" disabled={disabled || (selecting && candidate.source === 'curitiba')} aria-pressed={selected === candidateId(candidate)} aria-haspopup="dialog"
+            onClick={event => { void selectEdition(candidate, event.currentTarget); }}
             className="mt-3 rounded-lg border border-blue-300 px-3 py-2 text-sm font-semibold text-blue-800">Selecionar esta edição</button>
         </article>;
       })}

@@ -107,7 +107,7 @@ export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, f
     return { asin: text(item.asin), isbn, title: text(summary?.itemName) || value('item_name'),
       ...(keywords ? { subtitle: value('subtitle') } : {}),
       ...(browseClassification ? { browseClassification } : {}), ...(classifications.length ? { classifications } : {}),
-      authors: [...new Set(authors)], publisher: value('publisher') || value('publisher_name'),
+      authors: [...new Set(authors)], publisher: value('publisher') || value('publisher_name') || value('book_publisher') || value('publishing_company'),
       publicationDate: normalizePublicationDate(value('publication_date')) || normalizePublicationDate(value('street_date')) || null,
       language: text(language?.value), binding: value('binding'),
       edition: value('edition') || (positiveInteger(attr('edition')[0]?.value)?.toString() ?? null),

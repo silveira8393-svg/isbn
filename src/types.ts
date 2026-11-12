@@ -17,6 +17,8 @@ export interface BookSourceLink {
 }
 
 export interface BookInfo {
+  editionReferences?: EditionReference[];
+  curitibaTitleReference?: { productId: string };
   id: string;
   title: string;
   subtitle?: string;
@@ -92,6 +94,7 @@ export type RegistrationMode =
   | 'new_used_from_known_edition';
 
 export interface RegistrationDraft {
+  editionReferences?: EditionReference[];
   // Transient editor values, excluded from registration snapshots.
   conditionChildCodes?: Partial<Record<BookCondition, string>>;
   // Internal source references, not commercial content or registration export fields.
@@ -226,6 +229,8 @@ export type OperationType =
   | 'consulta_apenas';
 
 export interface SearchHistoryItem {
+  editionReferences?: EditionReference[];
+  provider?: string;
   storeId?: string;
   timestamp: number;
   // Entradas legadas sem classificação são tratadas como operacionais.
@@ -245,6 +250,14 @@ export interface SearchHistoryItem {
   userName?: string;
   userRole?: UserRole;
   operationEnvironment?: OperationEnvironment;
+}
+
+export interface EditionReference {
+  source: 'amazon' | 'google_books' | 'curitiba';
+  id: string;
+  url: string;
+  marketplaceId?: string;
+  isbn?: string;
 }
 
 export interface PriceComparisonItem {

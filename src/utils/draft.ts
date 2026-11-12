@@ -9,6 +9,7 @@ import { sanitizeSynopsis } from './sanitizer';
 import { canonicalBookIsbn, cleanIsbn } from './isbn';
 import { imageReferences, isImageReference } from './imageUrls';
 import { bookSourceLinks } from './bookSourceLinks';
+import { editionReferences } from './editionReferences';
 import { formatPhysicalMeasurement, normalizeLanguage, roundPhysicalMeasurement } from './bibliographicNormalization';
 
 export function registrationModeForCondition(condition: BookCondition, mode?: RegistrationMode): RegistrationMode {
@@ -104,6 +105,7 @@ export function createRegistrationDraft(
     typeof book.depth === 'number' && Number.isFinite(book.depth) ? roundPhysicalMeasurement(book.depth) : undefined;
 
   const draft: RegistrationDraft = {
+    ...(editionReferences(book).length ? { editionReferences: editionReferences(book) } : {}),
     ...(bookSourceLinks(book).length ? { sourceLinks: bookSourceLinks(book) } : {}),
     condition: initialCondition,
     registrationMode: registrationModeForCondition(initialCondition, registrationMode),

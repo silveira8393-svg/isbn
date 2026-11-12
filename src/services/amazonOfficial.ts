@@ -6,6 +6,7 @@ import { imageIdentity, imageReferences, isImageReference } from '../utils/image
 import { canonicalBookIsbn, evaluateBook } from '../utils/bibliographicEvaluation';
 import { searchAmazonLab, type LabQuality, type LabResult } from './amazonLabClient';
 import { roundPhysicalMeasurement } from '../utils/bibliographicNormalization';
+import { amazonAuthorName, amazonCoverFormat } from '../../shared/amazonBibliography';
 
 export const canUseAmazonOfficial = (user: Pick<User, 'active' | 'role' | 'storeId'>) =>
   user.active === true && ['developer', 'admin', 'operator'].includes(user.role) && !!user.storeId;
@@ -336,9 +337,9 @@ export async function searchAmazonOfficial(isbn: string, user: User, signal?: Ab
         ? { amazonCatalogReference: { asin: item.asin, isbn: canonical, marketplaceId: item.marketplaceId } } : {}),
       ...(canonical && identifiers.length && classifications.length
         ? { amazonCategoryReference: { asin: item.asin, isbn: canonical, marketplaceId: item.marketplaceId, classifications } } : {}),
-      authors: Array.isArray(item.authors) ? item.authors.map(text).filter((v): v is string => Boolean(v)) : undefined,
+      authors: Array.isArray(item.authors) ? item.authors.map(text).filter((v): v is string => Boolean(v)).map(amazonAuthorName) : undefined,
       publisher: text(item.publisher), publishedDate: normalizePublicationDate(item.publicationDate), year: publicationYear(item.publicationDate), language: amazonLanguage(item.language),
-      format: amazonBinding(item.binding), edition: text(item.edition), pageCount: Number.isInteger(item.pageCount) && item.pageCount! > 0 && item.pageCount! <= 20000 ? item.pageCount : undefined,
+      format: amazonCoverFormat(item.binding) || (typeof item.binding === 'string' && /^(mass_market_paperback|board_book|spiral_bound|loose_leaf|ebook|kindle_edition)$/.test(item.binding.trim().toLowerCase().replace(/[ -]+/g, '_')) ? amazonBinding(item.binding) : undefined), edition: text(item.edition), pageCount: Number.isInteger(item.pageCount) && item.pageCount! > 0 && item.pageCount! <= 20000 ? item.pageCount : undefined,
       ...(physical ? { amazonPhysical: physical, ...amazonPhysicalFields(physical) } : {}),
       ...(images.coverUrl ? { coverUrl: images.coverUrl } : {}),
       ...(images.additionalImages.length ? { additionalImages: images.additionalImages } : {}),

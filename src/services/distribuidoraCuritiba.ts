@@ -2,6 +2,9 @@ import { BookInfo } from '../types';
 import { curitibaProductLinks } from '../utils/bookSourceLinks';
 import { imageReferences, isImageReference } from '../utils/imageUrls';
 import { galleryLocation, galleryImage, type CuritibaGalleryRequest, type GalleryDiagnostic } from '../utils/curitibaGallery';
+import { normalizeTitleQuery, type TitleSearchCandidate } from '../../shared/googleBooks';
+import { canonicalBookIsbn, cleanIsbn } from '../utils/isbn';
+import { loadCuritibaProductLink } from './curitibaProductLink';
 
 const BASE_URL = 'https://distribuidoracuritiba.com.br/up-server/public/service';
 const SEARCH_URL = `${BASE_URL}/produto/findProdutoList/produtoController/findAllByExampleByPages`;
@@ -100,9 +103,10 @@ function buildHeaders(): HeadersInit {
   };
 }
 
-async function postJson(url: string, payload: JsonRecord): Promise<{ response: Response; data: unknown }> {
+async function postJson(url: string, payload: JsonRecord, signal?: AbortSignal): Promise<{ response: Response; data: unknown }> {
   const response = await fetch(url, {
     method: 'POST',
+    ...(signal ? { signal } : {}),
     headers: buildHeaders(),
     body: JSON.stringify(payload),
     credentials: 'omit',
@@ -212,6 +216,13 @@ export async function searchBookByIsbnDistribuidoraCuritiba(isbn: string): Promi
       return unavailableResult(startTime, detail.response.status, `Ficha indisponível (HTTP ${detail.response.status}).`);
     }
 
+    return mapProductDetail(detail, product, sanitizedIsbn, startTime);
+  } catch {
+    return unavailableResult(startTime, 'FALHA_CONEXAO', 'Não foi possível consultar a Distribuidora Curitiba.');
+  }
+}
+
+function mapProductDetail(detail: { data: unknown; response: Response }, product: JsonRecord, sanitizedIsbn: string, startTime: number): DistribuidoraSearchResult {
     const fields = getDynamicFields(detail.data);
     const detailProduct = findProduct(detail.data) || product;
     const directory = galleryLocation(detailProduct, product);
@@ -284,9 +295,6 @@ export async function searchBookByIsbnDistribuidoraCuritiba(isbn: string): Promi
         state: 'success',
       },
     };
-  } catch {
-    return unavailableResult(startTime, 'FALHA_CONEXAO', 'Não foi possível consultar a Distribuidora Curitiba.');
-  }
 }
 
 function findImageUrls(value: unknown): string[] {
@@ -338,3 +346,70 @@ function isMeaningful(value: unknown): boolean {
 }
 
 export { EXPECTED_DYNAMIC_FIELDS };
+
+export interface CuritibaTitleResult {
+  status: 'success' | 'not_found' | 'unavailable' | 'invalid_query';
+  candidates: TitleSearchCandidate[];
+  diagnostic: { code: string; httpStatus?: number };
+  loadDetail?: (key: string, signal?: AbortSignal) => Promise<TitleSearchCandidate | null>;
+}
+
+/** Public catalog: filter 1 is Código ou Descrição, attested by site configuration 41. */
+export async function searchCuritibaByTitle(title: string, signal?: AbortSignal): Promise<CuritibaTitleResult> {
+  const query = normalizeTitleQuery(title), start = performance.now();
+  const failed = (status: CuritibaTitleResult['status'], code: string, httpStatus?: number): CuritibaTitleResult => ({ status, candidates: [], diagnostic: { code, httpStatus } });
+  if (!query) return failed('invalid_query', 'invalid_title');
+  const request = (url: string, payload: JsonRecord, parentSignal = signal) => postJson(url, payload,
+    AbortSignal.any([AbortSignal.timeout(12000), ...(parentSignal ? [parentSignal] : [])]));
+  try {
+    const bootstrap = await request(`${BASE_URL}/auth/loginAcessoPublico`, { host: 'https:', usuario: { cdSistema: 50, flAtivo: 'S' } });
+    const context = bootstrap.data as JsonRecord;
+    if (!bootstrap.response.ok || !context?.sessionId || context?.empresa?.cdEmpresa == null) return failed('unavailable', 'public_auth_unavailable', bootstrap.response.status);
+    // Context belongs to this search only. It never enters a candidate, history or persistent storage.
+    const common = { cdClienteFilter: context.cliente?.cdCliente, cdEmpresa: context.empresa.cdEmpresa,
+      cdEmpresaPadraoUsuarioAnonimo: context.cdEmpresaPadraoUsuarioAnonimo, cdGrupoClienteFilter: context.cliente?.cdGrupoCliente,
+      clienteEmpresa: {}, flAtivo: 'S', isUsuarioAnomimo: true,
+      session: { cdEmpresaPadraoUsuarioAnonimo: context.cdEmpresaPadraoUsuarioAnonimo, cdSistema: context.cdSistema,
+        isUsuarioAnomimo: true, sessionId: context.sessionId, usuario: { cdUsuario: context.usuario?.cdUsuario } } };
+    const search = await request(SEARCH_URL, { ...common, currentPage: 1, dsPalavraChave: query, filtros: {},
+      opcaoFiltro: 1, pageLines: 20, sortColumns: '[1,PRODUTO,2]' });
+    if (!search.response.ok || !search.data || typeof search.data !== 'object' || !(search.data as JsonRecord).collections
+      || typeof (search.data as JsonRecord).collections !== 'object')
+      return failed('unavailable', 'invalid_search_response', search.response.status);
+    const products = new Map<string, JsonRecord>();
+    walkJson(search.data, record => {
+      if (/^LV\d{1,10}$/.test(record.cdProduto) && typeof record.dsProduto === 'string' && record.dsProduto.trim()
+        && !products.has(record.cdProduto) && products.size < 20) products.set(record.cdProduto, record);
+    });
+    function candidate(product: JsonRecord, detail: unknown, response: Response): TitleSearchCandidate {
+      const mapped = mapProductDetail({ data: detail, response }, product, '', start).book!;
+      const ids = [mapped.isbn10, mapped.isbn13].filter((id): id is string => typeof id === 'string' && !!canonicalBookIsbn(id));
+      const isbn10 = ids.map(cleanIsbn).find(id => id.length === 10), isbn13 = ids.map(cleanIsbn).find(id => id.length === 13);
+      const consistent = new Set(ids.map(canonicalBookIsbn)).size <= 1;
+      const book: BookInfo = { ...mapped, id: `curitiba:${product.cdProduto}`, title: mapped.title || product.dsProduto,
+        isbn10: consistent ? isbn10 : undefined, isbn13: consistent ? isbn13 : undefined,
+        curitibaTitleReference: { productId: product.cdProduto }, provider: 'Distribuidora Curitiba' };
+      if (consistent && (isbn13 || isbn10)) book.sourceLinks = curitibaProductLinks(findProduct(detail) || product, ids, isbn13 || isbn10!);
+      return { source: 'curitiba', key: product.cdProduto, book };
+    }
+    const candidates = [...products.values()].map(product => candidate(product, product, search.response));
+    const details = new Map<string, TitleSearchCandidate>();
+    return { status: candidates.length ? 'success' : 'not_found', candidates, diagnostic: { code: 'public_title_search', httpStatus: search.response.status },
+      async loadDetail(key, detailSignal) {
+        const product = products.get(key);
+        if (!product || detailSignal?.aborted) return null;
+        if (details.has(key)) return structuredClone(details.get(key)!);
+        try {
+          const detail = await request(DETAIL_URL, { ...common, cdProduto: key, cdCategoria: product.cdCategoria,
+            cdDepartamento: product.cdDepartamento, sortColumns: 'TB.CDCATEGORIA3 DESC, TB.CDCATEGORIA2 DESC, LOCALESTOQUE.NUORDEM, LOCALESTOQUE.DSLOCALESTOQUE' }, detailSignal);
+          const detailProduct = findProduct(detail.data);
+          if (!detail.response.ok || !detailProduct || detailProduct.cdProduto !== key || !detailProduct.dsProduto || detailSignal?.aborted) return null;
+          const selected = candidate(product, detail.data, detail.response);
+          const isbn = selected.book.isbn13 || selected.book.isbn10;
+          if (isbn && !selected.book.sourceLinks?.length) selected.book.sourceLinks = await loadCuritibaProductLink(selected.book, isbn, detailSignal);
+          if (detailSignal?.aborted) return null;
+          details.set(key, selected); return structuredClone(selected);
+        } catch { return null; }
+      } };
+  } catch { return failed('unavailable', 'transport_or_timeout'); }
+}

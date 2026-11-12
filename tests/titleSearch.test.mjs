@@ -86,13 +86,13 @@ test('title failures and incomplete upstream stay unavailable; client integrates
 
 const uiBundle = await build({ entryPoints: ['src/components/TitleSearch.tsx'], bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic', define: { 'import.meta.env.DEV': 'false', 'import.meta.env.ISBN_AMAZON_TITLE_PREVIEW': 'true' },
   plugins: [{ name: 'title-ui', setup(b) {
-    b.onResolve({ filter: /^(react|react\/jsx-runtime)$|\/services\/(googleBooks|amazonTitle)$/ }, args => ({ path: args.path, namespace: 'mock' }));
+    b.onResolve({ filter: /^(react|react\/jsx-runtime)$|\/services\/(googleBooks|amazonTitle|distribuidoraCuritiba)$/ }, args => ({ path: args.path, namespace: 'mock' }));
     b.onLoad({ filter: /.*/, namespace: 'mock' }, args => ({ contents: args.path === 'react' ? 'module.exports=deps.react'
-      : args.path === 'react/jsx-runtime' ? 'exports.jsx=exports.jsxs=(type,props)=>({type,props})' : args.path.endsWith('/amazonTitle') ? 'exports.searchAmazonByTitle=(...args)=>deps.amazonSearch(...args)' : 'exports.searchGoogleBooksByTitle=(...args)=>deps.search(...args)' }));
+      : args.path === 'react/jsx-runtime' ? 'exports.jsx=exports.jsxs=(type,props)=>({type,props})' : args.path.endsWith('/distribuidoraCuritiba') ? 'exports.searchCuritibaByTitle=(...args)=>deps.curitibaSearch(...args)' : args.path.endsWith('/amazonTitle') ? 'exports.searchAmazonByTitle=(...args)=>deps.amazonSearch(...args)' : 'exports.searchGoogleBooksByTitle=(...args)=>deps.search(...args)' }));
   } }] });
 function mountTitle(search, options = {}) {
   let cursor = 0, tree; const slots = [], confirmed = [], cleanups = [];
-  const deps = { search, amazonSearch: options.amazonSearch, react: {
+  const deps = { search, amazonSearch: options.amazonSearch, curitibaSearch: options.curitibaSearch || (async()=>({status:'not_found',candidates:[]})), react: {
     useState(value) { const i = cursor++; if (!(i in slots)) slots[i] = value; return [slots[i], next => { slots[i] = typeof next === 'function' ? next(slots[i]) : next; }]; },
     useRef(value) { const i = cursor++; return slots[i] ??= { current: value }; },
     useEffect(fn) { const i = cursor++; if (!(i in slots)) { slots[i] = true; cleanups.push(fn()); } },
@@ -108,7 +108,7 @@ const text = node => typeof node === 'string' || typeof node === 'number' ? Stri
 test('UI displays editions, disables future sources and requires selection plus confirmation', async () => {
   const view = mountTitle(async () => api.mapGoogleBooksTitleResponse(editions)); view.query('Título'); await view.submit();
   assert.equal(view.all().filter(n => n.type === 'article').length, 2);
-  for (const name of ['Amazon', 'Distribuidora Curitiba']) assert.equal(view.all().find(n => n.type === 'button' && text(n).includes(name)).props.disabled, true);
+  for (const name of ['Amazon']) assert.equal(view.all().find(n => n.type === 'button' && text(n).includes(name)).props.disabled, true);
   view.all().filter(n => n.type === 'button' && text(n) === 'Selecionar esta edição')[1].props.onClick({ currentTarget: { focus() {} } }); view.render();
   assert.equal(view.confirmed.length, 0);
   const dialog = view.all().find(n => n.type === 'dialog'); assert.ok(dialog);
@@ -175,4 +175,42 @@ test('Google failure does not block Amazon; production context does not call Ama
   view.query('Título');await view.submit();assert.equal(view.all().filter(n=>n.type==='article').length,1);
   let calls=0;const production=mountTitle(async()=>api.mapGoogleBooksTitleResponse(editions),{...development,environment:'production',amazonSearch:async()=>{calls++;}});
   production.query('Título');await production.submit();assert.equal(calls,0);
+});
+
+test('Curitiba keeps multiple candidates and loads only the manually selected edition before confirmation', async () => {
+  const candidates = [1, 2].map(n => ({ source: 'curitiba', key: `LV${n}`, book: { id: `curitiba:LV${n}`, title: `Edição ${n}`, provider: 'Distribuidora Curitiba' } }));
+  const calls = [];
+  const view = mountTitle(async () => ({ status: 'not_found', candidates: [] }), { curitibaSearch: async () => ({ status: 'success', candidates,
+    loadDetail: async key => { calls.push(key); return { ...candidates[1], book: { ...candidates[1].book, publisher: 'Editora selecionada' } }; } }) });
+  view.query('Obra'); await view.submit(); assert.equal(view.all().filter(n => n.type === 'article').length, 2); assert.deepEqual(calls, []);
+  view.all().filter(n => n.type === 'button' && text(n) === 'Selecionar esta edição')[1].props.onClick({ currentTarget: { focus() {} } });
+  await new Promise(resolve => setImmediate(resolve)); view.render(); assert.deepEqual(calls, ['LV2']);
+  assert.match(text(view.all().find(n => n.type === 'dialog')), /Editora selecionada/); assert.equal(view.confirmed.length, 0);
+  view.all().find(n => n.type === 'button' && text(n) === 'Confirmar edição e abrir cadastro').props.onClick();
+  assert.equal(view.confirmed[0].id, 'curitiba:LV2'); assert.equal(view.confirmed[0].publisher, 'Editora selecionada');
+});
+test('Curitiba list/detail failure cannot block another source or open an incomplete selected edition', async () => {
+  const candidate = { source: 'curitiba', key: 'LV1', book: { id: 'curitiba:LV1', title: 'Obra', provider: 'Distribuidora Curitiba' } };
+  const view = mountTitle(async () => api.mapGoogleBooksTitleResponse(editions), { curitibaSearch: async () => ({ status: 'success', candidates: [candidate], loadDetail: async () => null }) });
+  view.query('Obra'); await view.submit();
+  // Results settle independently: locate Curitiba by its source/key instead of relying on source arrival order.
+  const article = view.all().find(n => n.type === 'article' && text(n).includes('Distribuidora Curitiba'));
+  article.props.children.find(n => n?.type === 'button').props.onClick({ currentTarget: { focus() {} } });
+  await new Promise(resolve => setImmediate(resolve)); view.render();
+  assert.equal(view.confirmed.length, 0);
+  assert.equal(view.all().some(n => n.type === 'dialog'), false);
+  assert.equal(view.all().filter(n => n.type === 'article').length, 3);
+});
+test('pending Curitiba detail does not block Google selection or replace it when the late detail arrives', async () => {
+  let release;
+  const candidate = { source: 'curitiba', key: 'LV1', book: { id: 'curitiba:LV1', title: 'Curitiba late', provider: 'Distribuidora Curitiba' } };
+  const view = mountTitle(async () => api.mapGoogleBooksTitleResponse(editions), { curitibaSearch: async () => ({ status: 'success', candidates: [candidate], loadDetail: () => new Promise(resolve => { release = resolve; }) }) });
+  view.query('Obra'); await view.submit();
+  const articles = view.all().filter(n => n.type === 'article');
+  articles.find(article => text(article).includes('Distribuidora Curitiba')).props.children.find(n => n?.type === 'button').props.onClick({ currentTarget: { focus() {} } }); view.render();
+  const google = view.all().find(n => n.type === 'article' && text(n).includes('Google Books')).props.children.find(n => n?.type === 'button');
+  assert.equal(google.props.disabled, false); google.props.onClick({ currentTarget: { focus() {} } }); view.render();
+  release(candidate); await new Promise(resolve => setImmediate(resolve)); view.render();
+  assert.match(text(view.all().find(n => n.type === 'dialog')), /Google Books/);
+  assert.doesNotMatch(text(view.all().find(n => n.type === 'dialog')), /Curitiba late/);
 });

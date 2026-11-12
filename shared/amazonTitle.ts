@@ -3,6 +3,7 @@ import type { TitleSearchCandidate } from './googleBooks.js';
 import { canonicalBookIsbn, cleanIsbn } from '../src/utils/isbn.js';
 import { normalizeLanguage } from '../src/utils/bibliographicNormalization.js';
 import { normalizePublicationDate } from './publicationDate.js';
+import { amazonAuthorName, amazonCoverFormat } from './amazonBibliography.js';
 
 export type AmazonTitleResult = {
   status: 'success' | 'not_found' | 'unavailable' | 'invalid_query' | 'unauthorized' | 'rate_limited';
@@ -33,10 +34,10 @@ export function mapAmazonTitleResponse(payload: unknown): AmazonTitleResult {
     const book: BookInfo = { id: `amazon:${key}`, title: text(item.title)!, provider: 'Amazon SP-API',
       amazonTitleReference: { asin: item.asin, marketplaceId: item.marketplaceId }, provenance: {} };
     for (const [field, value] of Object.entries({ subtitle: text(item.subtitle), publisher: text(item.publisher),
-      edition: text(item.edition), language: normalizeLanguage(text(item.language)), format: text(item.binding),
+      edition: text(item.edition), language: normalizeLanguage(text(item.language)), format: amazonCoverFormat(item.binding),
       publishedDate: normalizePublicationDate(item.publicationDate) || undefined,
       pageCount: Number.isSafeInteger(item.pageCount) && item.pageCount > 0 ? item.pageCount : undefined,
-      authors: Array.isArray(item.authors) ? [...new Set(item.authors.map(text).filter(Boolean))] : undefined })) {
+      authors: Array.isArray(item.authors) ? [...new Set(item.authors.map(text).filter(Boolean).map(amazonAuthorName))] : undefined })) {
       if (value !== undefined && value !== '' && (!Array.isArray(value) || value.length)) {
         (book as any)[field] = value; book.provenance![field] = 'Amazon SP-API';
       }

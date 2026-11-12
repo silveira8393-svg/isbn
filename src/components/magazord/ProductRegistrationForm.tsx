@@ -17,6 +17,7 @@ import { formatPhysicalMeasurement, normalizeLanguage, roundPhysicalMeasurement 
 import RegistrationImage from '../dashboard/RegistrationImage';
 import { imageReferences } from '../../utils/imageUrls';
 import ProductIdentitySection from './ProductIdentitySection';
+import EditionReferenceLinks from '../EditionReferenceLinks';
 import MagazordProductLookup from './MagazordProductLookup';
 import CategoryAndBrandSection from './CategoryAndBrandSection';
 import { useMagazordCategories } from '../../hooks/useMagazordCategories';
@@ -426,6 +427,7 @@ export default function ProductRegistrationForm({
         onChange={onUpdateDraft}
         errors={errors}
       />
+      <EditionReferenceLinks book={originalBook} />
       <BibliographicSection variant="metadata" draft={draft} onChange={onUpdateDraft} errors={errors} />
       <ProductIdentitySection
         draft={draft}

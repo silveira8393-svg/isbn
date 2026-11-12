@@ -121,7 +121,7 @@ test('generic duplicates require independent edition anchors; arbitrary candidat
   t.mock.method(globalThis,'fetch',async()=>{calls++;return Response.json({isbn,items});});
   const result=await client.searchAmazonOfficial(isbn,user);
   assert.equal(result.status,'success');assert.equal(result.book.amazonCatalogReference.asin,duplicateFull.asin);
-  assert.equal(result.book.pageCount,320);assert.equal(result.book.format,'Capa dura');assert.equal(result.book.weight,500);
+  assert.equal(result.book.pageCount,320);assert.equal(result.book.format,'CD - Capa Dura');assert.equal(result.book.weight,500);
   assert.equal(result.book.coverUrl,duplicateFull.images[1].link);assert.equal(result.book.additionalImages,undefined);
   assert.equal(result.book.amazonImages.length,1);assert.equal(calls,1);assert.deepEqual(items,before);
  }
@@ -168,7 +168,7 @@ test('safe physical record fills gaps but preserves priority language/format, le
  const base={id:'priority',title:'Título prioritário',isbn13:isbn,language:'Português',publisher:'Editora prioritária',provenance:{language:'manual'}};
  const merged=client.complementWithAmazon(base,{...book,language:'Inglês'});
  assert.equal(merged.language,'Português');assert.equal(merged.title,base.title);assert.equal(merged.publisher,base.publisher);
- assert.equal(merged.provenance.language,'manual');assert.equal(merged.format,'Capa dura');assert.equal(merged.pageCount,320);
+ assert.equal(merged.provenance.language,'manual');assert.equal(merged.format,'CD - Capa Dura');assert.equal(merged.pageCount,320);
  for(const format of ['DIGITAL','Livro digital']){
   const digital=client.complementWithAmazon({...base,format,provenance:{format:'manual'}},book);
   assert.equal(digital.format,format);assert.equal(digital.provenance.format,'manual');assert.ok(digital.bibliographicWarnings.length);
@@ -185,7 +185,7 @@ test('reported edition-specific titles and paired ISBNs prove equivalence in eit
  for(const items of [mitologiaFixture.items,[...mitologiaFixture.items].reverse()]){
   t.mock.method(globalThis,'fetch',async()=>Response.json({...mitologiaFixture,items}));
   const result=await client.searchAmazonOfficial('8551003666',user);
-  assert.equal(result.status,'success');assert.deepEqual(result.book.authors,['Gaiman, Neil']);assert.equal(result.book.pageCount,288);assert.equal(result.candidates.length,2);
+  assert.equal(result.status,'success');assert.deepEqual(result.book.authors,['Neil Gaiman']);assert.equal(result.book.pageCount,288);assert.equal(result.candidates.length,2);
  }
  t.mock.method(globalThis,'fetch',async()=>Response.json({...mitologiaFixture,items:[mitologiaFixture.items[0]]}));
  const single=await client.searchAmazonOfficial('8551003666',user);assert.equal(single.status,'success');
@@ -275,7 +275,7 @@ test('safe generic duplicates reach Consulta and existing NOVO/USADO forms with 
  const view=mountApp({lab:async()=>({status:'interrompida'})});await view.search();view.render();
  assert.equal(view.find('ResearchSourcesPanel').props.states.amazon,'found');
  const book=view.find('BookDetailsCard').props.book;assert.equal(book.title,'Existing title');assert.equal(book.pageCount,320);
- assert.equal(book.format,'Capa dura');assert.equal(book.coverUrl,duplicateFull.images[1].link);
+ assert.equal(book.format,'CD - Capa Dura');assert.equal(book.coverUrl,duplicateFull.images[1].link);
  for(const condition of ['novo','usado']){
   view.find('MagazordStatusCard').props.onOpenRegistration(condition);view.render();
   const draft=view.find('ProductRegistrationForm').props.draft;
@@ -470,8 +470,8 @@ test('recorded Preview response for Jack Reacher retains bibliographic fields an
   t.after(() => { delete globalThis.__spapiSession; });
   t.mock.method(globalThis, 'fetch', async () => Response.json(response));
   const result = await client.searchAmazonOfficial(response.isbn, user);
-  assert.equal(result.book.title, 'Jack Reacher Boxed Set'); assert.deepEqual(result.book.authors, ['Child, Lee']);
-  assert.equal(result.book.language, 'Inglês'); assert.equal(result.book.format, 'Capa comum');
+  assert.equal(result.book.title, 'Jack Reacher Boxed Set'); assert.deepEqual(result.book.authors, ['Lee Child']);
+  assert.equal(result.book.language, 'Inglês'); assert.equal(result.book.format, 'CC - Capa Convencional');
   assert.equal(result.book.publishedDate, '2013-05-07'); assert.equal(result.book.year, '2013');
   assert.equal(api.createRegistrationDraft(client.complementWithAmazon(null, result.book)).year, '2013');
   assert.equal(result.book.publisher, undefined); assert.equal(result.book.coverUrl, undefined); assert.equal(result.book.synopsis, undefined);
@@ -527,7 +527,7 @@ test('client fills physical/bibliographic fields and authorized images in the ex
   t.after(() => { delete globalThis.__spapiSession; });
   t.mock.method(globalThis, 'fetch', async () => Response.json(payload));
   const { book } = await client.searchAmazonOfficial(isbn, user);
-  assert.equal(book.language, 'Inglês'); assert.equal(book.format, 'Capa comum'); assert.equal(book.weight, 1500); assert.equal(book.weightUnit, 'g');
+  assert.equal(book.language, 'Inglês'); assert.equal(book.format, 'CC - Capa Convencional'); assert.equal(book.weight, 1500); assert.equal(book.weightUnit, 'g');
   assert.equal(book.height, 20.32); assert.equal(book.width, 10); assert.equal(book.depth, 2); assert.equal(book.dimensionsUnit, 'cm');
   assert.deepEqual(book.amazonPhysical, payload.items[0].physical); assert.deepEqual(book.rawIdentifiers, payload.items[0].identifiers);
   const primary = { id: 'primary', title: 'Priority', authors: ['Priority Author'], publisher: 'Priority Press', pageCount: 200,
@@ -1192,7 +1192,7 @@ test('reported equivalent pair reaches all roles and NOVO/USADO while retaining 
   await view.search('8551003666');view.render();assert.equal(view.find('ResearchSourcesPanel').props.states.amazon,'found');
   const book=view.find('BookDetailsCard').props.book;
   for(const key of ['title','publisher','language','format','coverUrl','additionalImages'])assert.deepEqual(book[key],primary[key]);
-  assert.deepEqual(book.authors,['Gaiman, Neil']);assert.equal(book.pageCount,288);assert.equal(book.publishedDate,'2018-08-17');
+  assert.deepEqual(book.authors,['Neil Gaiman']);assert.equal(book.pageCount,288);assert.equal(book.publishedDate,'2018-08-17');
   assert.match(book.bibliographicWarnings.join(' '),/digital/);assert.equal(book.amazonCandidates.length,2);
   for(const condition of ['novo','usado']) {
    view.find('MagazordStatusCard').props.onOpenRegistration(condition);view.render();const draft=view.find('ProductRegistrationForm').props.draft;

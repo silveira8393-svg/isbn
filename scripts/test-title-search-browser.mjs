@@ -13,6 +13,8 @@ const cover = 'https://books.google.com/books/content?id=second&img=1';
 const images = [cover];
 const viewportWidth = process.argv.includes('--mobile') ? 390 : 1280;
 const amazon = process.argv.includes('--amazon');
+const curitiba = process.argv.includes('--curitiba');
+const externalSource = amazon || curitiba;
 const user = { id: '11111111-1111-4111-8111-111111111111', storeId: '22222222-2222-4222-8222-222222222222', role: amazon ? 'developer' : 'operator', active: true, name: 'Teste offline' };
 const bundle = await build({ stdin: { resolveDir: process.cwd(), loader: 'tsx', contents: `
 import React from 'react'; import { createRoot } from 'react-dom/client';
@@ -20,18 +22,28 @@ import App from './src/App'; import { mapGoogleBooksTitleResponse } from './shar
 window.__calls=[]; window.__errors=[]; window.__completed=[];
 window.addEventListener('error',event=>window.__errors.push(event.message));
 const payload={kind:'books#volumes',totalItems:20,items:[
- {id:'first',volumeInfo:{title:'Obra sintética',publisher:'Editora A',publishedDate:'2001',authors:['Autor A']}},
+ {id:'first',volumeInfo:{title:'Obra sintética',publisher:'Editora A',publishedDate:'2001',authors:['Autor A'],infoLink:'https://books.google.com/books?id=first'}},
  {id:'second',volumeInfo:{title:'Obra sintética',subtitle:'Edição revisada',publisher:'Editora B',publishedDate:'2020',imageLinks:{thumbnail:${JSON.stringify(cover)}},industryIdentifiers:[{type:'ISBN_10',identifier:'8550303623'}]}},
  ...Array.from({length:18},(_,i)=>({id:'other_'+i,volumeInfo:{title:'Outra edição '+i}}))
 ]};
 let scenario='multiple';
 window.fetch=async(url,init)=>{
  window.__calls.push(String(url));
+ if(String(url).startsWith('https://distribuidoracuritiba.com.br/up-server/public/service/')) {
+  if(String(url).endsWith('/auth/loginAcessoPublico'))return Response.json({sessionId:'synthetic-public-session',cdSistema:50,empresa:{cdEmpresa:1},cliente:{cdCliente:2},usuario:{cdUsuario:3}});
+  if(String(url).includes('/findAllByExampleByPages'))return scenario==='failure'?new Response('offline',{status:503}):Response.json({collections:!${curitiba}||scenario==='empty'?[]:[[
+   {cdProduto:'LV1',dsProduto:'Obra sintética',nuCdBarras:'9788550303628'},
+   {cdProduto:'LV2',dsProduto:'Obra sintética'}]]});
+  if(String(url).endsWith('/findProdutoByPrimaryKey')) {const key=JSON.parse(init.body).cdProduto;return Response.json({cdProduto:key,dsProduto:'Obra sintética',nuCdBarras:key==='LV1'?'9788550303628':undefined,
+   urlProduto:key==='LV1'?'https://www.distribuidoracuritiba.com.br/obra-LV1/p':undefined,
+   camposDinamicos:[{AD_DSEDITORA:key==='LV1'?'Editora Curitiba':'Editora Curitiba sem ISBN',AD_ANOEDICAO:key==='LV1'?'2024':'2023',AD_NUEDICAO:'2'}]});}
+  throw Error('Unexpected Curitiba request');
+ }
  if(${amazon} && String(url).startsWith('/api/amazon/spapi/catalog?title=') && init.method==='GET') {
   if(scenario==='failure')return new Response('offline',{status:503});
   return Response.json({query:decodeURIComponent(String(url).split('title=')[1]),hasMore:true,items:scenario==='empty'?[]:[
-   {source:'amazon_spapi_catalog_2022-04-01',marketplaceId:'A2Q3Y263D00KWC',asin:'ASIN000001',title:'Obra sint\u00e9tica',publisher:'Editora Amazon',publicationDate:'2024',edition:'2',isbn13:'9788550303628'},
-   {source:'amazon_spapi_catalog_2022-04-01',marketplaceId:'A2Q3Y263D00KWC',asin:'ASIN000002',title:'Obra sint\u00e9tica',publisher:'Editora Amazon sem ISBN',publicationDate:'2023'}
+   {source:'amazon_spapi_catalog_2022-04-01',marketplaceId:'A2Q3Y263D00KWC',asin:'ASIN000001',title:'Obra sint\u00e9tica',publisher:'Editora Amazon',publicationDate:'2024',edition:'2',isbn13:'9788550303628',binding:'paperback',authors:['Coelho, Paulo']},
+   {source:'amazon_spapi_catalog_2022-04-01',marketplaceId:'A2Q3Y263D00KWC',asin:'ASIN000002',title:'Obra sint\u00e9tica',publisher:'Editora Amazon sem ISBN',publicationDate:'2023',binding:'paperback',authors:['Coelho, Paulo']}
   ]});
  }
  if(!String(url).startsWith('/api/google-books?title=')||init.method!=='GET')throw Error('External/persistence forbidden');
@@ -58,9 +70,10 @@ async function run(){
    await wait(()=>section.textContent.includes(scenario==='empty'?'Nenhum resultado':'indisponível'),'failure state');
    check(section.querySelectorAll('article').length===0,'no stale cards');window.__completed.push(scenario);continue;
   }
-  await wait(()=>section.querySelectorAll('article').length===${amazon?22:20},'multiple cards');
-  for(const source of ${JSON.stringify(amazon?['Distribuidora Curitiba']:['Amazon','Distribuidora Curitiba'])})check([...section.querySelectorAll('button')].find(b=>b.textContent.includes(source)).disabled,'disabled '+source);
-  const trigger=section.querySelectorAll('article button')[scenario==='multiple'?${amazon?20:1}:${amazon?21:0}];trigger.focus();trigger.click();
+  await wait(()=>section.querySelectorAll('article').length===${externalSource?22:20},'multiple cards');
+  for(const source of ${JSON.stringify(amazon?[]:['Amazon'])})check([...section.querySelectorAll('button')].find(b=>b.textContent.includes(source)).disabled,'disabled '+source);
+  check(![...section.querySelectorAll('button')].find(b=>b.textContent.includes('Distribuidora Curitiba')).disabled,'Curitiba enabled');
+  const trigger=section.querySelectorAll('article button')[scenario==='multiple'?${externalSource?20:1}:${externalSource?21:0}];trigger.focus();trigger.click();
   await wait(()=>section.querySelector('dialog[open]'),'modal opens near selected edition');
   let dialog=section.querySelector('dialog[open]');
   check(dialog.matches(':modal'),'native modal with inert background');
@@ -70,10 +83,10 @@ async function run(){
   buttons[0].focus();await keyboard('Tab',true);check(dialog.contains(document.activeElement),'Shift+Tab stays inside modal');
   const box=dialog.getBoundingClientRect();check(box.left>=0&&box.right<=innerWidth&&box.top>=0&&box.bottom<=innerHeight,'responsive modal fits viewport');
   check(Math.abs((box.left+box.right)/2-document.documentElement.clientWidth/2)<3&&Math.abs((box.top+box.bottom)/2-innerHeight/2)<3,'centered modal in usable viewport');
-  if(scenario==='multiple'&&!${amazon})check(dialog.querySelector('img')?.src===${JSON.stringify(cover)},'cover reference in modal');
+  if(scenario==='multiple'&&!${externalSource})check(dialog.querySelector('img')?.src===${JSON.stringify(cover)},'cover reference in modal');
   click('Cancelar');await wait(()=>!section.querySelector('dialog'),'cancel closes modal');
   check(document.activeElement===trigger,'cancel restores selection trigger focus');
-  check(section.querySelectorAll('article').length===${amazon?22:20},'cancel preserves results');
+  check(section.querySelectorAll('article').length===${externalSource?22:20},'cancel preserves results');
   trigger.click();await wait(()=>section.querySelector('dialog[open]'),'reopen');await keyboard('Escape');
   await wait(()=>!section.querySelector('dialog'),'Escape closes modal');check(document.activeElement===trigger,'Escape restores focus');
   trigger.click();await wait(()=>section.querySelector('dialog[open]'),'confirm dialog');
@@ -82,14 +95,26 @@ async function run(){
   await wait(()=>field('title'),'existing registration form');
   check(window.__calls.length===callsBeforeConfirm,'confirm cannot query any source');
   check(field('title').value==='Obra sintética','mapped title');
-  check(field('publisher').value===(scenario==='multiple'?${JSON.stringify(amazon?'Editora Amazon':'Editora B')}:${JSON.stringify(amazon?'Editora Amazon sem ISBN':'Editora A')}),'selected publisher');
-  check(field('year').value===(scenario==='multiple'?'${amazon?2024:2020}':'${amazon?2023:2001}'),'selected edition year');
+  check(field('publisher').value===(scenario==='multiple'?${JSON.stringify(amazon?'Editora Amazon':curitiba?'Editora Curitiba':'Editora B')}:${JSON.stringify(amazon?'Editora Amazon sem ISBN':curitiba?'Editora Curitiba sem ISBN':'Editora A')}),'selected publisher');
+  check(field('year').value===(scenario==='multiple'?'${externalSource?2024:2020}':'${externalSource?2023:2001}'),'selected edition year');
   check(field('isbn13').value===(scenario==='multiple'?'9788550303628':''),'ISBN optional and canonical');
+  if(${amazon}) {
+   check(field('format').value==='CC - Capa Convencional','Amazon cover code');
+   check(field('authors').value==='Paulo Coelho','Amazon author order');
+   const reference=document.querySelector('section[aria-label="Referência da obra"] a');
+   check(reference?.href==='https://www.amazon.com.br/dp/'+(scenario==='multiple'?'ASIN000001':'ASIN000002'),'selected ASIN reference without ISBN');
+   check(reference.target==='_blank','reference opens separate tab');
+  }
   edit(field('title'),'Correção manual');await pause();check(field('title').value==='Correção manual','editable form');
+  const referenceUrl=document.querySelector('section[aria-label="Referência da obra"] a')?.href;
+  const historyButton=[...document.querySelectorAll('button')].find(button=>[...button.querySelectorAll('span')].some(span=>span.textContent==='Histórico'));
+  check(historyButton,'history navigation');historyButton.click();await wait(()=>document.querySelector('.isbn-history-page'),'history view');
+  if(referenceUrl)check([...document.querySelectorAll('.isbn-history-page a')].some(link=>link.href===referenceUrl),'source reference retained in history');
+  click('Cadastro');await wait(()=>field('title'),'return to existing draft');check(field('title').value==='Correção manual','history preserves manual draft');
   click('Consultar');await pause();click('Cadastro');await wait(()=>field('title'),'reopened form');
   check(field('title').value==='Correção manual','draft preserved');window.__completed.push(scenario);
  }
- check(window.__calls.length===${amazon?8:4},'exactly one title query per scenario');check(!window.__errors.length,'page errors');
+ check(window.__calls.length===${amazon?16:curitiba?14:12},'bounded title queries and selected detail only');check(!window.__errors.length,'page errors');
  return {ok:true,completed:window.__completed,viewport:innerWidth,mockedCalls:window.__calls.length,externalRequests:0,registrations:0,pageErrors:window.__errors};
 }
 run().then(result=>document.getElementById('result').textContent=JSON.stringify(result)).catch(error=>document.getElementById('result').textContent=JSON.stringify({ok:false,message:error.message,completed:window.__completed,calls:window.__calls,errors:window.__errors}));
