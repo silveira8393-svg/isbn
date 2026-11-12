@@ -11,6 +11,8 @@ const compiled = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts',
   export { default as catalog } from './api/amazon/spapi/catalog';
 ` }, bundle: true, write: false, metafile: true, platform: 'node', format: 'esm', target: 'node24' });
 const api = await import('data:text/javascript;base64,' + Buffer.from(compiled.outputFiles[0].text).toString('base64'));
+const titleBundle = await build({ entryPoints:['shared/amazonTitle.ts'], bundle:true, write:false, platform:'node', format:'esm' });
+const titleApi = await import('data:text/javascript;base64,' + Buffer.from(titleBundle.outputFiles[0].text).toString('base64'));
 const uid = '11111111-1111-4111-8111-111111111111', sid = api.PRIVATE_STORE_ID;
 const operationalStore='6058abd1-96e5-465b-a1df-292e5cf76de3';
 const env = { AMAZON_SPAPI_ENABLED: 'true', AMAZON_SPAPI_EXTERNAL_AUTH_APPROVED: 'true', AMAZON_SPAPI_ORIGIN: 'https://isbn.example.invalid',
@@ -47,7 +49,7 @@ function harness(settings = {}) {
       return Response.json(settings.tokens || tokens);
     }
     assert.equal(parsed.origin, 'https://sellingpartnerapi-na.amazon.com'); assert.equal(init.method, 'GET');
-    assert.equal(parsed.pathname, '/catalog/2022-04-01/items'); assert.equal(parsed.searchParams.get('identifiersType'), 'ISBN');
+    assert.equal(parsed.pathname, '/catalog/2022-04-01/items'); if (settings.keywords) { assert.equal(parsed.searchParams.get('keywords'), settings.keywords); assert.equal(parsed.searchParams.has('identifiers'), false); assert.equal(parsed.searchParams.has('identifiersType'), false); assert.equal(parsed.searchParams.get('pageSize'), '20'); assert.match(parsed.searchParams.get('includedData'), /productTypes/); } else assert.equal(parsed.searchParams.get('identifiersType'), 'ISBN');
     assert.equal(parsed.searchParams.get('marketplaceIds'), api.MARKETPLACE); assert.equal(init.headers['x-amz-access-token'], tokens.access_token);
     if (settings.catalogError) return new Response('sensitive-upstream-error', { status: settings.catalogError });
     return Response.json(settings.catalog || { numberOfResults: 1, items: [item] });
@@ -297,4 +299,52 @@ test('wrong method, unknown query and unknown path do not run authentication or 
     [h.request('catalog', { isbn, sellerId: 'OTHER' }), 400], [new Request(env.AMAZON_SPAPI_ORIGIN + '/api/amazon/oauth/other'), 404]])
     assert.equal((await h.handler(req.method === 'GET' && req.url.includes('catalog') ? 'catalog' : 'start')(req)).status, status);
   assert.equal(h.calls.length, 0);
+});
+
+// Title fixtures use the same production authorization/transport with no network requests.
+test('title catalog returns distinct ASIN editions, missing ISBN and strict bibliographic facts', async () => {
+  const h=harness({env:{NODE_ENV:'development'}, keywords:'O Alquimista', catalog:{numberOfResults:3,pagination:{nextToken:'synthetic-next'},items:[
+    {...item,asin:'ASIN000001',attributes:{...item.attributes,subtitle:[{value:'Subtítulo'}],edition:[{value:'2'}],publication_date:[{value:'2020-03-01'}],binding:[{value:'paperback'}],language:[{value:'por'}]}},
+    {...item,asin:'ASIN000002',attributes:{publisher:[{value:'Outra editora'}]}},
+    {asin:'ASIN000003',summaries:[{marketplaceId:api.MARKETPLACE,itemName:'Livro sem ISBN'}]}
+  ]}});
+  const response=await h.handler('catalog')(h.request('catalog',{title:'O Alquimista'}));assert.equal(response.status,200);
+  const body=await response.json(),result=titleApi.mapAmazonTitleResponse(body);
+  assert.equal(result.candidates.length,3);assert.equal(result.hasMore,true);
+  const [first,second,third]=result.candidates.map(c=>c.book);
+  assert.equal(first.edition,'2');assert.equal(first.year,2020);assert.equal(first.subtitle,'Subtítulo');assert.equal(first.pageCount,300);
+  assert.equal(first.isbn13,isbn);assert.equal(second.publisher,'Outra editora');assert.equal(second.authors,undefined);
+  assert.equal(third.isbn13,undefined);assert.equal(third.isbn10,undefined);assert.equal(third.publisher,undefined);
+  assert.equal(third.amazonTitleReference.asin,'ASIN000003');assert.equal(first.amazonTitleReference.marketplaceId,api.MARKETPLACE);
+  assert.equal(first.description,undefined);assert.equal(first.coverUrl,undefined);
+});
+test('title catalog is disabled outside development and rejects combined or repeated parameters before external calls', async () => {
+  for(const settings of [{NODE_ENV:'production'},{NODE_ENV:'development',VERCEL_ENV:'preview'},{NODE_ENV:'development',VERCEL_ENV:'production'},{}]){
+    const h=harness({env:settings});const response=await h.handler('catalog')(h.request('catalog',{title:'O Alquimista'}));
+    assert.equal(response.status,403);assert.equal(h.calls.length,0);
+  }
+  const h=harness({env:{NODE_ENV:'development'}});
+  for(const query of [{title:'O Alquimista',isbn},{title:'x'},{title:'x'.repeat(201)}]){
+    const response=await h.handler('catalog')(h.request('catalog',query));assert.ok([400,422].includes(response.status));
+  }
+  const repeated=new Request(env.AMAZON_SPAPI_ORIGIN+'/api/amazon/spapi/catalog?title=book&title=other');
+  assert.equal((await h.handler('catalog')(repeated)).status,400);assert.equal(h.calls.length,0);
+});
+test('title catalog honors existing authorization and sanitizes upstream errors including 429', async () => {
+  const revoked=harness({env:{NODE_ENV:'development'}});revoked.revoke();
+  assert.equal((await revoked.handler('catalog')(revoked.request('catalog',{title:'O Alquimista'}))).status,403);
+  assert.equal(revoked.calls.some(c=>c.url.includes('amazon.com')),false);
+  for(const [upstream,status,code] of [[429,429,'upstream_rate_limited'],[403,502,'upstream_authorization'],[503,502,'upstream_failure']]){
+    const h=harness({env:{NODE_ENV:'development'},keywords:'O Alquimista',catalogError:upstream});
+    const response=await h.handler('catalog')(h.request('catalog',{title:'O Alquimista'}));assert.equal(response.status,status);
+    assert.equal((await response.json()).code,code);if(status===429)assert.equal(response.headers.get('retry-after'),'2');
+  }
+});
+test('title catalog handles empty and malformed replies without inventing metadata or merging ISBNs', async()=>{
+  for(const [catalog,status] of [[{numberOfResults:0,items:[]},200],[{},502],[{numberOfResults:21,items:Array(21).fill(item)},502]]){
+    const h=harness({env:{NODE_ENV:'development'},keywords:'O Alquimista',catalog});const response=await h.handler('catalog')(h.request('catalog',{title:'O Alquimista'}));assert.equal(response.status,status);
+    if(status===200)assert.equal(titleApi.mapAmazonTitleResponse(await response.json()).status,'not_found');
+  }
+  const result=titleApi.mapAmazonTitleResponse({query:'book',items:[{source:'amazon_spapi_catalog_2022-04-01',asin:'ASIN000001',marketplaceId:api.MARKETPLACE,title:'Book',isbn10:'8535914846',isbn13:'9788584396375'}]});
+  assert.equal(result.candidates[0].book.isbn13,undefined);assert.equal(result.candidates[0].book.isbn10,undefined);
 });

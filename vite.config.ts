@@ -5,13 +5,25 @@ import {defineConfig, loadEnv} from 'vite';
 import { createGoogleBooksFunction } from './server/googleBooksFunction';
 import { createMagazordCategoriesFunction } from './server/magazordCategories';
 import { createMagazordProductsFunction } from './server/magazordProducts';
+import { createSpapiHandler } from './server/spapi/handler';
 
 export default defineConfig(({ mode }) => {
+  const amazon = createSpapiHandler('catalog', { env: { ...loadEnv(mode, process.cwd(), ['AMAZON_SPAPI_', 'SUPABASE_', 'VITE_SUPABASE_']), ...process.env,
+    NODE_ENV: mode === 'development' ? 'development' : 'production' } });
   const googleBooks = createGoogleBooksFunction({ env: { ...loadEnv(mode, process.cwd(), 'GOOGLE_BOOKS_'), ...process.env } });
   const categories = createMagazordCategoriesFunction({ env: { ...loadEnv(mode, process.cwd(), ['MAGAZORD_', 'SUPABASE_', 'VITE_SUPABASE_']), ...process.env } });
   const products = createMagazordProductsFunction({ env: { ...loadEnv(mode, process.cwd(), ['MAGAZORD_', 'SUPABASE_', 'VITE_SUPABASE_']), ...process.env } });
   return {
     plugins: [react(), tailwindcss(), { name: 'google-books-local-api', configureServer(server) {
+      server.middlewares.use('/api/amazon/spapi/catalog', async (req, res) => {
+        const headers = new Headers();
+        for (const key of ['origin', 'sec-fetch-site', 'authorization', 'x-isbn-store-id']) if (typeof req.headers[key] === 'string') headers.set(key, req.headers[key]);
+        // Keep the existing HTTPS origin allowlist; never trust forwarded host/protocol headers.
+        const protocol = 'encrypted' in req.socket && req.socket.encrypted ? 'https://' : 'http://';
+        const result = await amazon(new Request(protocol + (req.headers.host || 'localhost:3000') + (req.originalUrl || '/api/amazon/spapi/catalog'), { method: req.method, headers }));
+        res.statusCode = result.status; result.headers.forEach((value, key) => res.setHeader(key, value));
+        res.end(await result.text());
+      });
       server.middlewares.use('/api/magazord/products', async (req, res) => {
         const headers = new Headers();
         for (const key of ['origin', 'sec-fetch-site', 'authorization', 'x-isbn-store-id']) if (typeof req.headers[key] === 'string') headers.set(key, req.headers[key]);

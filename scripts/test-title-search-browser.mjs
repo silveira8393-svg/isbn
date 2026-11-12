@@ -12,7 +12,8 @@ await access(browser);
 const cover = 'https://books.google.com/books/content?id=second&img=1';
 const images = [cover];
 const viewportWidth = process.argv.includes('--mobile') ? 390 : 1280;
-const user = { id: '11111111-1111-4111-8111-111111111111', storeId: '22222222-2222-4222-8222-222222222222', role: 'operator', active: true, name: 'Teste offline' };
+const amazon = process.argv.includes('--amazon');
+const user = { id: '11111111-1111-4111-8111-111111111111', storeId: '22222222-2222-4222-8222-222222222222', role: amazon ? 'developer' : 'operator', active: true, name: 'Teste offline' };
 const bundle = await build({ stdin: { resolveDir: process.cwd(), loader: 'tsx', contents: `
 import React from 'react'; import { createRoot } from 'react-dom/client';
 import App from './src/App'; import { mapGoogleBooksTitleResponse } from './shared/googleBooks';
@@ -26,6 +27,13 @@ const payload={kind:'books#volumes',totalItems:20,items:[
 let scenario='multiple';
 window.fetch=async(url,init)=>{
  window.__calls.push(String(url));
+ if(${amazon} && String(url).startsWith('/api/amazon/spapi/catalog?title=') && init.method==='GET') {
+  if(scenario==='failure')return new Response('offline',{status:503});
+  return Response.json({query:decodeURIComponent(String(url).split('title=')[1]),hasMore:true,items:scenario==='empty'?[]:[
+   {source:'amazon_spapi_catalog_2022-04-01',marketplaceId:'A2Q3Y263D00KWC',asin:'ASIN000001',title:'Obra sint\u00e9tica',publisher:'Editora Amazon',publicationDate:'2024',edition:'2',isbn13:'9788550303628'},
+   {source:'amazon_spapi_catalog_2022-04-01',marketplaceId:'A2Q3Y263D00KWC',asin:'ASIN000002',title:'Obra sint\u00e9tica',publisher:'Editora Amazon sem ISBN',publicationDate:'2023'}
+  ]});
+ }
  if(!String(url).startsWith('/api/google-books?title=')||init.method!=='GET')throw Error('External/persistence forbidden');
  if(scenario==='failure')return new Response('offline',{status:503});
  return Response.json(mapGoogleBooksTitleResponse(scenario==='empty'?{kind:'books#volumes',totalItems:0}:payload));
@@ -50,9 +58,9 @@ async function run(){
    await wait(()=>section.textContent.includes(scenario==='empty'?'Nenhum resultado':'indisponível'),'failure state');
    check(section.querySelectorAll('article').length===0,'no stale cards');window.__completed.push(scenario);continue;
   }
-  await wait(()=>section.querySelectorAll('article').length===20,'multiple cards');
-  for(const source of ['Amazon','Distribuidora Curitiba'])check([...section.querySelectorAll('button')].find(b=>b.textContent.includes(source)).disabled,'disabled '+source);
-  const trigger=section.querySelectorAll('article button')[scenario==='multiple'?1:0];trigger.focus();trigger.click();
+  await wait(()=>section.querySelectorAll('article').length===${amazon?22:20},'multiple cards');
+  for(const source of ${JSON.stringify(amazon?['Distribuidora Curitiba']:['Amazon','Distribuidora Curitiba'])})check([...section.querySelectorAll('button')].find(b=>b.textContent.includes(source)).disabled,'disabled '+source);
+  const trigger=section.querySelectorAll('article button')[scenario==='multiple'?${amazon?20:1}:${amazon?21:0}];trigger.focus();trigger.click();
   await wait(()=>section.querySelector('dialog[open]'),'modal opens near selected edition');
   let dialog=section.querySelector('dialog[open]');
   check(dialog.matches(':modal'),'native modal with inert background');
@@ -62,10 +70,10 @@ async function run(){
   buttons[0].focus();await keyboard('Tab',true);check(dialog.contains(document.activeElement),'Shift+Tab stays inside modal');
   const box=dialog.getBoundingClientRect();check(box.left>=0&&box.right<=innerWidth&&box.top>=0&&box.bottom<=innerHeight,'responsive modal fits viewport');
   check(Math.abs((box.left+box.right)/2-document.documentElement.clientWidth/2)<3&&Math.abs((box.top+box.bottom)/2-innerHeight/2)<3,'centered modal in usable viewport');
-  if(scenario==='multiple')check(dialog.querySelector('img')?.src===${JSON.stringify(cover)},'cover reference in modal');
+  if(scenario==='multiple'&&!${amazon})check(dialog.querySelector('img')?.src===${JSON.stringify(cover)},'cover reference in modal');
   click('Cancelar');await wait(()=>!section.querySelector('dialog'),'cancel closes modal');
   check(document.activeElement===trigger,'cancel restores selection trigger focus');
-  check(section.querySelectorAll('article').length===20,'cancel preserves results');
+  check(section.querySelectorAll('article').length===${amazon?22:20},'cancel preserves results');
   trigger.click();await wait(()=>section.querySelector('dialog[open]'),'reopen');await keyboard('Escape');
   await wait(()=>!section.querySelector('dialog'),'Escape closes modal');check(document.activeElement===trigger,'Escape restores focus');
   trigger.click();await wait(()=>section.querySelector('dialog[open]'),'confirm dialog');
@@ -74,22 +82,22 @@ async function run(){
   await wait(()=>field('title'),'existing registration form');
   check(window.__calls.length===callsBeforeConfirm,'confirm cannot query any source');
   check(field('title').value==='Obra sintética','mapped title');
-  check(field('publisher').value===(scenario==='multiple'?'Editora B':'Editora A'),'selected publisher');
-  check(field('year').value===(scenario==='multiple'?'2020':'2001'),'selected edition year');
+  check(field('publisher').value===(scenario==='multiple'?${JSON.stringify(amazon?'Editora Amazon':'Editora B')}:${JSON.stringify(amazon?'Editora Amazon sem ISBN':'Editora A')}),'selected publisher');
+  check(field('year').value===(scenario==='multiple'?'${amazon?2024:2020}':'${amazon?2023:2001}'),'selected edition year');
   check(field('isbn13').value===(scenario==='multiple'?'9788550303628':''),'ISBN optional and canonical');
   edit(field('title'),'Correção manual');await pause();check(field('title').value==='Correção manual','editable form');
   click('Consultar');await pause();click('Cadastro');await wait(()=>field('title'),'reopened form');
   check(field('title').value==='Correção manual','draft preserved');window.__completed.push(scenario);
  }
- check(window.__calls.length===4,'exactly one title query per scenario');check(!window.__errors.length,'page errors');
+ check(window.__calls.length===${amazon?8:4},'exactly one title query per scenario');check(!window.__errors.length,'page errors');
  return {ok:true,completed:window.__completed,viewport:innerWidth,mockedCalls:window.__calls.length,externalRequests:0,registrations:0,pageErrors:window.__errors};
 }
 run().then(result=>document.getElementById('result').textContent=JSON.stringify(result)).catch(error=>document.getElementById('result').textContent=JSON.stringify({ok:false,message:error.message,completed:window.__completed,calls:window.__calls,errors:window.__errors}));
-` }, bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic', define: { 'import.meta.env': '{}', 'process.env.NODE_ENV': '"development"' },
+` }, bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic', define: { 'import.meta.env': JSON.stringify({DEV:amazon}), 'process.env.NODE_ENV': '"development"' },
   plugins: [{ name: 'offline-boundaries', setup(b) {
     const mocks = [
-      [/contexts\/UserContext$/, `export const useUser=()=>({currentUser:${JSON.stringify(user)},canViewProduction:false,canViewSettings:false,operationEnvironment:'production'});`],
-      [/lib\/supabase(?:\.js)?$/, `export const supabaseUrl='https://database.invalid';export const supabase={auth:{getSession:async()=>({data:{session:null}})},from:()=>{throw Error('Persistence forbidden')}};`],
+      [/contexts\/UserContext$/, `export const useUser=()=>({currentUser:${JSON.stringify(user)},canViewProduction:false,canViewSettings:false,operationEnvironment:'${amazon?'development':'production'}'});`],
+      [/lib\/supabase(?:\.js)?$/, `export const supabaseUrl='https://database.invalid';export const supabase={auth:{getSession:async()=>({data:{session:{access_token:"synthetic-session"}}})},from:()=>{throw Error('Persistence forbidden')}};`],
       [/hooks\/useOperationAudit$/, `export const useOperationAudit=()=>({saveOperation:()=>{throw Error('Persistence forbidden')},pending:[],saving:0,retry:()=>{}});`],
       [/hooks\/useLocalHistory$/, `import{useState}from'react';export const useLocalHistory=()=>{const[history,setHistory]=useState([]);return{history,setHistory,clearHistory:()=>setHistory([])}};`],
     ];

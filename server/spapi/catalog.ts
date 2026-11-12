@@ -43,15 +43,15 @@ function physicalDimensions(value: any): PhysicalDimensions {
   return result;
 }
 // Strict projection: never return raw attributes, seller information, offers, prices or inventory.
-export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, fetcher: typeof fetch, isbn: string, access: string) {
+export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, fetcher: typeof fetch, isbn: string, access: string, keywords?: string) {
   const url = new URL('https://sellingpartnerapi-na.amazon.com/catalog/2022-04-01/items');
-  url.search = new URLSearchParams({ identifiers: isbn, identifiersType: 'ISBN', marketplaceIds: MARKETPLACE,
-    includedData: 'summaries,attributes,identifiers,dimensions,images,classifications', pageSize: '20' }).toString();
+  url.search = new URLSearchParams({ ...(keywords ? { keywords } : { identifiers: isbn, identifiersType: 'ISBN' }), marketplaceIds: MARKETPLACE,
+    includedData: 'summaries,attributes,identifiers,dimensions,images,classifications' + (keywords ? ',productTypes' : ''), pageSize: '20' }).toString();
   const data = await jsonRequest(fetcher, url, { method: 'GET', headers: { 'x-amz-access-token': access,
     'x-amz-date': new Date().toISOString().replace(/[:-]|\.\d{3}/g, ''), 'User-Agent': 'ISBN/1.0 (Language=TypeScript)', Accept: 'application/json' } });
   if (!data || !Array.isArray(data.items) || data.items.length > 20 || !Number.isInteger(data.numberOfResults) || data.numberOfResults < 0) fail(502, 'invalid_catalog_response');
   const text = (value: unknown): string | null => typeof value === 'string' && value.trim() && value.length <= 10000 ? value.trim() : null;
-  const matching = data.items.filter((item: any) => Array.isArray(item?.identifiers) && item.identifiers.some((group: any) => group?.marketplaceId === MARKETPLACE
+  const matching = data.items.filter((item: any) => keywords ? /^[A-Z0-9]{10}$/.test(item?.asin) : Array.isArray(item?.identifiers) && item.identifiers.some((group: any) => group?.marketplaceId === MARKETPLACE
     && Array.isArray(group.identifiers) && group.identifiers.some((id: any) => ['ISBN', 'EAN', 'GTIN'].includes(id?.identifierType)
       && matchesIsbn(id.identifier, isbn))));
   const items = matching.map((item: any) => {
@@ -70,11 +70,14 @@ export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, f
     const authors = attr('author').map((a: any) => text(a.name) || text(a.value)).filter(Boolean);
     if (!authors.length && Array.isArray(summary?.contributors)) authors.push(...summary.contributors
       .filter((c: any) => c?.role?.value === 'author').map((c: any) => text(c.value)).filter(Boolean));
-    const reportedIdentifiers = (item.identifiers as any[]).filter(g => g?.marketplaceId === MARKETPLACE && Array.isArray(g.identifiers)).flatMap(g => g.identifiers)
-      .filter(id => ['ISBN', 'EAN', 'GTIN'].includes(id?.identifierType)).map(id => id.identifier);
+    const reportedIdentifiers = (Array.isArray(item.identifiers) ? item.identifiers : []).filter((g: any) => g?.marketplaceId === MARKETPLACE && Array.isArray(g.identifiers)).flatMap((g: any) => g.identifiers)
+      .filter((id: any) => ['ISBN', 'EAN', 'GTIN'].includes(id?.identifierType)).map((id: any) => id.identifier);
     reportedIdentifiers.push(...attr('externally_assigned_product_identifier').filter((id: any) => typeof id.type === 'string' && ['isbn', 'ean', 'gtin'].includes(id.type.toLowerCase())).map((id: any) => id.value));
     for (const key of ['isbn', 'isbn_10', 'isbn_13']) reportedIdentifiers.push(...attr(key).map((id: any) => id.value));
-    const identifiers = reportedIdentifiers.filter(id => matchesIsbn(id, isbn)).map(id => {
+    const identifiers = reportedIdentifiers.filter((id: unknown) => {
+      if (!keywords) return matchesIsbn(id, isbn);
+      try { return typeof id === 'string' && Boolean(normalizeIsbn(id)); } catch { return false; }
+    }).map((id: string) => {
       const identifier = normalizeIsbn(id);
       return { type: identifier.length === 10 ? 'ISBN_10' : 'ISBN_13', identifier };
     });
@@ -102,6 +105,7 @@ export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, f
       } catch { return null; }
     };
     return { asin: text(item.asin), isbn, title: text(summary?.itemName) || value('item_name'),
+      ...(keywords ? { subtitle: value('subtitle') } : {}),
       ...(browseClassification ? { browseClassification } : {}), ...(classifications.length ? { classifications } : {}),
       authors: [...new Set(authors)], publisher: value('publisher') || value('publisher_name'),
       publicationDate: normalizePublicationDate(value('publication_date')) || normalizePublicationDate(value('street_date')) || null,
@@ -122,5 +126,5 @@ export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, f
         .map((image: any) => ({ variant: image.variant, link: imageUrl(image.link), width: pixels(image.width), height: pixels(image.height) }))
         .filter((image: any) => image.link), source: 'amazon_spapi_catalog_2022-04-01', marketplaceId: MARKETPLACE };
   });
-  return { isbn, items, hasMore: Boolean(data.pagination?.nextToken), requiresReview: true };
+  return { ...(keywords ? { query: keywords } : { isbn }), items, hasMore: Boolean(data.pagination?.nextToken), requiresReview: true };
 }

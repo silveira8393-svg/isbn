@@ -84,21 +84,21 @@ test('title failures and incomplete upstream stay unavailable; client integrates
   assert.equal((await api.searchGoogleBooksByTitle('Título de teste', controller.signal)).status, 'unavailable');
 });
 
-const uiBundle = await build({ entryPoints: ['src/components/TitleSearch.tsx'], bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic',
+const uiBundle = await build({ entryPoints: ['src/components/TitleSearch.tsx'], bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic', define: { 'import.meta.env.DEV': 'true' },
   plugins: [{ name: 'title-ui', setup(b) {
-    b.onResolve({ filter: /^(react|react\/jsx-runtime)$|\/services\/googleBooks$/ }, args => ({ path: args.path, namespace: 'mock' }));
+    b.onResolve({ filter: /^(react|react\/jsx-runtime)$|\/services\/(googleBooks|amazonTitle)$/ }, args => ({ path: args.path, namespace: 'mock' }));
     b.onLoad({ filter: /.*/, namespace: 'mock' }, args => ({ contents: args.path === 'react' ? 'module.exports=deps.react'
-      : args.path === 'react/jsx-runtime' ? 'exports.jsx=exports.jsxs=(type,props)=>({type,props})' : 'exports.searchGoogleBooksByTitle=(...args)=>deps.search(...args)' }));
+      : args.path === 'react/jsx-runtime' ? 'exports.jsx=exports.jsxs=(type,props)=>({type,props})' : args.path.endsWith('/amazonTitle') ? 'exports.searchAmazonByTitle=(...args)=>deps.amazonSearch(...args)' : 'exports.searchGoogleBooksByTitle=(...args)=>deps.search(...args)' }));
   } }] });
-function mountTitle(search) {
+function mountTitle(search, options = {}) {
   let cursor = 0, tree; const slots = [], confirmed = [], cleanups = [];
-  const deps = { search, react: {
-    useState(value) { const i = cursor++; if (!(i in slots)) slots[i] = value; return [slots[i], next => { slots[i] = next; }]; },
+  const deps = { search, amazonSearch: options.amazonSearch, react: {
+    useState(value) { const i = cursor++; if (!(i in slots)) slots[i] = value; return [slots[i], next => { slots[i] = typeof next === 'function' ? next(slots[i]) : next; }]; },
     useRef(value) { const i = cursor++; return slots[i] ??= { current: value }; },
     useEffect(fn) { const i = cursor++; if (!(i in slots)) { slots[i] = true; cleanups.push(fn()); } },
   } };
   const module = { exports: {} }; new Function('deps', 'module', 'exports', uiBundle.outputFiles[0].text)(deps, module, module.exports);
-  const render = () => { cursor = 0; tree = module.exports.default({ onConfirm: book => confirmed.push(book) }); };
+  const render = () => { cursor = 0; tree = module.exports.default({ onConfirm: book => confirmed.push(book), ...options }); };
   const nodes = node => !node || typeof node !== 'object' ? [] : Array.isArray(node) ? node.flatMap(nodes) : [node, ...nodes(node.props?.children)];
   render(); return { render, confirmed, all: () => nodes(tree), unmount: () => cleanups.forEach(fn => fn?.()),
     query(value) { nodes(tree).find(n => n.type === 'input').props.onChange({ target: { value } }); render(); },
@@ -144,4 +144,35 @@ test('UI discards late results after query edit or unmount', async () => {
   assert.equal(view.all().filter(n => n.type === 'article').length, 0);
   await view.submit(); view.unmount(); assert.equal(signal.aborted, true);
   resolve(api.mapGoogleBooksTitleResponse(editions));
+});
+
+const development = { user: { id: 'synthetic', active: true, role: 'developer', storeId: 'synthetic-store' }, environment: 'development' };
+const amazonCandidate = { source: 'amazon', key: 'br:ASIN000001', book: { id: 'amazon:br:ASIN000001', title: 'Edição Amazon', publisher: 'Editora Amazon', provider: 'Amazon SP-API', edition: '2', amazonTitleReference: { asin: 'ASIN000001', marketplaceId: 'A2Q3Y263D00KWC' } } };
+test('Amazon development results coexist with Google, select their own edition through existing modal', async () => {
+  const view = mountTitle(async () => api.mapGoogleBooksTitleResponse(editions), { ...development, amazonSearch: async () => ({status:'success', candidates:[amazonCandidate]}) });
+  view.query('Título'); await view.submit();
+  assert.equal(view.all().find(n => n.type === 'button' && text(n) === 'Amazon').props.disabled, false);
+  assert.equal(view.all().filter(n => n.type === 'article').length, 3);
+  const article = view.all().find(n => n.type === 'article' && text(n).includes('Edição Amazon'));
+  const button = article.props.children.find(n => n?.type === 'button'); button.props.onClick({currentTarget:{focus(){}}}); view.render();
+  assert.match(text(view.all().find(n => n.type === 'dialog')), /Editora Amazon/);
+  view.all().find(n => n.type === 'button' && text(n) === 'Confirmar edição e abrir cadastro').props.onClick();
+  assert.deepEqual(view.confirmed[0], amazonCandidate.book);
+});
+test('Amazon failure or pending request never prevents Google selection and confirmation', async () => {
+  for (const status of ['unauthorized','rate_limited','unavailable','pending']) {
+    const view = mountTitle(async () => api.mapGoogleBooksTitleResponse(editions), { ...development, amazonSearch: async () => status === 'pending' ? new Promise(()=>{}) : ({status,candidates:[]}) });
+    view.query('Título'); await view.submit();
+    assert.equal(view.all().filter(n=>n.type==='article').length,2);
+    const button=view.all().find(n=>n.type==='button' && text(n)==='Selecionar esta edição');
+    assert.equal(button.props.disabled,false);button.props.onClick({currentTarget:{focus(){}}});view.render();
+    view.all().find(n=>n.type==='button' && text(n)==='Confirmar edição e abrir cadastro').props.onClick();
+    assert.equal(view.confirmed.length,1);view.unmount();
+  }
+});
+test('Google failure does not block Amazon; production context does not call Amazon', async () => {
+  const view=mountTitle(async()=>{throw Error('offline');},{...development,amazonSearch:async()=>({status:'success',candidates:[amazonCandidate]})});
+  view.query('Título');await view.submit();assert.equal(view.all().filter(n=>n.type==='article').length,1);
+  let calls=0;const production=mountTitle(async()=>api.mapGoogleBooksTitleResponse(editions),{...development,environment:'production',amazonSearch:async()=>{calls++;}});
+  production.query('Título');await production.submit();assert.equal(calls,0);
 });

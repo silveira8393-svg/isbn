@@ -812,7 +812,7 @@ export default function App() {
             <button type="button" disabled={isLoading} aria-pressed={searchMode === 'isbn'} onClick={() => setSearchMode('isbn')} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700">Por ISBN</button>
             <button type="button" disabled={isLoading} aria-pressed={searchMode === 'title'} onClick={() => setSearchMode('title')} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700">Por título</button>
           </div>
-          {searchMode === 'title' && activeTab === 'consultar' && <div key={`${currentUser.id}:${currentUser.storeId}:${currentUser.role}:${currentUser.active}:${operationEnvironment}`}><TitleSearch onConfirm={handleConfirmTitleResult} disabled={isLoading} /></div>}
+          {searchMode === 'title' && activeTab === 'consultar' && <div key={`${currentUser.id}:${currentUser.storeId}:${currentUser.role}:${currentUser.active}:${operationEnvironment}`}><TitleSearch user={currentUser} environment={operationEnvironment} onConfirm={handleConfirmTitleResult} disabled={isLoading} /></div>}
           {searchMode === 'isbn' && <>
           <SearchForm
             onSearch={handleSearch}

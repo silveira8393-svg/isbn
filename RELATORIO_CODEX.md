@@ -1649,3 +1649,31 @@ Runtime reutilizado do cache já instalado: **Node 24.22.2**; nenhuma dependênc
 - Após comprovação, o menor ensaio é uma única chamada oficial com LWA existente, keywords `O Alquimista`, marketplace Brasil, pageSize 10 e os datasets solicitados, sem identifiers e sem alterar controles de acesso. Implementação/paginação permanecem posteriores ao sucesso desse ensaio.
 - O modal utiliza HTMLDialogElement.showModal e foi validado no Edge atual. Homologação humana com tecnologias assistivas e nos navegadores móveis usados pela equipe continua recomendada.
 - Publicação limitada à branch exclusiva de desenvolvimento, incluindo apenas o modal autorizado e seu diagnóstico. Nenhum merge, promoção ou alteração de produção, ambiente, proteção de Preview, Supabase ou Magazord. O resultado do push/Preview será registrado após a operação, em atualização documental.
+
+## Amazon SP-API por título — implementação local (2026-11-11)
+
+- Branch: `feature/isbn-amazon-titulo-etapa2`; base analisada: `4518ec72117e1332b4616e929f261a0291f50470`. Havia somente a atualização documental anterior deste relatório, preservada fora do novo commit funcional.
+- Rota oficial existente aceita `title` ou `isbn`, exclusivamente. Título usa `searchCatalogItems`, `keywords`, marketplace Brasil, `pageSize=20`, LWA e autorização existentes. Consulta ISBN preservada; sem fallback ou extração HTML.
+- Título é bloqueado no servidor fora de `NODE_ENV=development` e em Preview/produção Vercel. Cliente exige build de desenvolvimento, ambiente operacional de desenvolvimento, usuário desenvolvedor ativo e loja selecionada. Autorização efetiva permanece validada no servidor.
+- Candidatos separados por fonte, marketplace e ASIN; campos bibliográficos disponíveis, ISBNs validados, avisos de ausência/conflito, capa somente de referência. Não presume ISBN exclusivo por ASIN. Dados de produtos/fontes diferentes não são concatenados.
+- Aba Todos reúne Google Books e Amazon; respostas independentes permitem selecionar Google mesmo com Amazon pendente/falhando. Modal existente e formulário atual reaproveitados, sem cadastro automático.
+- Erros de autorização, 429, transporte, resposta incompleta e ausência de resultados possuem tratamento. Primeiros 20 candidatos; quando houver mais, a interface solicita refinar o título, sem novas chamadas automáticas.
+
+Arquivos desta entrega:
+
+- `server/spapi/catalog.ts`, `server/spapi/handler.ts`: palavras-chave, projeção e restrição de desenvolvimento.
+- `shared/amazonTitle.ts`, `src/services/amazonTitle.ts`, `src/types.ts`: contrato, normalização, identidade, sessão existente e cliente oficial.
+- `src/components/TitleSearch.tsx`, `src/App.tsx`: abas, fontes independentes, contexto de desenvolvimento e seleção existente.
+- `vite.config.ts`: encaminhamento local para o mesmo handler, mantendo a lista de origens HTTPS autorizadas.
+- `tests/amazonTitle.test.mjs`, `tests/titleSearch.test.mjs`, `tests/spapiOfficial.test.mjs`, `scripts/test-title-search-browser.mjs`: testes simulados focados e opção `--amazon` no teste de navegador existente.
+- `RELATORIO_CODEX.md`: este registro.
+
+Validação com Node **24.22.2**:
+
+- `node --test --test-concurrency=1 tests/amazonTitle.test.mjs tests/titleSearch.test.mjs`: **15/15 aprovados**.
+- `node --test --test-concurrency=1 --test-name-pattern='title|catalog|equivalent ISBN|all four' tests/spapiOfficial.test.mjs`: **8/8 aprovados**, incluindo regressão ISBN e isolamento do servidor oficial.
+- `tsc --noEmit`: aprovado. `vite build`: aprovado; avisos de bundle grande e importação estática/dinâmica da biblioteca de sessão, sem falhas.
+- `node scripts/test-title-search-browser.mjs --amazon`: aprovado no Edge, 1280 px; múltiplas edições, sem ISBN, vazio, falha, foco/Tab/Escape/cancelamento, confirmação no cadastro atual e edição manual. **8 respostas simuladas, zero consultas externas, zero cadastros, zero erros de página**. Controle CDP exigiu execução fora do sandbox; teste permaneceu isolado e com rede bloqueada.
+- Revisão React: requisições concorrentes e independentes, atualizações funcionais de estado, descarte de respostas antigas, identidade por fonte e modal acessível preservado. Nenhuma suíte global executada.
+
+Pendências e limites: validação oficial real e confirmação do escopo de autorização continuam para etapa autorizada posterior; integração sem liberação comercial. Desenvolvimento real requer origem HTTPS já autorizada e configuração existente válida; localhost HTTP continua bloqueado, sem relaxar segurança. Paginação além dos primeiros 20 não faz parte desta entrega. Sem push, merge, Preview ou alterações em produção, Vercel, Supabase, Magazord, credenciais ou OAuth.
