@@ -1,6 +1,7 @@
 import { configuration, catalogConfiguration, SpapiError, fail, nonce, hash, cookie, browserCookie, encrypt } from './core.js';
 import { createStore, authorize, authorizeCatalog, type Store, type State } from './store.js';
 import { lwa, normalizeIsbn, searchCatalog } from './catalog.js';
+import { amazonTitleEnvironmentEnabled } from '../../shared/amazonTitleEnvironment.js';
 
 type Mode = 'start' | 'login' | 'callback' | 'catalog';
 export function createSpapiHandler(mode: Mode, options: { env?: NodeJS.ProcessEnv; fetcher?: typeof fetch; store?: Store } = {}) {
@@ -101,7 +102,7 @@ function createCatalogHandler(options: { env?: NodeJS.ProcessEnv; fetcher?: type
       const parameter = byTitle ? 'title' : 'isbn';
       if (url.search.length > (byTitle ? 2400 : 100) || [...url.searchParams.keys()].some(k => k !== parameter) || url.searchParams.getAll(parameter).length !== 1) fail(400, 'invalid_parameters');
       const env = options.env || process.env, fetcher = options.fetcher || fetch;
-      if (byTitle && (env.NODE_ENV !== 'development' || (env.VERCEL_ENV && env.VERCEL_ENV !== 'development'))) fail(403, 'title_development_only');
+      if (byTitle && !amazonTitleEnvironmentEnabled(env)) fail(403, 'title_environment_denied');
       const rawTitle = url.searchParams.get('title') || '';
       const title = rawTitle.trim().replace(/\s+/g, ' ');
       if (byTitle && (rawTitle.length > 200 || title.length < 2 || /[<>\x00-\x1f]/.test(rawTitle))) fail(422, 'invalid_title');

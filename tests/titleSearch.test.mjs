@@ -84,7 +84,7 @@ test('title failures and incomplete upstream stay unavailable; client integrates
   assert.equal((await api.searchGoogleBooksByTitle('Título de teste', controller.signal)).status, 'unavailable');
 });
 
-const uiBundle = await build({ entryPoints: ['src/components/TitleSearch.tsx'], bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic', define: { 'import.meta.env.DEV': 'true' },
+const uiBundle = await build({ entryPoints: ['src/components/TitleSearch.tsx'], bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic', define: { 'import.meta.env.DEV': 'false', 'import.meta.env.ISBN_AMAZON_TITLE_PREVIEW': 'true' },
   plugins: [{ name: 'title-ui', setup(b) {
     b.onResolve({ filter: /^(react|react\/jsx-runtime)$|\/services\/(googleBooks|amazonTitle)$/ }, args => ({ path: args.path, namespace: 'mock' }));
     b.onLoad({ filter: /.*/, namespace: 'mock' }, args => ({ contents: args.path === 'react' ? 'module.exports=deps.react'

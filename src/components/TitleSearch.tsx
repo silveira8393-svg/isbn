@@ -15,7 +15,7 @@ const sources: { id: 'all' | TitleSearchSource; label: string; enabled: boolean 
 ];
 
 export default function TitleSearch({ onConfirm, disabled = false, user, environment }: { user?: User; environment?: string; onConfirm: (book: BookInfo) => void; disabled?: boolean }) {
-  const amazonEnabled = import.meta.env.DEV && canSearchAmazonTitle(user, environment);
+  const amazonEnabled = (import.meta.env.DEV || import.meta.env.ISBN_AMAZON_TITLE_PREVIEW) && canSearchAmazonTitle(user, environment);
   const [amazonMessage, setAmazonMessage] = useState('');
   const [query, setQuery] = useState('');
   const [candidates, setCandidates] = useState<TitleSearchCandidate[]>([]);
@@ -91,7 +91,7 @@ export default function TitleSearch({ onConfirm, disabled = false, user, environ
         {item.label}{!enabled && ' (em breve)'}
       </button>; })}
     </div>
-    <p className="text-xs text-slate-500">{amazonEnabled ? 'Google Books e Amazon SP-API são consultados separadamente. Amazon somente para desenvolvimento, sem liberação comercial.' : 'Somente Google Books é consultado nesta etapa.'} A seleção abre o cadastro para conferência e edição.</p>
+    <p className="text-xs text-slate-500">{amazonEnabled ? 'Google Books e Amazon SP-API são consultados separadamente. Confira a edição antes de selecionar.' : 'Somente Google Books é consultado nesta etapa.'} A seleção abre o cadastro para conferência e edição.</p>
     <p role="status" aria-live="polite" className="text-sm text-slate-700">{message}</p>
     {amazonEnabled && <p role="status" aria-live="polite" className="text-sm text-slate-700">{amazonMessage}</p>}
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

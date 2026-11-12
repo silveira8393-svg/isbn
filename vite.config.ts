@@ -6,6 +6,7 @@ import { createGoogleBooksFunction } from './server/googleBooksFunction';
 import { createMagazordCategoriesFunction } from './server/magazordCategories';
 import { createMagazordProductsFunction } from './server/magazordProducts';
 import { createSpapiHandler } from './server/spapi/handler';
+import { amazonTitleEnvironmentEnabled } from './shared/amazonTitleEnvironment';
 
 export default defineConfig(({ mode }) => {
   const amazon = createSpapiHandler('catalog', { env: { ...loadEnv(mode, process.cwd(), ['AMAZON_SPAPI_', 'SUPABASE_', 'VITE_SUPABASE_']), ...process.env,
@@ -14,6 +15,7 @@ export default defineConfig(({ mode }) => {
   const categories = createMagazordCategoriesFunction({ env: { ...loadEnv(mode, process.cwd(), ['MAGAZORD_', 'SUPABASE_', 'VITE_SUPABASE_']), ...process.env } });
   const products = createMagazordProductsFunction({ env: { ...loadEnv(mode, process.cwd(), ['MAGAZORD_', 'SUPABASE_', 'VITE_SUPABASE_']), ...process.env } });
   return {
+    define: { 'import.meta.env.ISBN_AMAZON_TITLE_PREVIEW': JSON.stringify(process.env.VERCEL_ENV === 'preview' && amazonTitleEnvironmentEnabled(process.env)) },
     plugins: [react(), tailwindcss(), { name: 'google-books-local-api', configureServer(server) {
       server.middlewares.use('/api/amazon/spapi/catalog', async (req, res) => {
         const headers = new Headers();

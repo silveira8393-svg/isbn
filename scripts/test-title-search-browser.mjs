@@ -93,7 +93,7 @@ async function run(){
  return {ok:true,completed:window.__completed,viewport:innerWidth,mockedCalls:window.__calls.length,externalRequests:0,registrations:0,pageErrors:window.__errors};
 }
 run().then(result=>document.getElementById('result').textContent=JSON.stringify(result)).catch(error=>document.getElementById('result').textContent=JSON.stringify({ok:false,message:error.message,completed:window.__completed,calls:window.__calls,errors:window.__errors}));
-` }, bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic', define: { 'import.meta.env': JSON.stringify({DEV:amazon}), 'process.env.NODE_ENV': '"development"' },
+` }, bundle: true, write: false, platform: 'browser', format: 'iife', jsx: 'automatic', define: { 'import.meta.env': JSON.stringify({DEV:false,ISBN_AMAZON_TITLE_PREVIEW:amazon}), 'process.env.NODE_ENV': '"development"' },
   plugins: [{ name: 'offline-boundaries', setup(b) {
     const mocks = [
       [/contexts\/UserContext$/, `export const useUser=()=>({currentUser:${JSON.stringify(user)},canViewProduction:false,canViewSettings:false,operationEnvironment:'${amazon?'development':'production'}'});`],

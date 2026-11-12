@@ -4,7 +4,7 @@ import { normalizeTitleQuery } from '../../shared/googleBooks';
 
 export async function searchAmazonByTitle(title: string, user: User | undefined, environment: string | undefined, signal?: AbortSignal): Promise<AmazonTitleResult> {
   const failed = (status: AmazonTitleResult['status'], code: string, httpStatus?: number): AmazonTitleResult => ({ status, candidates: [], diagnostic: { code, httpStatus } });
-  if (!import.meta.env.DEV || !canSearchAmazonTitle(user, environment)) return failed('unauthorized', 'title_development_only');
+  if (!(import.meta.env.DEV || import.meta.env.ISBN_AMAZON_TITLE_PREVIEW) || !canSearchAmazonTitle(user, environment)) return failed('unauthorized', 'title_environment_denied');
   const query = normalizeTitleQuery(title);
   if (!query) return failed('invalid_query', 'invalid_title');
   try {

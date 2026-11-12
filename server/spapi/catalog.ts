@@ -46,7 +46,7 @@ function physicalDimensions(value: any): PhysicalDimensions {
 export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, fetcher: typeof fetch, isbn: string, access: string, keywords?: string) {
   const url = new URL('https://sellingpartnerapi-na.amazon.com/catalog/2022-04-01/items');
   url.search = new URLSearchParams({ ...(keywords ? { keywords } : { identifiers: isbn, identifiersType: 'ISBN' }), marketplaceIds: MARKETPLACE,
-    includedData: 'summaries,attributes,identifiers,dimensions,images,classifications' + (keywords ? ',productTypes' : ''), pageSize: '20' }).toString();
+    includedData: keywords ? 'summaries,attributes,identifiers,images,productTypes' : 'summaries,attributes,identifiers,dimensions,images,classifications', pageSize: '20' }).toString();
   const data = await jsonRequest(fetcher, url, { method: 'GET', headers: { 'x-amz-access-token': access,
     'x-amz-date': new Date().toISOString().replace(/[:-]|\.\d{3}/g, ''), 'User-Agent': 'ISBN/1.0 (Language=TypeScript)', Accept: 'application/json' } });
   if (!data || !Array.isArray(data.items) || data.items.length > 20 || !Number.isInteger(data.numberOfResults) || data.numberOfResults < 0) fail(502, 'invalid_catalog_response');

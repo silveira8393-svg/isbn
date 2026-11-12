@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 
-async function client(development = true) {
+async function client(development = true, preview = false) {
   const result = await build({ entryPoints: ['src/services/amazonTitle.ts'], bundle: true, write: false, platform: 'node', format: 'cjs',
-    define: { 'import.meta.env.DEV': String(development) }, plugins: [{ name: 'session-fixture', setup(b) {
+    define: { 'import.meta.env.DEV': String(development), 'import.meta.env.ISBN_AMAZON_TITLE_PREVIEW': String(preview) }, plugins: [{ name: 'session-fixture', setup(b) {
       b.onResolve({ filter: /\/lib\/supabase$/ }, () => ({ path: 'session', namespace: 'fixture' }));
       b.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: 'exports.supabase={auth:{getSession:async()=>deps.session}}' }));
     } }] });
@@ -17,7 +17,7 @@ const item = { source: 'amazon_spapi_catalog_2022-04-01', asin: 'ASIN000001', ma
   isbn13: '9788584396375', authors: ['Autor'], images: [{ variant: 'MAIN', link: 'https://images.example.invalid/cover.jpg' }] };
 
 test('title client uses official same-origin route, session and store, maps each edition without commercial cover', async t => {
-  const api = await client();
+  const api = await client(false, true);
   t.mock.method(globalThis, 'fetch', async (url, init) => {
     assert.equal(url, '/api/amazon/spapi/catalog?title=O%20Alquimista');
     assert.equal(init.credentials, 'same-origin'); assert.equal(init.redirect, 'error'); assert.equal(init.cache, 'no-store');

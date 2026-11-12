@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { build } from 'esbuild';
 const compiled = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts', contents: `
-  export * from './server/spapi/core'; export * from './server/spapi/handler';
+  export * from './shared/amazonTitleEnvironment'; export * from './server/spapi/core'; export * from './server/spapi/handler';
   export * from './server/spapi/store'; export * from './server/spapi/catalog';
   export { default as start } from './api/amazon/oauth/start';
   export { default as login } from './api/amazon/oauth/login';
@@ -318,8 +318,8 @@ test('title catalog returns distinct ASIN editions, missing ISBN and strict bibl
   assert.equal(third.amazonTitleReference.asin,'ASIN000003');assert.equal(first.amazonTitleReference.marketplaceId,api.MARKETPLACE);
   assert.equal(first.description,undefined);assert.equal(first.coverUrl,undefined);
 });
-test('title catalog is disabled outside development and rejects combined or repeated parameters before external calls', async () => {
-  for(const settings of [{NODE_ENV:'production'},{NODE_ENV:'development',VERCEL_ENV:'preview'},{NODE_ENV:'development',VERCEL_ENV:'production'},{}]){
+test('title catalog is disabled outside permitted environments and rejects combined or repeated parameters before external calls', async () => {
+  for(const settings of [{NODE_ENV:'production'},{NODE_ENV:'development',VERCEL_ENV:'preview'}, {NODE_ENV:'production',VERCEL_ENV:'preview',VERCEL_GIT_COMMIT_REF:'other-branch'},{NODE_ENV:'development',VERCEL_ENV:'production'},{}]){
     const h=harness({env:settings});const response=await h.handler('catalog')(h.request('catalog',{title:'O Alquimista'}));
     assert.equal(response.status,403);assert.equal(h.calls.length,0);
   }
@@ -347,4 +347,24 @@ test('title catalog handles empty and malformed replies without inventing metada
   }
   const result=titleApi.mapAmazonTitleResponse({query:'book',items:[{source:'amazon_spapi_catalog_2022-04-01',asin:'ASIN000001',marketplaceId:api.MARKETPLACE,title:'Book',isbn10:'8535914846',isbn13:'9788584396375'}]});
   assert.equal(result.candidates[0].book.isbn13,undefined);assert.equal(result.candidates[0].book.isbn10,undefined);
+});
+
+test('title environment allows only development or the explicit preview branch, never production',async()=>{
+  const branch='feature/isbn-amazon-titulo-etapa2';
+  for(const [settings,expected] of [
+    [{NODE_ENV:'development'},true],
+    [{NODE_ENV:'development',VERCEL_ENV:'development'},true],
+    [{NODE_ENV:'production',VERCEL_ENV:'preview',VERCEL_GIT_COMMIT_REF:branch},true],
+    [{NODE_ENV:'production',VERCEL_ENV:'preview',VERCEL_GIT_COMMIT_REF:'other'},false],
+    [{NODE_ENV:'development',VERCEL_ENV:'production',VERCEL_GIT_COMMIT_REF:branch},false],
+    [{NODE_ENV:'production',VERCEL_ENV:'production',VERCEL_GIT_COMMIT_REF:branch},false],
+    [{NODE_ENV:'production'},false]
+  ])assert.equal(api.amazonTitleEnvironmentEnabled(settings),expected,JSON.stringify(settings));
+  const settings={NODE_ENV:'production',VERCEL_ENV:'preview',VERCEL_GIT_COMMIT_REF:branch};
+  const h=harness({env:settings,keywords:'O Alquimista',catalog:{numberOfResults:0,items:[]}});
+  assert.equal((await h.handler('catalog')(h.request('catalog',{title:'O Alquimista'}))).status,200);
+  h.revoke();
+  const prior=h.calls.filter(c=>c.url.includes('amazon.com')).length;
+  assert.equal((await h.handler('catalog')(h.request('catalog',{title:'O Alquimista'}))).status,403);
+  assert.equal(h.calls.filter(c=>c.url.includes('amazon.com')).length,prior);
 });
