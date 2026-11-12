@@ -42,6 +42,39 @@ function physicalDimensions(value: any): PhysicalDimensions {
   }
   return result;
 }
+
+/** Read only explicitly editorial attributes; never infer a publisher from commercial fields. */
+function publisherAttribute(attributes: Record<string, unknown> | undefined): string | null {
+  const editorialKeys = ['publisher', 'publisher_name', 'book_publisher', 'publishing_company'];
+  const read = (entry: unknown, depth = 0): string | null => {
+    if (depth > 3) return null;
+    if (typeof entry === 'string') {
+      const value = entry.trim();
+      return value && value.length <= 500 && !/[<>\x00-\x1f]/.test(value) ? value : null;
+    }
+    if (Array.isArray(entry)) return entry.map(value => read(value, depth + 1)).find(Boolean) || null;
+    if (!entry || typeof entry !== 'object') return null;
+    const record = entry as Record<string, unknown>;
+    if ([record.marketplace_id, record.marketplaceId].some(id => id !== undefined && id !== MARKETPLACE)) return null;
+    for (const key of ['value', 'name', ...editorialKeys]) {
+      const value = read(record[key], depth + 1);
+      if (value) return value;
+    }
+    return null;
+  };
+  for (const key of editorialKeys) {
+    const raw = attributes?.[key];
+    const entries = Array.isArray(raw) ? raw : [raw];
+    // Keep the existing preference for a marketplace-specific value within each attribute.
+    const ordered = [...entries.filter(entry => entry?.marketplace_id === MARKETPLACE),
+      ...entries.filter(entry => entry?.marketplace_id === undefined)];
+    for (const entry of ordered) {
+      const value = read(entry);
+      if (value) return value;
+    }
+  }
+  return null;
+}
 // Strict projection: never return raw attributes, seller information, offers, prices or inventory.
 export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, fetcher: typeof fetch, isbn: string, access: string, keywords?: string) {
   const url = new URL('https://sellingpartnerapi-na.amazon.com/catalog/2022-04-01/items');
@@ -107,7 +140,7 @@ export async function searchCatalog(config: Pick<Config, 'client' | 'secret'>, f
     return { asin: text(item.asin), isbn, title: text(summary?.itemName) || value('item_name'),
       ...(keywords ? { subtitle: value('subtitle') } : {}),
       ...(browseClassification ? { browseClassification } : {}), ...(classifications.length ? { classifications } : {}),
-      authors: [...new Set(authors)], publisher: value('publisher') || value('publisher_name') || value('book_publisher') || value('publishing_company'),
+      authors: [...new Set(authors)], publisher: publisherAttribute(item.attributes),
       publicationDate: normalizePublicationDate(value('publication_date')) || normalizePublicationDate(value('street_date')) || null,
       language: text(language?.value), binding: value('binding'),
       edition: value('edition') || (positiveInteger(attr('edition')[0]?.value)?.toString() ?? null),
