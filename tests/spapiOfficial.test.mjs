@@ -41,7 +41,7 @@ function harness(settings = {}) {
     const parsed = new URL(url);
     if (parsed.pathname === '/auth/v1/user') return Response.json(settings.user || { id: uid });
     if (parsed.pathname === '/rest/v1/profiles') return Response.json(active ? [{ id: uid, active: true }] : []);
-    if (parsed.pathname === '/rest/v1/store_users') return Response.json(active ? [{ user_id: uid, store_id: operationalStore, role: 'developer', active: true }] : []);
+    if (parsed.pathname === '/rest/v1/store_users') return Response.json(active ? [{ user_id: uid, store_id: operationalStore, role: settings.role || 'developer', active: true }] : []);
     if (parsed.pathname === '/rest/v1/stores') return Response.json([{id:operationalStore,active:true}]);
     if (parsed.href === 'https://api.amazon.com/auth/o2/token') {
       assert.equal(init.method, 'POST'); assert.equal(init.body.get('client_secret'), env.AMAZON_SPAPI_CLIENT_SECRET);
@@ -330,6 +330,29 @@ test('title catalog is disabled outside permitted environments and rejects combi
   const repeated=new Request(env.AMAZON_SPAPI_ORIGIN+'/api/amazon/spapi/catalog?title=book&title=other');
   assert.equal((await h.handler('catalog')(repeated)).status,400);assert.equal(h.calls.length,0);
 });
+test('production title catalog keeps authentication, store access, origin and read-only controls', async () => {
+  const production = { NODE_ENV: 'production', VERCEL_ENV: 'production' };
+  for (const role of ['developer', 'admin', 'operator']) {
+    const h = harness({ env: production, role, keywords: 'O Alquimista' });
+    const response = await h.handler('catalog')(h.request('catalog', { title: 'O Alquimista' }));
+    assert.equal(response.status, 200); assert.equal((await response.json()).items.length, 1);
+    assert.equal(h.calls.filter(call => call.url.includes('sellingpartnerapi')).length, 1);
+  }
+  for (const settings of [{ headers: { authorization: '' } }, { headers: { 'x-isbn-store-id': '' } },
+    { headers: { origin: 'https://other.invalid' } }, { init: { method: 'POST' } }]) {
+    const h = harness({ env: production, keywords: 'O Alquimista' });
+    const response = await h.handler('catalog')(h.request('catalog', { title: 'O Alquimista' }, settings));
+    assert.ok([401, 403, 405].includes(response.status));
+    assert.equal(h.calls.some(call => call.url.includes('amazon.com')), false);
+  }
+  const revoked = harness({ env: production }); revoked.revoke();
+  assert.equal((await revoked.handler('catalog')(revoked.request('catalog', { title: 'O Alquimista' }))).status, 403);
+  assert.equal(revoked.calls.some(call => call.url.includes('amazon.com')), false);
+  const disabled = harness({ env: { ...production, AMAZON_SPAPI_ENABLED: 'false' } });
+  assert.equal((await disabled.handler('catalog')(disabled.request('catalog', { title: 'O Alquimista' }))).status, 503);
+  assert.equal(disabled.calls.length, 0);
+});
+
 test('title catalog honors existing authorization and sanitizes upstream errors including 429', async () => {
   const revoked=harness({env:{NODE_ENV:'development'}});revoked.revoke();
   assert.equal((await revoked.handler('catalog')(revoked.request('catalog',{title:'O Alquimista'}))).status,403);
@@ -349,19 +372,21 @@ test('title catalog handles empty and malformed replies without inventing metada
   assert.equal(result.candidates[0].book.isbn13,undefined);assert.equal(result.candidates[0].book.isbn10,undefined);
 });
 
-test('title environment allows only development or the explicit preview branch, never production',async()=>{
+test('title environment permits production and keeps development and explicit Preview restrictions',async()=>{
   const branch='feature/isbn-amazon-titulo-etapa2';
   for(const [settings,expected] of [
     [{NODE_ENV:'development'},true],
     [{NODE_ENV:'development',VERCEL_ENV:'development'},true],
     [{NODE_ENV:'production',VERCEL_ENV:'preview',VERCEL_GIT_COMMIT_REF:branch},true],
     [{NODE_ENV:'production',VERCEL_ENV:'preview',VERCEL_GIT_COMMIT_REF:'feature/isbn-etapa3-bibliografia-referencias'},true],
-    [{NODE_ENV:'production',VERCEL_ENV:'production',VERCEL_GIT_COMMIT_REF:'feature/isbn-etapa3-bibliografia-referencias'},false],
+    [{NODE_ENV:'production',VERCEL_ENV:'production',VERCEL_GIT_COMMIT_REF:'feature/isbn-etapa3-bibliografia-referencias'},true],
     [{NODE_ENV:'production',VERCEL_ENV:'preview',VERCEL_GIT_COMMIT_REF:'feature/isbn-melhorias-pos-demo'},true],
-    [{NODE_ENV:'production',VERCEL_ENV:'production',VERCEL_GIT_COMMIT_REF:'feature/isbn-melhorias-pos-demo'},false],
+    [{NODE_ENV:'production',VERCEL_ENV:'production',VERCEL_GIT_COMMIT_REF:'feature/isbn-melhorias-pos-demo'},true],
     [{NODE_ENV:'production',VERCEL_ENV:'preview',VERCEL_GIT_COMMIT_REF:'other'},false],
     [{NODE_ENV:'development',VERCEL_ENV:'production',VERCEL_GIT_COMMIT_REF:branch},false],
-    [{NODE_ENV:'production',VERCEL_ENV:'production',VERCEL_GIT_COMMIT_REF:branch},false],
+    [{NODE_ENV:'production',VERCEL_ENV:'production',VERCEL_GIT_COMMIT_REF:branch},true],
+    [{NODE_ENV:'production',VERCEL_ENV:'production'},true],
+    [{NODE_ENV:'production',VERCEL_ENV:'staging'},false],
     [{NODE_ENV:'production'},false]
   ])assert.equal(api.amazonTitleEnvironmentEnabled(settings),expected,JSON.stringify(settings));
   const settings={NODE_ENV:'production',VERCEL_ENV:'preview',VERCEL_GIT_COMMIT_REF:branch};
