@@ -1,0 +1,170 @@
+{
+  "description": "Real public Projeto ISBN Google Books projections captured 2026-11-13; not raw upstream API responses and not evidence of absent upstream fields.",
+  "source": "https://isbn.silveiralab.com.br/api/google-books",
+  "withoutIsbn": {
+    "source": "google_books",
+    "key": "XdU7EAAAQBAJ",
+    "book": {
+      "id": "google-books-XdU7EAAAQBAJ",
+      "title": "O Hobbit",
+      "provider": "Google Books",
+      "provenance": {
+        "title": "Google Books",
+        "publisher": "Google Books",
+        "authors": "Google Books",
+        "publishedDate": "Google Books",
+        "year": "Google Books",
+        "pageCount": "Google Books",
+        "language": "Google Books",
+        "googleBooksReference": "Google Books",
+        "bibliographicWarnings": "Google Books",
+        "sourceLinks": "Google Books"
+      },
+      "publisher": "Clube de Autores",
+      "authors": [
+        "Eduardo"
+      ],
+      "publishedDate": "2021-07-27",
+      "year": 2021,
+      "pageCount": 21,
+      "language": "Português",
+      "googleBooksReference": {
+        "volumeId": "XdU7EAAAQBAJ",
+        "isbn": "",
+        "infoLink": "https://books.google.com/books?id=XdU7EAAAQBAJ&dq=intitle:%22O+Hobbit%22&hl=&as_pt=BOOKS&source=gbs_api",
+        "previewLink": "https://books.google.com/books?id=XdU7EAAAQBAJ&printsec=frontcover&dq=intitle:%22O+Hobbit%22&hl=&as_pt=BOOKS&cd=5&source=gbs_api",
+        "coverUrl": "https://books.google.com/books/content?id=XdU7EAAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api",
+        "categories": [
+          "Reference"
+        ],
+        "descriptionAvailable": true,
+        "contentReviewRequired": true
+      },
+      "bibliographicWarnings": [
+        "Google Books: descrição/capa disponíveis como referência; direitos de uso comercial exigem verificação."
+      ],
+      "sourceLinks": [
+        {
+          "source": "google_books",
+          "kind": "info",
+          "url": "https://books.google.com/books?id=XdU7EAAAQBAJ&dq=intitle:%22O+Hobbit%22&hl=&as_pt=BOOKS&source=gbs_api",
+          "isbn": ""
+        },
+        {
+          "source": "google_books",
+          "kind": "preview",
+          "url": "https://books.google.com/books?id=XdU7EAAAQBAJ&printsec=frontcover&dq=intitle:%22O+Hobbit%22&hl=&as_pt=BOOKS&cd=5&source=gbs_api",
+          "isbn": ""
+        }
+      ]
+    }
+  },
+  "withIsbn": {
+    "source": "google_books",
+    "key": "J3WDPwAACAAJ",
+    "book": {
+      "id": "google-books-J3WDPwAACAAJ",
+      "title": "O Hobbit",
+      "isbn13": "9789721043053",
+      "provider": "Google Books",
+      "provenance": {
+        "title": "Google Books",
+        "isbn13": "Google Books",
+        "authors": "Google Books",
+        "publishedDate": "Google Books",
+        "year": "Google Books",
+        "pageCount": "Google Books",
+        "language": "Google Books",
+        "googleBooksReference": "Google Books",
+        "sourceLinks": "Google Books",
+        "isbn10": "Google Books"
+      },
+      "authors": [
+        "J. R. R. Tolkien"
+      ],
+      "publishedDate": "1997",
+      "year": 1997,
+      "pageCount": 259,
+      "language": "Português",
+      "googleBooksReference": {
+        "volumeId": "J3WDPwAACAAJ",
+        "isbn": "9789721043053",
+        "infoLink": "https://books.google.com/books?id=J3WDPwAACAAJ&dq=intitle:%22O+Hobbit%22&hl=&as_pt=BOOKS&source=gbs_api",
+        "previewLink": "https://books.google.com/books?id=J3WDPwAACAAJ&dq=intitle:%22O+Hobbit%22&hl=&as_pt=BOOKS&cd=2&source=gbs_api",
+        "descriptionAvailable": false,
+        "contentReviewRequired": true
+      },
+      "sourceLinks": [
+        {
+          "source": "google_books",
+          "kind": "info",
+          "url": "https://books.google.com/books?id=J3WDPwAACAAJ&dq=intitle:%22O+Hobbit%22&hl=&as_pt=BOOKS&source=gbs_api",
+          "isbn": "9789721043053"
+        },
+        {
+          "source": "google_books",
+          "kind": "preview",
+          "url": "https://books.google.com/books?id=J3WDPwAACAAJ&dq=intitle:%22O+Hobbit%22&hl=&as_pt=BOOKS&cd=2&source=gbs_api",
+          "isbn": "9789721043053"
+        }
+      ],
+      "isbn10": "9721043052"
+    }
+  },
+  "isbnResponse": {
+    "status": "success",
+    "book": {
+      "id": "google-books-J3WDPwAACAAJ",
+      "title": "O Hobbit",
+      "isbn13": "9789721043053",
+      "provider": "Google Books",
+      "provenance": {
+        "title": "Google Books",
+        "isbn13": "Google Books",
+        "authors": "Google Books",
+        "publishedDate": "Google Books",
+        "year": "Google Books",
+        "pageCount": "Google Books",
+        "language": "Google Books",
+        "googleBooksReference": "Google Books",
+        "sourceLinks": "Google Books",
+        "isbn10": "Google Books"
+      },
+      "authors": [
+        "J. R. R. Tolkien"
+      ],
+      "publishedDate": "1997",
+      "year": 1997,
+      "pageCount": 259,
+      "language": "Português",
+      "googleBooksReference": {
+        "volumeId": "J3WDPwAACAAJ",
+        "isbn": "9789721043053",
+        "infoLink": "https://books.google.com/books?id=J3WDPwAACAAJ&dq=isbn:9789721043053&hl=&as_pt=BOOKS&source=gbs_api",
+        "previewLink": "https://books.google.com/books?id=J3WDPwAACAAJ&dq=isbn:9789721043053&hl=&as_pt=BOOKS&cd=1&source=gbs_api",
+        "descriptionAvailable": false,
+        "contentReviewRequired": true
+      },
+      "sourceLinks": [
+        {
+          "source": "google_books",
+          "kind": "info",
+          "url": "https://books.google.com/books?id=J3WDPwAACAAJ&dq=isbn:9789721043053&hl=&as_pt=BOOKS&source=gbs_api",
+          "isbn": "9789721043053"
+        },
+        {
+          "source": "google_books",
+          "kind": "preview",
+          "url": "https://books.google.com/books?id=J3WDPwAACAAJ&dq=isbn:9789721043053&hl=&as_pt=BOOKS&cd=1&source=gbs_api",
+          "isbn": "9789721043053"
+        }
+      ],
+      "isbn10": "9721043052"
+    },
+    "diagnostic": {
+      "code": "exact_isbn",
+      "httpStatus": 200,
+      "durationMs": 252
+    }
+  }
+}

@@ -70,6 +70,14 @@ function mapVolumeFacts(info: RecordValue, id: string, title: string, expected =
       book.publishedDate = date; book.year = +date.slice(0, 4);
     }
     if (typeof info.pageCount === 'number' && Number.isSafeInteger(info.pageCount) && info.pageCount > 0 && info.pageCount <= 20000) book.pageCount = info.pageCount;
+    // Volume.dimensions is documented in cm; accept only positive, unambiguous values.
+    const dimensions = object(info.dimensions);
+    for (const [source, target] of [['height', 'height'], ['width', 'width'], ['thickness', 'depth']] as const) {
+      const value = dimensions[source];
+      if (typeof value !== 'string' || !/^\s*\d+(?:[.,]\d+)?\s*(?:cm)?\s*$/i.test(value)) continue;
+      const measure = Number(value.trim().replace(/\s*cm$/i, '').replace(',', '.'));
+      if (Number.isFinite(measure) && measure > 0) { book[target] = measure; book.dimensionsUnit = 'cm'; }
+    }
     const language = text(info.language, 30);
     if (language) book.language = normalizeLanguage(language);
     const infoLink = volumeUrl(info.infoLink, id), previewLink = volumeUrl(info.previewLink, id);

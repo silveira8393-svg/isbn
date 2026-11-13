@@ -63,6 +63,14 @@ export function complementWithGoogleBooks(base: BookInfo | null, incoming: BookI
     if (field === 'publishedDate' && merged.year && String(merged.year) !== String(value).slice(0, 4)) continue;
     merged[field] = structuredClone(value) as never; merged.provenance![field] = GOOGLE_BOOKS_SOURCE;
   }
+  if (incoming.dimensionsUnit === 'cm' && (!merged.dimensionsUnit || merged.dimensionsUnit === 'cm')) {
+    for (const field of ['height', 'width', 'depth'] as const) {
+      const value = incoming[field];
+      if (!absent(merged[field]) || /manual/i.test(merged.provenance?.[field] || '')
+        || typeof value !== 'number' || !Number.isFinite(value) || value <= 0) continue;
+      merged[field] = value; merged.dimensionsUnit = 'cm'; merged.provenance![field] = GOOGLE_BOOKS_SOURCE;
+    }
+  }
   if (!merged.googleBooksReference) {
     merged.googleBooksReference = structuredClone(incoming.googleBooksReference);
     merged.provenance!.googleBooksReference = GOOGLE_BOOKS_SOURCE;
