@@ -41,7 +41,7 @@ function harness(settings = {}) {
     const parsed = new URL(url);
     if (parsed.pathname === '/auth/v1/user') return Response.json(settings.user || { id: uid });
     if (parsed.pathname === '/rest/v1/profiles') return Response.json(active ? [{ id: uid, active: true }] : []);
-    if (parsed.pathname === '/rest/v1/store_users') return Response.json(active ? [{ user_id: uid, store_id: operationalStore, role: 'developer', active: true }] : []);
+    if (parsed.pathname === '/rest/v1/store_users') return Response.json(active ? [{ user_id: uid, store_id: operationalStore, role: settings.role || 'developer', active: true }] : []);
     if (parsed.pathname === '/rest/v1/stores') return Response.json([{id:operationalStore,active:true}]);
     if (parsed.href === 'https://api.amazon.com/auth/o2/token') {
       assert.equal(init.method, 'POST'); assert.equal(init.body.get('client_secret'), env.AMAZON_SPAPI_CLIENT_SECRET);
@@ -349,17 +349,19 @@ test('title catalog handles empty and malformed replies without inventing metada
   assert.equal(result.candidates[0].book.isbn13,undefined);assert.equal(result.candidates[0].book.isbn10,undefined);
 });
 
-test('title environment allows only development or the explicit preview branch, never production',async()=>{
+test('title environment allows Production and explicit Preview branches, retaining runtime guards',async()=>{
   const branch='feature/isbn-amazon-titulo-etapa2';
   for(const [settings,expected] of [
     [{NODE_ENV:'development'},true],
     [{NODE_ENV:'development',VERCEL_ENV:'development'},true],
     [{NODE_ENV:'production',VERCEL_ENV:'preview',VERCEL_GIT_COMMIT_REF:branch},true],
     [{NODE_ENV:'production',VERCEL_ENV:'preview',VERCEL_GIT_COMMIT_REF:'feature/isbn-etapa3-bibliografia-referencias'},true],
-    [{NODE_ENV:'production',VERCEL_ENV:'production',VERCEL_GIT_COMMIT_REF:'feature/isbn-etapa3-bibliografia-referencias'},false],
+    [{NODE_ENV:'production',VERCEL_ENV:'preview',VERCEL_GIT_COMMIT_REF:'release/isbn-v1.5.0-production'},true],
+    [{NODE_ENV:'production',VERCEL_ENV:'preview',VERCEL_GIT_COMMIT_REF:'feature/isbn-melhorias-pos-demo'},false],
+    [{NODE_ENV:'production',VERCEL_ENV:'production',VERCEL_GIT_COMMIT_REF:'feature/isbn-etapa3-bibliografia-referencias'},true],
     [{NODE_ENV:'production',VERCEL_ENV:'preview',VERCEL_GIT_COMMIT_REF:'other'},false],
     [{NODE_ENV:'development',VERCEL_ENV:'production',VERCEL_GIT_COMMIT_REF:branch},false],
-    [{NODE_ENV:'production',VERCEL_ENV:'production',VERCEL_GIT_COMMIT_REF:branch},false],
+    [{NODE_ENV:'production',VERCEL_ENV:'production',VERCEL_GIT_COMMIT_REF:branch},true],
     [{NODE_ENV:'production'},false]
   ])assert.equal(api.amazonTitleEnvironmentEnabled(settings),expected,JSON.stringify(settings));
   const settings={NODE_ENV:'production',VERCEL_ENV:'preview',VERCEL_GIT_COMMIT_REF:branch};
@@ -369,4 +371,22 @@ test('title environment allows only development or the explicit preview branch, 
   const prior=h.calls.filter(c=>c.url.includes('amazon.com')).length;
   assert.equal((await h.handler('catalog')(h.request('catalog',{title:'O Alquimista'}))).status,403);
   assert.equal(h.calls.filter(c=>c.url.includes('amazon.com')).length,prior);
+});
+
+test('Production and release Preview title reads retain authentication, store membership and official GET transport',async()=>{
+  for(const deployment of ['production','preview']) for(const role of ['developer','admin','operator']) {
+    const h=harness({role,env:{NODE_ENV:'production',VERCEL_ENV:deployment,VERCEL_GIT_COMMIT_REF:'release/isbn-v1.5.0-production'},keywords:'O Alquimista'});
+    assert.equal((await h.handler('catalog')(h.request('catalog',{title:'O Alquimista'},{headers:{authorization:''}}))).status,401);
+    assert.equal(h.calls.length,0);
+    assert.equal((await h.handler('catalog')(h.request('catalog',{title:'O Alquimista'},{headers:{'x-isbn-store-id':sid}}))).status,403);
+    assert.equal(h.calls.some(c=>c.url.includes('amazon.com')),false);
+    const response=await h.handler('catalog')(h.request('catalog',{title:'O Alquimista'}));
+    assert.equal(response.status,200);
+    assert.equal((await response.json()).items.length,1);
+    const catalogCalls=h.calls.filter(c=>c.url.startsWith('https://sellingpartnerapi-na.amazon.com/'));
+    assert.equal(catalogCalls.length,1);assert.equal(catalogCalls[0].init.method,'GET');
+    h.revoke();const prior=h.calls.length;
+    assert.equal((await h.handler('catalog')(h.request('catalog',{title:'O Alquimista'}))).status,403);
+    assert.equal(h.calls.slice(prior).some(c=>c.url.includes('amazon.com')),false);
+  }
 });
