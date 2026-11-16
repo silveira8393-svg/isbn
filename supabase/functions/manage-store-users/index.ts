@@ -10,6 +10,14 @@ const runtime = (globalThis as unknown as { Deno: {
 runtime.serve(createManageStoreUsersHandler({
   allowedOrigins: (runtime.env.get('ISBN_ALLOWED_ORIGINS') ?? '').split(',').map(value => value.trim()).filter(Boolean),
   inviteRedirectTo: runtime.env.get('ISBN_INVITE_REDIRECT_URL') ?? '',
+  getAuthClient: () => {
+    const url = runtime.env.get('SUPABASE_URL');
+    const key = runtime.env.get('SUPABASE_ANON_KEY');
+    if (!url || !key) throw new Error('Backend configuration unavailable');
+    return createClient(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+  },
   getAdminClient: () => {
     const url = runtime.env.get('SUPABASE_URL');
     const serviceKey = runtime.env.get('SUPABASE_SERVICE_ROLE_KEY');

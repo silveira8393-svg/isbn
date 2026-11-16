@@ -1,3 +1,4 @@
+import { mfaToken } from './helpers/mfa.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
@@ -8,7 +9,7 @@ const api=await import('data:text/javascript;base64,'+Buffer.from(built.outputFi
 const uid='11111111-1111-4111-8111-111111111111',store='22222222-2222-4222-8222-222222222222';
 const env={MAGAZORD_BASE_URL:'https://livrariasul.painel.magazord.com.br/api',MAGAZORD_API_USER:'synthetic-user',MAGAZORD_API_PASSWORD:'synthetic-password',MAGAZORD_STORE_ID:store,SUPABASE_URL:'https://database.invalid',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_fixture'};
 const page=(items,total=items.length,current=1,pages=1,more=false)=>Response.json({data:{items,total,page:current,limit:100,total_pages:pages,has_more:more}});
-const req=(suffix='',headers={})=>new Request('https://isbn.invalid/api/magazord/categories'+suffix,{headers:{authorization:'Bearer synthetic-valid-session', 'x-isbn-store-id':store,...headers}});
+const req=(suffix='',headers={})=>new Request('https://isbn.invalid/api/magazord/categories'+suffix,{headers:{authorization:`Bearer ${mfaToken(uid)}`, 'x-isbn-store-id':store,...headers}});
 function network({member=true,profile=true,activeStore=true,upstream=()=>page(fixture)}={}){
  const calls=[];const fetcher=async(input,init)=>{const url=new URL(input);calls.push({url,init});assert.equal(init.method,'GET');assert.equal(init.redirect,'error');
  if(url.hostname==='livrariasul.painel.magazord.com.br'){assert.equal(url.pathname,'/api/v2/site/categoria');return upstream(url,init);}

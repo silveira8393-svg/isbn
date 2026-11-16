@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
+import { mfaHeadersPlugin } from './helpers/mfa.mjs';
 
 const bundle = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts', contents: `
   export * from './shared/googleBooks'; export * from './server/googleBooksFunction';
   export * from './src/services/googleBooks'; export * from './src/utils/draft';
-` }, bundle: true, write: false, platform: 'node', format: 'esm' });
+` }, bundle: true, write: false, platform: 'node', format: 'esm', plugins: [mfaHeadersPlugin] });
 const api = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'));
 const isbn = '9788550303628', isbn10 = '8550303623';
 const volume = (id, info = {}) => ({ id, volumeInfo: { title: 'Título de teste', ...info } });

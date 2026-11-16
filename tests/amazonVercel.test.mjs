@@ -1,3 +1,4 @@
+import { mfaToken } from './helpers/mfa.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -15,7 +16,7 @@ const { createAmazonFunction, authorizeAmazonDeveloper, authorizeAmazonSearch, L
 const isbn = '9788501014863';
 const html = await readFile('experimentos/amazon/tests/fixtures/amazon_estrangeiro_9788501014863_galeria_sanitizada.html', 'utf8');
 const uid = '11111111-1111-4111-8111-111111111111', store = '22222222-2222-4222-8222-222222222222';
-const token = 'session-for-local-automated-test-only';
+const token = mfaToken(uid);
 const env = { SUPABASE_URL: 'https://auth.example.invalid', SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_synthetic' };
 const request = (body, options = {}) => new Request('https://preview.example.invalid/api/amazon' + (options.query || ''), {
   method: body === undefined ? 'GET' : 'POST', headers: { authorization: `Bearer ${token}`,

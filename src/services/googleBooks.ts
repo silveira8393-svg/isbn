@@ -1,3 +1,4 @@
+import { mfaHeaders } from './mfaHeaders';
 import type { BookInfo } from '../types';
 import { canonicalBookIsbn } from '../utils/isbn';
 import { GOOGLE_BOOKS_SOURCE, normalizeTitleQuery, type GoogleBooksTitleResult, type GoogleBooksResult } from '../../shared/googleBooks';
@@ -9,7 +10,7 @@ export async function searchGoogleBooksByTitle(title: string, signal?: AbortSign
     const timeout = AbortSignal.timeout(5000);
     const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
     const response = await fetch('/api/google-books?title=' + encodeURIComponent(query), { method: 'GET', signal: combined,
-      credentials: 'same-origin', redirect: 'error', cache: 'no-store', headers: { Accept: 'application/json' } });
+      credentials: 'same-origin', redirect: 'error', cache: 'no-store', headers: await mfaHeaders() });
     if (!response.ok) throw new Error('http');
     const result = await response.json() as GoogleBooksTitleResult;
     if (combined.aborted || !result?.diagnostic || typeof result.diagnostic.code !== 'string'
@@ -31,7 +32,7 @@ export async function searchGoogleBooks(isbn: string, signal?: AbortSignal): Pro
     const timeout = AbortSignal.timeout(5000);
     const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
     const response = await fetch('/api/google-books?isbn=' + canonical, { method: 'GET', signal: combined,
-      credentials: 'same-origin', redirect: 'error', cache: 'no-store', headers: { Accept: 'application/json' } });
+      credentials: 'same-origin', redirect: 'error', cache: 'no-store', headers: await mfaHeaders() });
     if (!response.ok) return { status: 'unavailable', book: null, diagnostic: { code: 'function_http', httpStatus: response.status } };
     const result = await response.json() as GoogleBooksResult;
     if (combined.aborted || !result?.diagnostic || typeof result.diagnostic.code !== 'string'

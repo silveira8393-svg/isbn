@@ -1,4 +1,5 @@
 import type { SupabaseClient, User } from '@supabase/supabase-js';
+import { hasAal2ForUser } from '../_shared/mfa.ts';
 
 export interface InvitePayload {
   action: 'invite_user';
@@ -8,6 +9,7 @@ export interface InvitePayload {
 }
 
 export interface HandlerOptions {
+  getAuthClient: () => SupabaseClient;
   getAdminClient: () => SupabaseClient;
   allowedOrigins: readonly string[];
   inviteRedirectTo: string;
@@ -175,11 +177,16 @@ export function createManageStoreUsersHandler(options: HandlerOptions) {
     let readingStatus = false;
     let updating = false;
     try {
-      const client = options.getAdminClient();
-      const { data: identity, error: identityError } = await client.auth.getUser(token);
+      const authClient = options.getAuthClient();
+      const { data: identity, error: identityError } = await authClient.auth.getUser(token);
       if (identityError || !identity.user || !uuidPattern.test(identity.user.id)) {
         throw new RequestError(401, 'Entre novamente para continuar.', 'unauthenticated');
       }
+      if (!hasAal2ForUser(token, identity.user.id)) {
+        throw new RequestError(403, 'Confirme o código do autenticador para continuar.', 'mfa_required');
+      }
+      // Never construct/use a privileged client until Auth and MFA validate this exact caller token.
+      const client = options.getAdminClient();
       const storeId = await authorizedStore(client, identity.user.id, request.headers.get('x-isbn-store-id') || undefined);
       if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get('Content-Type') ?? '')) {
         throw new RequestError(400, 'Envie o payload como JSON.', 'invalid_payload');

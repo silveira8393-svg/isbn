@@ -1,3 +1,4 @@
+import { hasAal2ForUser } from '../supabase/functions/_shared/mfa.js';
 // Apenas leituras no Auth e nas tabelas já usadas por UserContext, sob RLS.
 export class AmazonAccessError extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }
@@ -77,6 +78,7 @@ async function authorizeAmazon(request: Request, env: NodeJS.ProcessEnv, fetcher
     // O Auth verifica o token; claims enviados pelo cliente e user_metadata não concedem acesso.
     const user = await get('/auth/v1/user');
     if (!user || !uuid.test(user.id) || user.is_anonymous === true) throw denied();
+    if (!hasAal2ForUser(authorization.slice(7), user.id)) throw new AmazonAccessError(403, 'mfa_required', 'Confirme o código do autenticador para continuar.');
     const profiles = await get('/rest/v1/profiles', { select: 'id,active', id: `eq.${user.id}`, limit: '1' });
     if (!Array.isArray(profiles) || profiles.length !== 1 || profiles[0].id !== user.id || profiles[0].active !== true) throw denied();
     // Validate the selected membership under the caller token, never client role claims.

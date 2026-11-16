@@ -1,3 +1,4 @@
+import { mfaHeaders } from './mfaHeaders';
 import type { BookInfo, RegistrationDraft } from '../types';
 import { galleryImage, galleryLocation, GALLERY_MAX_IMAGES, type CuritibaGalleryRequest } from '../utils/curitibaGallery';
 import { imageReferences } from '../utils/imageUrls';
@@ -8,7 +9,7 @@ export async function loadCuritibaGallery(query: CuritibaGalleryRequest, signal:
   try {
     const response = await fetch(`/api/curitiba/gallery?${new URLSearchParams({product:query.product,index:directory.href})}`,{
       method:'GET',credentials:'same-origin',redirect:'error',signal:AbortSignal.any([signal,AbortSignal.timeout(6500)]),
-      headers:{Accept:'application/json'},cache:'no-store',
+      headers:await mfaHeaders(),cache:'no-store',
     });
     if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) return [];
     // Small JSON contract; bound actual bytes even for malformed infrastructure responses.

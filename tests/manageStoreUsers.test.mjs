@@ -1,3 +1,4 @@
+import { mfaToken } from './helpers/mfa.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -10,6 +11,7 @@ new Function('module', 'exports', compiled.outputFiles[0].text)(module, module.e
 const { createManageStoreUsersHandler, validateInvitePayload } = module.exports;
 
 const callerId = '11111111-1111-1111-1111-111111111111';
+const callerToken = mfaToken(callerId);
 const storeId = '22222222-2222-2222-2222-222222222222';
 const otherStore = '33333333-3333-3333-3333-333333333333';
 const invitedId = '44444444-4444-4444-4444-444444444444';
@@ -120,10 +122,10 @@ function setup(options = {}) {
       return query;
     },
   };
-  const handler = createManageStoreUsersHandler({ getAdminClient: () => client,
+  const handler = createManageStoreUsersHandler({ getAuthClient: () => client, getAdminClient: () => client,
     allowedOrigins: [origin], inviteRedirectTo: options.redirect ?? redirect });
   const request = async (body = payload, overrides = {}) => {
-    const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer caller-jwt', Origin: origin, ...overrides.headers };
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${callerToken}`, Origin: origin, ...overrides.headers };
     if (overrides.noAuth) delete headers.Authorization;
     if (overrides.noOrigin) delete headers.Origin;
     const method = overrides.method ?? 'POST';
@@ -146,7 +148,7 @@ for (const callerRole of ['admin', 'developer']) for (const role of ['admin', 'o
     assert.equal(fake.invites[0].options.data.display_name, 'Pessoa convidada');
     assert.ok(fake.invites[0].options.data.isbn_invitation_request_id);
     assert.equal(fake.invites[0].options.redirectTo, redirect);
-    assert.deepEqual(fake.calls[0], { action: 'getUser', token: 'caller-jwt' });
+    assert.deepEqual(fake.calls[0], { action: 'getUser', token: callerToken });
     const membershipRead = fake.calls.find(call => call.table === 'store_users');
     assert.deepEqual(membershipRead.filters, [['user_id', callerId], ['active', true]]);
     assert.equal(membershipRead.order, undefined);

@@ -1,3 +1,4 @@
+import { mfaToken } from './helpers/mfa.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -11,7 +12,7 @@ const env = { AMAZON_SPAPI_ENABLED: 'true', AMAZON_SPAPI_REFRESH_TOKEN: 'Atzr|sy
   AMAZON_SPAPI_CLIENT_SECRET: 'synthetic-secret', AMAZON_SPAPI_STORE_ID: sid, AMAZON_SPAPI_SELLER_ID: 'SELLERTEST',
   SUPABASE_URL: 'https://auth.example.invalid', SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_synthetic', VERCEL_URL: 'isbn-preview.example.invalid', VERCEL_ENV: 'preview',
   AMAZON_SPAPI_ORIGIN: 'https://production.example.invalid', AMAZON_SPAPI_EXTERNAL_AUTH_APPROVED: 'false' };
-const origin = 'https://' + env.VERCEL_URL, bearer = 'Bearer synthetic-user-session';
+const origin = 'https://' + env.VERCEL_URL, bearer = `Bearer ${mfaToken(uid)}`;
 const item = { asin: 'SYNTHETIC1', identifiers: [{ marketplaceId: api.MARKETPLACE, identifiers: [{ identifierType: 'ISBN', identifier: '8535914846' }] }],
   summaries: [{ marketplaceId: api.MARKETPLACE, itemName: 'Synthetic title' }],
   attributes: { author: [{ marketplace_id: api.MARKETPLACE, name: 'Synthetic Author' }], publisher: [{ marketplace_id: api.MARKETPLACE, value: 'Synthetic Publisher' }],

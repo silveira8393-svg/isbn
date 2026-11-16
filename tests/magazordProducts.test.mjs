@@ -1,3 +1,4 @@
+import { mfaToken } from './helpers/mfa.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
@@ -33,7 +34,7 @@ function network({member=true,profile=true,activeStore=true,override,fixture=str
  };return{calls,fetcher,fixture};
 }
 const query=(kind,value)=>api.normalizeProductQuery(kind,value);
-const request=(kind='child',value='FIXTURE-U-001',headers={})=>new Request('https://isbn.invalid/api/magazord/products?'+new URLSearchParams({kind,value}),{headers:{authorization:'Bearer synthetic-valid-session','x-isbn-store-id':store,...headers}});
+const request=(kind='child',value='FIXTURE-U-001',headers={})=>new Request('https://isbn.invalid/api/magazord/products?'+new URLSearchParams({kind,value}),{headers:{authorization:`Bearer ${mfaToken(uid)}`,'x-isbn-store-id':store,...headers}});
 const lookup=async(kind,value,flags={})=>{const n=network(flags);return{n,result:await api.createProductLookup({env,fetcher:n.fetcher})(query(kind,value))};};
 
 test('exact parent query returns only its related children',async()=>{const {result,n}=await lookup('parent','FIXTURE-U-P');assert.equal(result.status,'found');assert.equal(result.parents[0].code,'FIXTURE-U-P');assert.deepEqual(result.parents[0].children.map(c=>c.code),['FIXTURE-U-001']);assert.equal(n.calls.length,2);});

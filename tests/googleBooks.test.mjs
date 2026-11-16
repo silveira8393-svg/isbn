@@ -2,11 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 import { readFile } from 'node:fs/promises';
+import { mfaHeadersPlugin } from './helpers/mfa.mjs';
 const output = await build({ stdin: { resolveDir: process.cwd(), loader: 'ts', contents: `
   export * from './shared/googleBooks'; export * from './server/googleBooksFunction';
   export * from './src/services/googleBooks'; export {createRegistrationDraft} from './src/utils/draft';
   export {createRegistrationSnapshot} from './src/utils/registrationSnapshot';
-` }, bundle: true, write: false, platform: 'node', format: 'esm' });
+` }, bundle: true, write: false, platform: 'node', format: 'esm', plugins: [mfaHeadersPlugin] });
 const api = await import('data:text/javascript;base64,' + Buffer.from(output.outputFiles[0].text).toString('base64'));
 const isbn = '9788550303628', isbn10 = '8550303623', independent = '9798276439839';
 // Entirely synthetic metadata; these fixtures do not claim Google coverage of real ISBNs.
@@ -133,7 +134,7 @@ test('Preview protection: client retains same-origin access cookies without forw
     // A protected Preview redirects unauthenticated fetches before its Function runs.
     if(init.credentials!=='same-origin')throw new TypeError('Preview authentication redirect rejected');
     assert.equal(init.redirect,'error');assert.equal(init.cache,'no-store');
-    assert.deepEqual(init.headers,{Accept:'application/json'});
+    assert.deepEqual(init.headers,{Accept:'application/json',Authorization:'Bearer synthetic-mfa-session'});
     return Response.json(mapped());
   });
   const result=await api.searchGoogleBooks(isbn);

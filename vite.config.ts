@@ -7,11 +7,15 @@ import { createMagazordCategoriesFunction } from './server/magazordCategories';
 import { createMagazordProductsFunction } from './server/magazordProducts';
 import { createSpapiHandler } from './server/spapi/handler';
 import { amazonTitleEnvironmentEnabled } from './shared/amazonTitleEnvironment';
+import { withMfa } from './server/mfaAuthorization';
+import { createCuritibaGalleryFunction } from './server/curitibaGalleryFunction';
+import { createCuritibaProductLinkFunction } from './server/curitibaProductLinkFunction';
 
 export default defineConfig(({ mode }) => {
   const amazon = createSpapiHandler('catalog', { env: { ...loadEnv(mode, process.cwd(), ['AMAZON_SPAPI_', 'SUPABASE_', 'VITE_SUPABASE_']), ...process.env,
     NODE_ENV: mode === 'development' ? 'development' : 'production' } });
-  const googleBooks = createGoogleBooksFunction({ env: { ...loadEnv(mode, process.cwd(), 'GOOGLE_BOOKS_'), ...process.env } });
+  const mfaOptions = { env: { ...loadEnv(mode, process.cwd(), ['SUPABASE_', 'VITE_SUPABASE_']), ...process.env } };
+  const googleBooks = withMfa(createGoogleBooksFunction({ env: { ...loadEnv(mode, process.cwd(), 'GOOGLE_BOOKS_'), ...process.env } }), mfaOptions);
   const categories = createMagazordCategoriesFunction({ env: { ...loadEnv(mode, process.cwd(), ['MAGAZORD_', 'SUPABASE_', 'VITE_SUPABASE_']), ...process.env } });
   const products = createMagazordProductsFunction({ env: { ...loadEnv(mode, process.cwd(), ['MAGAZORD_', 'SUPABASE_', 'VITE_SUPABASE_']), ...process.env } });
   return {
@@ -40,10 +44,12 @@ export default defineConfig(({ mode }) => {
         res.statusCode = result.status; result.headers.forEach((value, key) => res.setHeader(key, value));
         res.end(await result.text());
       });
-      server.middlewares.use('/api/google-books', async (req, res) => {
+      const sources = { '/api/google-books': googleBooks, '/api/curitiba/gallery': withMfa(createCuritibaGalleryFunction(), mfaOptions),
+        '/api/curitiba/product-link': withMfa(createCuritibaProductLinkFunction(), mfaOptions) };
+      for (const [route, handler] of Object.entries(sources)) server.middlewares.use(route, async (req, res) => {
         const headers = new Headers();
-        for (const key of ['origin', 'sec-fetch-site']) if (typeof req.headers[key] === 'string') headers.set(key, req.headers[key]);
-        const result = await googleBooks(new Request('http://' + (req.headers.host || 'localhost:3000') + (req.originalUrl || '/api/google-books'),
+        for (const key of ['origin', 'sec-fetch-site', 'authorization']) if (typeof req.headers[key] === 'string') headers.set(key, req.headers[key]);
+        const result = await handler(new Request('http://' + (req.headers.host || 'localhost:3000') + (req.originalUrl || route),
           { method: req.method, headers }));
         res.statusCode = result.status; result.headers.forEach((value, key) => res.setHeader(key, value));
         res.end(await result.text());

@@ -1,5 +1,6 @@
 import { type Config, type AuthConfig, type Principal, type Envelope, fail, jsonRequest, limitedJson, UUID } from './core.js';
 import { serviceHeaders } from './supabaseHeaders.js';
+import { hasAal2ForUser } from '../../supabase/functions/_shared/mfa.js';
 
 export type State = Principal & { state_hash: string; browser_hash: string; seller_id: string; phase: 'start' | 'callback'; expires_at: string };
 export type Authorization = Envelope & { store_id: string; selling_partner_id: string };
@@ -43,6 +44,7 @@ export async function authorize(request: Request, config: AuthConfig, store: Pic
   if (!response.ok) { void response.body?.cancel(); return fail(response.status === 401 || response.status === 403 ? 401 : 503, 'authentication_failed'); }
   const user = await limitedJson(response, 65536, AbortSignal.timeout(5000));
   if (!UUID.test(user?.id) || user.is_anonymous === true) return fail(403, 'developer_required');
+  if (!hasAal2ForUser(bearer.slice(7), user.id)) return fail(403, 'mfa_required');
   const principal = { user_id: user.id, store_id: config.store };
   await store.active(principal);
   return principal;

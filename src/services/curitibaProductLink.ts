@@ -1,3 +1,4 @@
+import { mfaHeaders } from './mfaHeaders';
 import type { BookInfo, BookSourceLink } from '../types';
 import { canonicalBookIsbn } from '../utils/isbn';
 import { matchesBookIsbn } from '../utils/researchSources';
@@ -11,7 +12,7 @@ export async function loadCuritibaProductLink(book: Partial<BookInfo>, searchedI
   try {
     const timeout = AbortSignal.timeout(4500), combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
     const response = await fetch(`/api/curitiba/product-link?product=${encodeURIComponent(product)}&isbn=${isbn}`,
-      { credentials: 'same-origin', redirect: 'error', cache: 'no-store', signal: combined, headers: { Accept: 'application/json' } });
+      { credentials: 'same-origin', redirect: 'error', cache: 'no-store', signal: combined, headers: await mfaHeaders() });
     if (!response.ok) return [];
     const data = await response.json();
     return !combined.aborted && data.status === 'success' && data.link?.source === 'curitiba' && validSourceLink(data.link, isbn) ? [data.link] : [];

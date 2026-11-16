@@ -1,3 +1,4 @@
+import { mfaToken } from './helpers/mfa.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -56,7 +57,7 @@ function harness(settings = {}) {
   };
   const handler = mode => api.createSpapiHandler(mode, { env: { ...env, ...settings.env }, fetcher, store });
   const request = (mode, query = {}, options = {}) => new Request(`${env.AMAZON_SPAPI_ORIGIN}/api/amazon/${mode === 'catalog' ? 'spapi/catalog' : 'oauth/' + mode}?${new URLSearchParams(query)}`, {
-    method: mode === 'start' ? 'POST' : 'GET', headers: { authorization: 'Bearer synthetic-session-token', origin: env.AMAZON_SPAPI_ORIGIN, ...(mode==='catalog'?{'x-isbn-store-id':operationalStore}:{}), ...options.headers }, ...options.init });
+    method: mode === 'start' ? 'POST' : 'GET', headers: { authorization: `Bearer ${mfaToken(uid)}`, origin: env.AMAZON_SPAPI_ORIGIN, ...(mode==='catalog'?{'x-isbn-store-id':operationalStore}:{}), ...options.headers }, ...options.init });
   async function start() {
     const response = await handler('start')(request('start')); assert.equal(response.status, 200);
     const target = new URL((await response.json()).authorization_url), cookie = response.headers.get('set-cookie').split(';')[0];
@@ -87,7 +88,7 @@ test('start requires real bearer, active developer and same origin; no client cl
 });
 test('state is hashed, browser-bound, expiring; cookies and responses are protected', async () => {
   const h = harness(), auth = await h.start(), row = [...h.states.values()][0];
-  assert.equal(row.state_hash, api.hash(auth.state)); assert.equal(row.phase, 'start');
+  assert.equal(row.state_hash, api.hash(`isbn-mfa2:${auth.state}`)); assert.equal(row.phase, 'start');
   assert.ok(Date.parse(row.expires_at) <= Date.now() + 600000);
   assert.ok(!JSON.stringify(row).includes(auth.state));
   const response = await h.handler('start')(h.request('start'));
@@ -95,6 +96,18 @@ test('state is hashed, browser-bound, expiring; cookies and responses are protec
   assert.match(response.headers.get('cache-control'), /no-store/); assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
   const bad = await h.handler('callback')(h.request('callback', { state: auth.state, selling_partner_id: env.AMAZON_SPAPI_SELLER_ID, spapi_oauth_code: 'x' }, { headers: { cookie: '__Host-isbn_spapi=' + 'z'.repeat(43) } }));
   assert.equal(bad.status, 403); assert.equal(h.saved.length, 0);
+});
+
+test('OAuth states issued before mandatory MFA cannot resume through callback or login', async () => {
+  const h = harness(), auth = await h.start(), row = [...h.states.values()][0];
+  h.states.clear();
+  row.state_hash = api.hash(auth.state);
+  row.browser_hash = api.hash(auth.cookie.split('=')[1]);
+  h.states.set(row.state_hash, row);
+  assert.equal((await h.callback(auth)).status, 403);
+  const login = await h.handler('login')(h.request('login', { amazon_callback_uri: `https://sellercentral.amazon.com.br/apps/authorize/confirm/${env.AMAZON_SPAPI_APP_ID}`,
+    amazon_state: 'synthetic-state', selling_partner_id: env.AMAZON_SPAPI_SELLER_ID }, { headers: { cookie: auth.cookie } }));
+  assert.equal(login.status, 403); assert.equal(h.saved.length, 0);
 });
 test('direct callback exchanges code once, encrypts refresh, never returns tokens; concurrent replay denied', async () => {
   const h = harness(), auth = await h.start();
@@ -120,7 +133,7 @@ test('login validates exact callback and seller, rotates state, preserves Amazon
 });
 test('expired state, missing cookie, wrong seller, duplicate params and revoked role fail closed', async () => {
   const h = harness(), auth = await h.start();
-  h.states.get(api.hash(auth.state)).expires_at = new Date(0).toISOString(); assert.equal((await h.callback(auth)).status, 403);
+  h.states.get(api.hash(`isbn-mfa2:${auth.state}`)).expires_at = new Date(0).toISOString(); assert.equal((await h.callback(auth)).status, 403);
   const fresh = await h.start(); h.revoke(); assert.equal((await h.callback(fresh)).status, 403); assert.equal(h.saved.length, 0);
   const h2 = harness(), a2 = await h2.start();
   assert.equal((await h2.callback({ ...a2, cookie: '' })).status, 403);

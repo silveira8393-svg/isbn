@@ -9,8 +9,10 @@ import { User, OperationEnvironment } from '../types';
 import { supabase } from '../lib/supabase';
 import Login from '../components/Login';
 import ResetPassword from '../components/ResetPassword';
+import MfaChallenge from '../components/MfaChallenge';
+import { hasAal2ForUser } from '../../supabase/functions/_shared/mfa';
 
-type AuthState = 'initializing' | 'unauthenticated' | 'authenticated' | 'selecting_store' | 'recovery';
+type AuthState = 'initializing' | 'unauthenticated' | 'authenticated' | 'selecting_store' | 'recovery' | 'mfa' | 'mfa_error';
 
 function hasRecoveryIntent() {
   const url = new URL(window.location.href);
@@ -127,12 +129,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
       if (next && latestSession.current?.access_token === next.access_token) return;
       const sameIdentity = next && latestSession.current?.user.id === next.user.id;
+      const needsMfa = next && !hasAal2ForUser(next.access_token, next.user.id);
       latestSession.current = next;
       generation.current += 1;
       if (!sameIdentity) { setCurrentUser(null); setStoreChoices([]); selectedStore.current = null; }
+      if (needsMfa) { setCurrentUser(null); setStoreChoices([]); }
       setLoading(previous => next ? (previous || !sameIdentity) : false);
       setSession(next ? { ...next } : null);
       if (!next) setAuthState('unauthenticated');
+      else if (needsMfa) { setLoading(false); setAuthState('mfa'); }
       else if (!sameIdentity) setAuthState('initializing');
     };
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, next) => {
@@ -175,6 +180,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const loadIdentity = async () => {
       let message = 'Não foi possível consultar seus dados. Verifique sua conexão e entre novamente.';
       try {
+        const assurance = await supabase.auth.mfa.getAuthenticatorAssuranceLevel(session.access_token);
+        if (!isCurrent()) return;
+        if (assurance.error || !assurance.data) {
+          setCurrentUser(null); setLoading(false); setAuthState('mfa_error'); return;
+        }
+        if (assurance.data.currentLevel !== 'aal2' || assurance.data.nextLevel !== 'aal2') {
+          setCurrentUser(null); setStoreChoices([]); setLoading(false); setAuthState('mfa'); return;
+        }
         const choices = await loadAuthorizedStores(session.user.id);
         if (!isCurrent()) return;
         setStoreChoices(choices);
@@ -252,6 +265,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
   };
 
   if (authState === 'recovery') return <ResetPassword sessionValid={Boolean(session)} onComplete={() => leaveRecovery(true)} onCancel={() => leaveRecovery(false)} />;
+  if (authState === 'mfa_error') return <main className="min-h-screen bg-slate-50 flex items-center justify-center p-4"><section className="max-w-sm bg-white border rounded-xl p-8 space-y-4">
+    <p role="alert">Não foi possível verificar a autenticação em duas etapas. Seu acesso permanece bloqueado.</p>
+    <button type="button" onClick={() => { setLoading(true); setAuthState('initializing'); setSelectionRevision(v => v + 1); }} className="text-blue-600">Tentar novamente</button>
+    <button type="button" onClick={() => void signOut()} className="block text-blue-600">Sair</button>
+  </section></main>;
+  if (authState === 'mfa' && session) return <div key={session.user.id}><MfaChallenge userId={session.user.id} onVerified={() => { setLoading(true); setAuthState('initializing'); setSelectionRevision(v => v + 1); }} onSignOut={signOut} /></div>;
   if (loading || authState === 'initializing') return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-600" role="status">Carregando Projeto ISBN...</div>;
   if (!currentUser && authState === 'selecting_store') return <main className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
     <section aria-label="Selecionar loja operacional" className="w-full max-w-lg space-y-4 rounded-xl border bg-white p-6">

@@ -31,9 +31,11 @@ export function createSpapiHandler(mode: Mode, options: { env?: NodeJS.ProcessEn
       };
       const approved = () => { if (env.AMAZON_SPAPI_EXTERNAL_AUTH_APPROVED !== 'true') fail(403, 'developer_classification_pending'); };
       const context = `${config.store}:${config.seller}:v1`;
+      // Do not resume OAuth states issued before MFA was mandatory. No schema change is needed.
+      const mfaStateHash = (value: string) => hash(`isbn-mfa2:${value}`);
       async function issue(principal: { user_id: string; store_id: string }, browser: string, phase: State['phase'], expires = Date.now() + 600000) {
         const state = nonce();
-        await store.issue({ ...principal, state_hash: hash(state), browser_hash: hash(browser), phase, seller_id: config.seller, expires_at: new Date(expires).toISOString() });
+        await store.issue({ ...principal, state_hash: mfaStateHash(state), browser_hash: mfaStateHash(browser), phase, seller_id: config.seller, expires_at: new Date(expires).toISOString() });
         return state;
       }
       if (mode === 'start') {
@@ -58,7 +60,7 @@ export function createSpapiHandler(mode: Mode, options: { env?: NodeJS.ProcessEn
           || target.pathname !== `/apps/authorize/confirm/${config.app}`) fail(400, 'invalid_amazon_callback');
         // Login is a continuation of an authenticated start. Appstore-first onboarding is deliberately closed.
         // Consume the unique outstanding start for this browser, using the browser hash as lookup key.
-        const prior = await store.consume('', hash(browser), 'start');
+        const prior = await store.consume('', mfaStateHash(browser), 'start');
         if (!prior || prior.store_id !== config.store || prior.seller_id !== seller) fail(403, 'invalid_state');
         await store.active(prior);
         const state = await issue(prior, browser, 'callback', Date.parse(prior.expires_at));
@@ -68,9 +70,9 @@ export function createSpapiHandler(mode: Mode, options: { env?: NodeJS.ProcessEn
       }
       const state = param('state', 43);
       if (!/^[A-Za-z0-9_-]{43}$/.test(state)) fail(403, 'invalid_state');
-      const prior = await store.consume(hash(state), hash(browser), 'callback');
+      const prior = await store.consume(mfaStateHash(state), mfaStateHash(browser), 'callback');
       // Website consent can return straight to redirect URI without a login intermediate.
-      const saved = prior || await store.consume(hash(state), hash(browser), 'start');
+      const saved = prior || await store.consume(mfaStateHash(state), mfaStateHash(browser), 'start');
       if (!saved || saved.store_id !== config.store || saved.seller_id !== config.seller) fail(403, 'invalid_state');
       headers['Set-Cookie'] = cookie('');
       await store.active(saved);

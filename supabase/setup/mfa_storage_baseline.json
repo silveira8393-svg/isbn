@@ -1,0 +1,26 @@
+{
+  "project_ref": "jcxdkrpmrfbrhzwbzhph",
+  "source": "Read-only catalog audit, 2026-11-16. Exact original expressions; no object contents.",
+  "policies": [
+    {
+      "schemaname": "storage",
+      "tablename": "objects",
+      "policyname": "isbn_registration_images_insert",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((bucket_id = 'isbn-registration-images'::text) AND ((storage.foldername(name))[2] = (( SELECT auth.uid() AS uid))::text) AND (name ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}/[0-9a-f]{64}\\.(jpg|png|webp)$'::text) AND (EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND p.active))) AND (EXISTS ( SELECT 1\n   FROM store_users su\n  WHERE ((su.user_id = ( SELECT auth.uid() AS uid)) AND su.active AND (su.role = ANY (ARRAY['admin'::user_role, 'operator'::user_role, 'developer'::user_role])) AND ((su.store_id)::text = (storage.foldername(objects.name))[1])))))"
+    },
+    {
+      "schemaname": "storage",
+      "tablename": "objects",
+      "policyname": "isbn_registration_images_read",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "((bucket_id = 'isbn-registration-images'::text) AND (EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND p.active))) AND (EXISTS ( SELECT 1\n   FROM store_users su\n  WHERE ((su.user_id = ( SELECT auth.uid() AS uid)) AND su.active AND (su.role = ANY (ARRAY['admin'::user_role, 'operator'::user_role, 'developer'::user_role])) AND ((su.store_id)::text = (storage.foldername(objects.name))[1])))))",
+      "with_check": null
+    }
+  ]
+}

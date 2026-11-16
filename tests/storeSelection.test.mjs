@@ -1,16 +1,17 @@
+import { mfaToken } from './helpers/mfa.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 
 const bundled = await build({ entryPoints: ['src/contexts/UserContext.tsx'], bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic', plugins: [{ name: 'identity-boundary', setup(b) {
-  b.onResolve({ filter: /^react$|^react\/jsx-runtime$|\/lib\/supabase$|\/components\/(Login|ResetPassword)$/ }, a => ({ path: a.path, namespace: 'mock' }));
-  b.onLoad({ filter: /.*/, namespace: 'mock' }, a => ({ loader: 'js', contents: a.path === 'react' ? 'module.exports=deps.react' : a.path === 'react/jsx-runtime' ? 'exports.jsx=exports.jsxs=(type,props,key)=>({type,props,key})' : a.path.endsWith('supabase') ? 'exports.supabase=deps.sdk' : 'module.exports="Login"' }));
+  b.onResolve({ filter: /^react$|^react\/jsx-runtime$|\/lib\/supabase$|\/components\/(Login|ResetPassword|MfaChallenge)$/ }, a => ({ path: a.path, namespace: 'mock' }));
+  b.onLoad({ filter: /.*/, namespace: 'mock' }, a => ({ loader: 'js', contents: a.path === 'react' ? 'module.exports=deps.react' : a.path === 'react/jsx-runtime' ? 'exports.jsx=exports.jsxs=(type,props,key)=>({type,props,key})' : a.path.endsWith('supabase') ? 'exports.supabase=deps.sdk' : `module.exports=${JSON.stringify(a.path.split('/').pop())}` }));
 } }] });
 const uid = 'c551813b-236c-4d24-8778-b748fa6a02cc';
 const commercial = '6058abd1-96e5-465b-a1df-292e5cf76de3', lab = '492af2ad-905c-42f8-90f4-aa6c1dc142f3';
 const other = '77777777-7777-4777-8777-777777777777';
 const stores = [{ id: commercial, name: 'Sebo Livraria Sul', slug: 'sebo', active: true }, { id: lab, name: 'Laboratório', slug: 'lab', active: true }, { id: other, name: 'Outra livraria', slug: 'outra', active: true }];
-function harness(t, memberships) {
+function harness(t, memberships, options = {}) {
   const previous = globalThis.window; globalThis.window = { location: { href: 'https://isbn.example/' } };
   t.after(() => { if (previous === undefined) delete globalThis.window; else globalThis.window = previous; });
   let slots = [], cursor = 0, effects = [], tree, authCallback;
@@ -23,7 +24,11 @@ function harness(t, memberships) {
     useEffect(callback, dependencies) { const i = cursor++, old = slots[i]; if (!old || dependencies.some((v, j) => !Object.is(v, old.dependencies[j]))) effects.push(() => { old?.cleanup?.(); slots[i] = { dependencies, cleanup: callback() }; }); },
   }, sdk: {
     auth: { onAuthStateChange(callback) { authCallback = callback; return { data: { subscription: { unsubscribe() {} } } }; },
-      getSession: async () => ({ data: { session: { user: { id: uid }, access_token: 'initial' } } }), signOut: async () => ({ error: null }) },
+      getSession: async () => ({ data: { session: options.noSession ? null : { user: { id: uid }, access_token: mfaToken(uid, options.aal ?? 'aal2') } } }), signOut: async () => ({ error: null }),
+      mfa: { getAuthenticatorAssuranceLevel: async token => {
+        const aal = JSON.parse(Buffer.from(token.split('.')[1], 'base64url')).aal;
+        return options.assurance ? options.assurance(token) : { data: { currentLevel: aal, nextLevel: options.noFactor && aal !== 'aal2' ? 'aal1' : 'aal2' }, error: null };
+      } } },
     from(table) { const filters = []; calls.push({ table, filters }); const result = () => ({ error: null, data: table === 'profiles' ? data.profile : table === 'stores' ? data.stores.find(s => s.id === filters.find(([k]) => k === 'id')?.[1]) ?? null : data.memberships.filter(m => filters.every(([k, v]) => m[k] === v)) });
       return { select() { return this; }, eq(k, v) { filters.push([k, v]); return this; }, maybeSingle: async () => result(), then(resolve, reject) { return Promise.resolve(result()).then(resolve, reject); } }; },
   } };
@@ -36,7 +41,7 @@ function harness(t, memberships) {
   return { data, calls, async settle() { for (let i = 0; i < 12; i++) { await Promise.resolve(); await Promise.resolve(); render(); } },
     tree: () => tree, text: () => text(tree), user: () => tree?.props?.value?.currentUser,
     choose(name) { nodes(tree).find(n => n.type === 'button' && text(n).includes(name)).props.onClick(); render(); },
-    refresh() { authCallback('TOKEN_REFRESHED', { user: { id: uid }, access_token: crypto.randomUUID() }); render(); },
+    refresh(aal = 'aal2') { authCallback('TOKEN_REFRESHED', { user: { id: uid }, access_token: mfaToken(uid, aal) }); render(); },
     signOut() { authCallback('SIGNED_OUT', null); render(); }, api };
 }
 const member = (store_id, role = 'developer') => ({ user_id: uid, store_id, role, active: true });
@@ -74,4 +79,31 @@ for (const reversed of [false, true]) test('Amazon credential context is not an 
 
 test('A technical membership alone never invents access to the commercial store', async t => {
   const h = harness(t, [member(lab)]); await h.settle(); assert.equal(h.user(), undefined);
+});
+
+for (const role of ['admin', 'operator', 'developer']) {
+  for (const noFactor of [true, false]) test(`aal1 blocks ${role} before any business query; enrolled=${!noFactor}`, async t => {
+    const h = harness(t, [member(commercial, role)], { aal: 'aal1', noFactor });
+    await h.settle(); assert.equal(h.user(), undefined); assert.equal(h.calls.length, 0);
+    assert.equal(h.tree().props.children.type, 'MfaChallenge');
+    h.refresh('aal2'); await h.settle(); assert.equal(h.user().role, role);
+    h.refresh('aal1'); assert.equal(h.user(), undefined, 'downgrade closes the app immediately');
+    const calls = h.calls.length; await h.settle(); assert.equal(h.calls.length, calls);
+    h.signOut(); await h.settle(); assert.equal(h.tree().type, 'Login');
+    h.refresh('aal1'); await h.settle(); assert.equal(h.tree().props.children.type, 'MfaChallenge');
+  });
+}
+
+test('MFA service failure never reads profile or opens protected children', async t => {
+  const h = harness(t, [member(commercial)], { assurance: async () => ({ data: null, error: new Error('offline') }) });
+  await h.settle(); assert.equal(h.user(), undefined); assert.equal(h.calls.length, 0);
+  assert.match(h.text(), /acesso permanece bloqueado/);
+});
+
+test('an old MFA check cannot reopen the application after sign-out', async t => {
+  let release; const pending = new Promise(resolve => { release = resolve; });
+  const h = harness(t, [member(commercial)], { assurance: () => pending });
+  await h.settle(); h.signOut();
+  release({ data: { currentLevel: 'aal2', nextLevel: 'aal2' }, error: null });
+  await h.settle(); assert.equal(h.tree().type, 'Login'); assert.equal(h.calls.length, 0);
 });
