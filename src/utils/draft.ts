@@ -289,7 +289,7 @@ export function buildFinalDescription(draft: {
   condition: BookCondition;
   usedBookConditionNotes?: string;
   synopsis?: string;
-}): string {
+}, format: 'text' | 'html' = 'text'): string {
   const synopsis = (draft.synopsis || '').trim();
 
   if (draft.condition === 'novo') {
@@ -297,6 +297,18 @@ export function buildFinalDescription(draft: {
   }
 
   const conditionNotes = (draft.usedBookConditionNotes || '').trim();
+
+  // Build only from the editable source fields, never from draft.description:
+  // preparing an already submitted draft again must not nest or re-escape our HTML.
+  // Keep plain-text editing/review and NEW descriptions unchanged.
+  if (format === 'html') {
+    const escapeText = (text: string) => text
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+      .replace(/\r\n|\r|\n/g, '<br>');
+    return [conditionNotes ? `<strong>${escapeText(conditionNotes)}</strong>` : '', escapeText(synopsis)]
+      .filter(Boolean).join('<br><br>');
+  }
 
   if (conditionNotes && synopsis) {
     return `${conditionNotes}\n\n${synopsis}`;

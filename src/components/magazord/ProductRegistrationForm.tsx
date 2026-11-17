@@ -152,7 +152,7 @@ export default function ProductRegistrationForm({
         if (records.some(record => cleanIsbn(record.childCode) === cleanIsbn(draft.childCode)))
           throw new Error('Código Filho já utilizado nesta loja. Confira o código comercial interno antes de concluir.');
       }
-      const finalDescription = buildFinalDescription(draft);
+      const finalDescription = buildFinalDescription(draft, 'html');
       const images = imageReferences([draft.mainImageUrl, ...(draft.additionalImageUrls || [])]);
       const draftToSubmit: RegistrationDraft = {
         ...draft,

@@ -8,7 +8,11 @@ const runtime = (globalThis as unknown as { Deno: {
 } }).Deno;
 
 runtime.serve(createManageStoreUsersHandler({
-  allowedOrigins: (runtime.env.get('ISBN_ALLOWED_ORIGINS') ?? '').split(',').map(value => value.trim()).filter(Boolean),
+  allowedOrigins: [...new Set([
+    ...(runtime.env.get('ISBN_ALLOWED_ORIGINS') ?? '').split(',').map(value => value.trim()).filter(Boolean),
+    'https://isbn-955vjmkcb-silveira8393-svgs-projects.vercel.app',
+    'https://isbn-gold.vercel.app',
+  ])],
   inviteRedirectTo: runtime.env.get('ISBN_INVITE_REDIRECT_URL') ?? '',
   getAuthClient: () => {
     const url = runtime.env.get('SUPABASE_URL');

@@ -99,6 +99,43 @@ for (const [format, expected] of [['brochura', 'CC — Capa Comum'], ['hardcover
     assert.equal(submitted.length, 1); assert.equal(submitted[0].format, expected); assert.deepEqual(draft, before);
   });
 
+test('used description HTML preserves condition paragraphs, blank line, synopsis and safe special characters', () => {
+  const draft = { condition: 'usado', usedBookConditionNotes: 'Bom & íntegro.\nSem grifos.', synopsis: 'Sinopse <literal> "citada".\n\nSegundo parágrafo.' };
+  assert.equal(api.buildFinalDescription(draft), 'Bom & íntegro.\nSem grifos.\n\nSinopse <literal> "citada".\n\nSegundo parágrafo.');
+  assert.equal(api.buildFinalDescription(draft, 'html'), '<strong>Bom &amp; íntegro.<br>Sem grifos.</strong><br><br>Sinopse &lt;literal&gt; &quot;citada&quot;.<br><br>Segundo parágrafo.');
+  assert.equal(api.buildFinalDescription({ ...draft, synopsis: '' }, 'html'), '<strong>Bom &amp; íntegro.<br>Sem grifos.</strong>');
+  assert.equal(api.buildFinalDescription({ condition: 'usado', synopsis: 'Só sinopse.' }, 'html'), 'Só sinopse.');
+  assert.equal(api.buildFinalDescription({ condition: 'usado' }, 'html'), '');
+});
+
+test('used HTML is regenerated from source fields without nesting, trusting input tags or double escaping', () => {
+  const draft = { condition: 'usado', usedBookConditionNotes: '<img src=x onerror=alert(1)> & \'íntegro\'', synopsis: '&lt;script&gt;literal&lt;/script&gt;\r\nLinha 2.' };
+  const before = structuredClone(draft), first = api.buildFinalDescription(draft, 'html');
+  assert.equal(first, '<strong>&lt;img src=x onerror=alert(1)&gt; &amp; &#39;íntegro&#39;</strong><br><br>&amp;lt;script&amp;gt;literal&amp;lt;/script&amp;gt;<br>Linha 2.');
+  for (let n = 0; n < 3; n++) assert.equal(api.buildFinalDescription({ ...draft, description: first }, 'html'), first);
+  assert.equal((first.match(/<strong>/g) || []).length, 1);
+  assert.deepEqual(draft, before);
+});
+
+for (const condition of ['novo', 'usado']) test(`${condition}: submission, simulator and snapshot preserve the prepared description`, async t => {
+  t.mock.method(globalThis, 'fetch', () => assert.fail('Preparing a description must not fetch'));
+  const service = setupStore(t), events = [];
+  const draft = { ...initial(condition), ...selectedCategory, title: 'Obra manual', parentCode: 'DESC-P', childCode: 'DESC-1', price: '20',
+    usedBookConditionNotes: 'Excelente estado & sem grifos.', synopsis: 'Sinopse original.\n\nSegundo parágrafo.', description: 'Descrição anterior.' };
+  const expected = condition === 'usado'
+    ? '<strong>Excelente estado &amp; sem grifos.</strong><br><br>Sinopse original.<br><br>Segundo parágrafo.'
+    : draft.synopsis;
+  const before = structuredClone(draft), view = form(draft, service, events); openReview(view);
+  await view.find(node => node.props.id === 'btn-confirm-magazord-registration').props.onClick();
+  assert.equal(events.length, 1);
+  const submitted = events[0][1];
+  assert.equal(submitted.description, expected);
+  assert.equal(service.getRecordsForEan(draft.childCode)[0].description, expected);
+  assert.equal(api.createRegistrationSnapshot(submitted, '2026-11-17T12:00:00Z').fields.description, expected);
+  assert.equal(api.buildFinalDescription(submitted, 'html'), expected);
+  assert.deepEqual(draft, before);
+});
+
 for (const withIsbn of [true, false]) test(`confirmed title selection opens the existing editable form, ISBN ${withIsbn}, without other API lookups`, t => {
   t.mock.method(globalThis, 'fetch', () => assert.fail('Confirmation must not fetch or register'));
   const view = mountApp();

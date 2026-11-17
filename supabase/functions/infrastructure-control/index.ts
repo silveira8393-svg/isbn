@@ -13,7 +13,11 @@ const client = (key: string, token?: string) => {
     ...(token ? { global: { headers: { Authorization: `Bearer ${token}` } } } : {}) });
 };
 runtime.serve(createInfrastructureHandler({
-  allowedOrigins: (get('ISBN_ALLOWED_ORIGINS') ?? '').split(',').map(value => value.trim()).filter(Boolean),
+  allowedOrigins: [...new Set([
+    ...(get('ISBN_ALLOWED_ORIGINS') ?? '').split(',').map(value => value.trim()).filter(Boolean),
+    'https://isbn-955vjmkcb-silveira8393-svgs-projects.vercel.app',
+    'https://isbn-gold.vercel.app',
+  ])],
   userClient: token => client(get('SUPABASE_ANON_KEY') ?? '', token),
   adminClient: () => client(get('SUPABASE_SERVICE_ROLE_KEY') ?? ''),
   getSecret: get, fetch,
