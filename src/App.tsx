@@ -828,7 +828,7 @@ export default function App() {
           <div className="mb-3 flex flex-wrap gap-2" aria-label="Modo de pesquisa">
             <button type="button" disabled={isLoading} aria-pressed={searchMode === 'isbn'} onClick={() => setSearchMode('isbn')} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700">Por ISBN</button>
             <button type="button" disabled={isLoading} aria-pressed={searchMode === 'title'} onClick={() => setSearchMode('title')} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700">Por título</button>
-            {activeTab === 'consultar' && <button type="button" disabled={isLoading} onClick={handleStartManualRegistration}
+            {activeTab === 'cadastro' && <button type="button" disabled={isLoading} onClick={handleStartManualRegistration}
               className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700">
               <BookOpen aria-hidden="true" className="h-4 w-4" />
               <span>Cadastro manual</span>

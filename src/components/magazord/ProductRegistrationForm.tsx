@@ -303,7 +303,9 @@ export default function ProductRegistrationForm({
         </div>}
         <div><h3 className="text-sm font-bold">Meta Description</h3><p className="whitespace-pre-wrap text-sm text-slate-700">{draft.metaDescription || 'Não informada'}</p></div>
         {draft.synopsis && <div><h3 className="text-sm font-bold">Sinopse</h3><p className="whitespace-pre-wrap text-sm text-slate-700">{draft.synopsis}</p></div>}
-        {buildFinalDescription(draft) && <div><h3 className="text-sm font-bold">Descrição final</h3><p className="whitespace-pre-wrap text-sm text-slate-700">{buildFinalDescription(draft)}</p></div>}
+        {buildFinalDescription(draft) && <div><h3 className="text-sm font-bold">Descrição final</h3><p className="whitespace-pre-wrap text-sm text-slate-700">{draft.condition === 'usado' && draft.usedBookConditionNotes?.trim()
+          ? <><strong>{draft.usedBookConditionNotes.trim()}</strong>{buildFinalDescription(draft).slice(draft.usedBookConditionNotes.trim().length)}</>
+          : buildFinalDescription(draft)}</p></div>}
         <div><h3 className="mb-3 text-sm font-bold">Imagens selecionadas</h3>{reviewedImages.length ? <div className="grid gap-4 sm:grid-cols-3">{reviewedImages.map((url, index) => <div key={url}><RegistrationImage url={url} label={index ? `Imagem adicional ${index}` : 'Capa principal'} /></div>)}</div> : <p className="text-sm text-slate-500">Sem imagens. O cadastro pode continuar.</p>}</div>
         {submitError && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">{submitError}</p>}
         <div className="flex flex-wrap justify-end gap-3">
