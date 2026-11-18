@@ -1,10 +1,10 @@
 import { buildCategoryTree, type CategoryCatalog, type MagazordCategory } from '../shared/magazordCategories.js';
 import { readLimitedJson, authorizeAmazonSearch, AmazonAccessError } from './amazonAuthorization.js';
+import { resolveMagazordBaseUrl } from './magazordBaseUrl.js';
 
 export class CategoryError extends Error {
   constructor(public status: number, public code: string) { super(code); }
 }
-const BASE = 'https://livrariasul.painel.magazord.com.br/api';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CACHE_MS = 5 * 60_000, REFRESH_INTERVAL_MS = 30_000;
 
@@ -13,7 +13,8 @@ export function createCategoryLoader(options: { env?: NodeJS.ProcessEnv; fetcher
   let cached: CategoryCatalog | undefined, expires = 0, lastAttempt = -Infinity;
   let inFlight: Promise<CategoryCatalog> | undefined;
   async function load(): Promise<CategoryCatalog> {
-    if (env.MAGAZORD_BASE_URL?.replace(/\/$/, '') !== BASE || !env.MAGAZORD_API_USER || !env.MAGAZORD_API_PASSWORD)
+    const base = resolveMagazordBaseUrl(env.MAGAZORD_BASE_URL);
+    if (!base || !env.MAGAZORD_API_USER || !env.MAGAZORD_API_PASSWORD)
       throw new CategoryError(503, 'not_configured');
     const signal = AbortSignal.timeout(options.timeoutMs ?? 20_000);
     const categories: MagazordCategory[] = [];
@@ -21,7 +22,7 @@ export function createCategoryLoader(options: { env?: NodeJS.ProcessEnv; fetcher
     let expectedTotal: number | undefined;
     try {
       for (let page = 1; page <= 100; page++) {
-        const url = new URL(`${BASE}/v2/site/categoria`);
+        const url = new URL(`${base}/v2/site/categoria`);
         url.search = new URLSearchParams({ limit: '100', page: String(page), order: 'id', orderDirection: 'asc' }).toString();
         const response = await fetcher(url, { method: 'GET', redirect: 'error', cache: 'no-store', credentials: 'omit', signal,
           headers: { Accept: 'application/json', Authorization: 'Basic ' + Buffer.from(`${env.MAGAZORD_API_USER}:${env.MAGAZORD_API_PASSWORD}`).toString('base64') } });

@@ -1,8 +1,8 @@
 import { authorizeAmazonSearch, AmazonAccessError, readLimitedJson } from './amazonAuthorization.js';
+import { resolveMagazordBaseUrl } from './magazordBaseUrl.js';
 import { canonicalBookIsbn } from '../src/utils/isbn.js';
 import { normalizeProductQuery, unavailableProductLookup, type ProductQuery, type ProductLookup, type CommercialParent, type CommercialChild } from '../shared/magazordProducts.js';
 
-const BASE = 'https://livrariasul.painel.magazord.com.br/api';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 class LookupError extends Error { constructor(public code: string) { super(code); } }
 const codeValue = (value: unknown): value is string => typeof value === 'string' && !!normalizeProductQuery('child', value) && value.trim() === value;
@@ -24,13 +24,14 @@ const publicChild = ({ code, name, active, ean }: CommercialChild): CommercialCh
 export function createProductLookup(options: { env?: NodeJS.ProcessEnv; fetcher?: typeof fetch; timeoutMs?: number } = {}) {
   const env = options.env || process.env, fetcher = options.fetcher || fetch;
   return async (query: ProductQuery): Promise<ProductLookup> => {
-    if (env.MAGAZORD_BASE_URL?.replace(/\/$/, '') !== BASE || !env.MAGAZORD_API_USER || !env.MAGAZORD_API_PASSWORD)
+    const base = resolveMagazordBaseUrl(env.MAGAZORD_BASE_URL);
+    if (!base || !env.MAGAZORD_API_USER || !env.MAGAZORD_API_PASSWORD)
       return unavailableProductLookup(query, 'not_configured');
     const signal = AbortSignal.timeout(options.timeoutMs ?? 15_000);
     let calls = 0, truncated = false;
     async function get(path: string, params?: Record<string, string>, allowMissing = false): Promise<any> {
       if (++calls > 8) throw new LookupError('query_limit');
-      const url = new URL(BASE + path);
+      const url = new URL(base + path);
       if (params) url.search = new URLSearchParams(params).toString();
       const response = await fetcher(url, { method: 'GET', signal, redirect: 'error', cache: 'no-store', credentials: 'omit',
         headers: { Accept: 'application/json', Authorization: 'Basic ' + Buffer.from(`${env.MAGAZORD_API_USER}:${env.MAGAZORD_API_PASSWORD}`).toString('base64') } });
