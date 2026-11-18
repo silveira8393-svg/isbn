@@ -19,6 +19,7 @@ import { imageReferences } from '../../utils/imageUrls';
 import ProductIdentitySection from './ProductIdentitySection';
 import EditionReferenceLinks from '../EditionReferenceLinks';
 import MagazordProductLookup from './MagazordProductLookup';
+import MagazordRealRegistration from './MagazordRealRegistration';
 import CategoryAndBrandSection from './CategoryAndBrandSection';
 import { useMagazordCategories } from '../../hooks/useMagazordCategories';
 import CommercialSection from './CommercialSection';
@@ -85,6 +86,8 @@ export default function ProductRegistrationForm({
   const [touchedCodes, setTouchedCodes] = useState<Record<string, boolean>>({});
   const [focusField, setFocusField] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [realBusy, setRealBusy] = useState(false);
+  const [realStarted, setRealStarted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successResult, setSuccessResult] = useState<MagazordRegistrationResult | null>(null);
   const submissionInFlight = useRef(false);
@@ -131,6 +134,7 @@ export default function ProductRegistrationForm({
   };
 
   const handleSubmit = async () => {
+    if (realBusy || realStarted) return;
     if (!reviewOpen.current || submissionInFlight.current || submissionCompleted.current || successResult || imageUploadInFlight.current) return;
     setSubmitError(null);
     const draft = currentDraft.current;
@@ -293,7 +297,7 @@ export default function ProductRegistrationForm({
       ].join('\n')}</style>
       {reviewing && <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-5 sm:p-7" aria-label="Revisão do cadastro">
         <h2 data-registration-field="review" tabIndex={-1} className="text-xl font-bold text-slate-900">Revisão do cadastro</h2>
-        <p className="text-sm text-slate-600">Confira os dados e as imagens selecionadas. A operação será executada somente ao confirmar, no simulador existente.</p>
+        <p className="text-sm text-slate-600">Confira os dados e escolha a ação. O simulador e o cadastro real em homologação são independentes; cada um exige sua própria confirmação.</p>
         <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{reviewRows.map(([label, value]) => <div key={label} className="min-w-0">
           <dt className="text-xs text-slate-500">{label}</dt><dd className="break-words text-sm font-medium text-slate-900">{value == null || value === '' ? 'Não informado' : String(value)}</dd>
         </div>)}</dl>
@@ -308,9 +312,10 @@ export default function ProductRegistrationForm({
           : buildFinalDescription(draft)}</p></div>}
         <div><h3 className="mb-3 text-sm font-bold">Imagens selecionadas</h3>{reviewedImages.length ? <div className="grid gap-4 sm:grid-cols-3">{reviewedImages.map((url, index) => <div key={url}><RegistrationImage url={url} label={index ? `Imagem adicional ${index}` : 'Capa principal'} /></div>)}</div> : <p className="text-sm text-slate-500">Sem imagens. O cadastro pode continuar.</p>}</div>
         {submitError && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">{submitError}</p>}
+        <MagazordRealRegistration draft={draft} user={imageUser} onBusy={setRealBusy} onStarted={() => setRealStarted(true)} onDone={onProcessNextBook} />
         <div className="flex flex-wrap justify-end gap-3">
-          <button type="button" id="btn-return-to-registration" disabled={isSubmitting} onClick={() => { if (submissionInFlight.current) return; reviewOpen.current = false; onReviewStateChange?.(false); setReviewing(false); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold disabled:opacity-60">Retornar ao cadastro</button>
-          <button type="button" id="btn-confirm-magazord-registration" disabled={isSubmitting || imageUploadBusy} onClick={handleSubmit} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-bold text-white disabled:opacity-60">{isSubmitting ? 'Confirmando cadastro...' : 'Confirmar cadastro'}</button>
+          <button type="button" id="btn-return-to-registration" disabled={isSubmitting || realBusy || realStarted} onClick={() => { if (submissionInFlight.current) return; reviewOpen.current = false; onReviewStateChange?.(false); setReviewing(false); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold disabled:opacity-60">Retornar ao cadastro</button>
+          <button type="button" id="btn-confirm-magazord-registration" disabled={isSubmitting || imageUploadBusy || realBusy || realStarted} onClick={handleSubmit} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-bold text-white disabled:opacity-60">{isSubmitting ? 'Confirmando cadastro...' : 'Confirmar cadastro no simulador'}</button>
         </div>
       </section>}
       <div hidden={reviewing} className="isbn-registration-editor space-y-6" onChangeCapture={event => {
