@@ -7,12 +7,13 @@ const built = await build({ stdin: { resolveDir: process.cwd(), contents: `expor
 const api = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].text).toString('base64'));
 const uid='11111111-1111-4111-8111-111111111111', store='22222222-2222-4222-8222-222222222222';
 const base='https://homologacaosilveiralab.painel.magazord.com.br/api';
-const env={MAGAZORD_BASE_URL:base,MAGAZORD_API_USER:'fixture-token',MAGAZORD_API_PASSWORD:'fixture-password',MAGAZORD_STORE_ID:store,SUPABASE_URL:'https://auth.invalid',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_fixture'};
-const input={parentCode:'USED-01-P',childCode:'USED-01',title:'Livro fixture',condition:'usado',categoryId:10,categoryStoreId:store,brandId:20,channelId:30,fiscalOrigin:0,unit:'UN',ncm:'49019900',description:'Conservacao fixture',ean:'9788551003664'};
+const env={MAGAZORD_BASE_URL:base,MAGAZORD_API_USER:'fixture-token',MAGAZORD_API_PASSWORD:'fixture-password',MAGAZORD_STORE_ID:store,MAGAZORD_HOMOLOGATION_CHANNELS:JSON.stringify({[store]:1}),SUPABASE_URL:'https://auth.invalid',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_fixture'};
+const input={parentCode:'USED-01-P',childCode:'USED-01',title:'Livro fixture',condition:'usado',categoryId:10,categoryStoreId:store,brandId:20,channelId:1,fiscalOrigin:0,unit:'UN',ncm:'49019900',description:'Conservacao fixture',ean:'9788551003664'};
 const id=()=>crypto.randomUUID();
 const req=(operationId,changes={},headers={})=>new Request('https://isbn.invalid/api/magazord/registration',{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${mfaToken(uid)}`,'x-isbn-store-id':store,...headers},body:JSON.stringify({action:'create',operationId,input,...changes})});
 function fixture(flags={}) {
   const calls=[],logs=[],jobs=new Map(),codes=new Set(),parents=new Map(),children=new Map();
+  const fixtureStore=flags.store||store;
   const journal={
     async reserve(row){if(jobs.has(row.id))return {...jobs.get(row.id)};for(const c of [row.parent_code,row.child_code])if(codes.has(c.toLowerCase()))throw new api.JournalError('code_reserved');for(const c of [row.parent_code,row.child_code])codes.add(c.toLowerCase());jobs.set(row.id,{...row});return {...row};},
     async advance(row,next){if(jobs.get(row.id)?.stage!==row.stage)return false;jobs.set(row.id,{...row,stage:next});return true;},
@@ -24,8 +25,8 @@ function fixture(flags={}) {
       assert.equal(init.method,'GET');assert.match(init.headers.Authorization,/^Bearer /);
       if(url.pathname==='/auth/v1/user')return flags.authRejected?new Response(null,{status:401}):Response.json({id:uid});
       if(url.pathname==='/rest/v1/profiles')return Response.json([{id:uid,active:flags.profile!==false}]);
-      if(url.pathname==='/rest/v1/store_users')return Response.json(flags.member===false?[]:[{user_id:uid,store_id:store,role:'operator',active:true}]);
-      if(url.pathname==='/rest/v1/stores')return Response.json([{id:store,active:flags.activeStore!==false}]);
+      if(url.pathname==='/rest/v1/store_users')return Response.json(flags.member===false?[]:[{user_id:uid,store_id:fixtureStore,role:'operator',active:true}]);
+      if(url.pathname==='/rest/v1/stores')return Response.json([{id:fixtureStore,active:flags.activeStore!==false}]);
       assert.fail('Unexpected Auth path');
     }
     assert.equal(url.origin,new URL(base).origin);assert.equal(init.headers.Authorization,'Basic '+Buffer.from('fixture-token:fixture-password').toString('base64'));
@@ -45,11 +46,11 @@ function fixture(flags={}) {
       return Response.json({status:'success',data:[]},{status:201});
     }
     assert.equal(init.method,'GET');
+    assert.notEqual(url.pathname,'/api/v2/site/loja','Registration must not query stores');
     if(flags.rejectGet===url.pathname)return new Response('upstream private body fixture-token fixture-password',{status:flags.rejectStatus||403});
     if(flags.remoteRedirect)return new Response(null,{status:302,headers:{location:'https://livrariasul.painel.magazord.com.br/api'}});
     if(url.pathname==='/api/v2/site/marca')return page(flags.noBrand?[]:[{id:20}]);
     if(url.pathname==='/api/v2/site/categoria')return page([{id:10}]);
-    if(url.pathname==='/api/v2/site/loja')return page([{id:30,ativo:true}]);
     if(url.pathname==='/api/v2/site/produtoDerivacoes')return page([...children.values(),...(flags.parentOnlyInList?[{codigo:input.parentCode,tipoRegistro:'pai'}]:[])].filter(c=>c.codigo.toLowerCase()===url.searchParams.get('codigo').toLowerCase()));
     if(url.pathname.endsWith('/derivacao'))return Response.json({status:'success',data:flags.badRelationship?[]:[...children.values()].filter(c=>c.agrupador===decodeURIComponent(url.pathname.split('/')[5]))});
     const p=parents.get(decodeURIComponent(url.pathname.split('/').at(-1)));
@@ -59,10 +60,65 @@ function fixture(flags={}) {
 }
 const writes=f=>f.calls.filter(c=>c.init.method==='POST');
 
+test('homologation binding 1 unblocks preview with brand/category/code GETs and no store lookup or journal',async()=>{
+  const f=fixture(),r=await f.handler()(req(id(),{action:'preview'}));
+  assert.equal(r.status,200);const body=await r.json();
+  assert.equal(body.payload.parent.produtoLoja[0].loja,1);assert.deepEqual(body.payload.child.lojas,[1]);
+  const paths=f.calls.filter(c=>c.url.origin===new URL(base).origin).map(c=>c.url.pathname);
+  assert.deepEqual(paths,['/api/v2/site/marca','/api/v2/site/categoria','/api/v2/site/produto/'+input.parentCode,
+    '/api/v2/site/produto/'+input.childCode,'/api/v2/site/produtoDerivacoes','/api/v2/site/produtoDerivacoes']);
+  assert.equal(writes(f).length,0);assert.equal(f.jobs.size,0);
+});
+
+test('missing, malformed or unbound channel configuration fails closed in preview and create',async()=>{
+  const invalid=[undefined,'','{','null','[]','1','{}',JSON.stringify({[uid]:1}),
+    ...[null,0,-1,1.5,'1',Number.MAX_SAFE_INTEGER+1,true,{}].map(v=>JSON.stringify({[store]:v})),
+    JSON.stringify({[store]:1,default:1}),JSON.stringify({[store]:1,[uid]:0})];
+  for(const action of ['preview','create'])for(const value of invalid){
+    const f=fixture();const handler=api.createMagazordRegistrationFunction({env:{...env,MAGAZORD_HOMOLOGATION_CHANNELS:value},fetcher:f.fetcher,journal:f.journal});
+    const r=await handler(req(id(),{action}));assert.equal(r.status,503);assert.deepEqual(await r.json(),{code:'channel_not_configured'});
+    assert.ok(f.calls.every(c=>c.url.origin==='https://auth.invalid'));assert.equal(f.jobs.size,0);assert.equal(writes(f).length,0);
+  }
+});
+
+test('browser channel divergence is denied before remote GETs, reservations or creation',async()=>{
+  for(const action of ['preview','create']){
+    const f=fixture(),r=await f.handler()(req(id(),{action,input:{...input,channelId:99}}));
+    assert.equal(r.status,403);assert.deepEqual(await r.json(),{code:'channel_access_denied'});
+    assert.ok(f.calls.every(c=>c.url.origin==='https://auth.invalid'));assert.equal(f.jobs.size,0);assert.equal(writes(f).length,0);
+  }
+});
+
+test('independent ISBN stores select only their own backend channel binding, without a global default',async()=>{
+  const other='33333333-3333-4333-8333-333333333333',bindings=JSON.stringify({[store]:1,[other]:2});
+  for(const [selected,channel] of [[store,1],[other,2]]){
+    const f=fixture({store:selected});const handler=api.createMagazordRegistrationFunction({env:{...env,MAGAZORD_STORE_ID:selected,MAGAZORD_HOMOLOGATION_CHANNELS:bindings},fetcher:f.fetcher,journal:f.journal});
+    const r=await handler(req(id(),{action:'preview',input:{...input,categoryStoreId:selected,channelId:channel}},{'x-isbn-store-id':selected}));
+    assert.equal(r.status,200);const body=await r.json();assert.equal(body.payload.parent.produtoLoja[0].loja,channel);assert.deepEqual(body.payload.child.lojas,[channel]);
+    const denied=await handler(req(id(),{action:'preview',input:{...input,categoryStoreId:selected,channelId:channel===1?2:1}},{'x-isbn-store-id':selected}));
+    assert.equal(denied.status,403);assert.equal(writes(f).length,0);
+  }
+});
+
+test('channel bindings cannot enable production or other hosts in preview or create',async()=>{
+  for(const action of ['preview','create'])for(const target of ['https://livrariasul.painel.magazord.com.br/api',
+    'https://livrariasul.painel.magazord.com.br/api/','https://other.invalid/api','http://homologacaosilveiralab.painel.magazord.com.br/api']){
+    const f=fixture();const handler=api.createMagazordRegistrationFunction({env:{...env,MAGAZORD_BASE_URL:target},fetcher:f.fetcher,journal:f.journal});
+    const r=await handler(req(id(),{action}));assert.equal(r.status,403);assert.deepEqual(await r.json(),{code:'homologation_only'});assert.equal(f.calls.length,0);assert.equal(f.jobs.size,0);
+  }
+});
+
+test('channel change cannot redirect an already reserved partial operation',async()=>{
+  const f=fixture({childLost:true}),key=id();assert.equal((await f.handler()(req(key))).status,503);
+  const before=writes(f).length,stage=f.jobs.get(key).stage;
+  const handler=api.createMagazordRegistrationFunction({env:{...env,MAGAZORD_HOMOLOGATION_CHANNELS:JSON.stringify({[store]:2})},fetcher:f.fetcher,journal:f.journal});
+  const r=await handler(req(key));assert.equal(r.status,403);assert.deepEqual(await r.json(),{code:'channel_access_denied'});
+  assert.equal(writes(f).length,before);assert.equal(f.jobs.get(key).stage,stage);
+});
+
 test('read rejection diagnostics identify each preview GET without sensitive data or fallback',async()=>{
   for(const [path,operation] of [
     ['/api/v2/site/marca','registration_brand_lookup'],
-    ['/api/v2/site/loja','registration_stores_lookup'],
     ['/api/v2/site/categoria','registration_category_lookup'],
     ['/api/v2/site/produto/'+input.parentCode,'registration_product_lookup'],
     ['/api/v2/site/produto/'+input.childCode,'registration_product_lookup'],
@@ -82,10 +138,9 @@ test('read rejection diagnostics identify each preview GET without sensitive dat
 
 test('read rejection diagnostics preserve HTTP status and successful preview accepts missing codes without logging',async()=>{
   for(const status of [401,403,429,503]){
-    const f=fixture({rejectGet:'/api/v2/site/loja',rejectStatus:status});
+    const f=fixture({rejectGet:'/api/v2/site/categoria',rejectStatus:status});
     assert.equal((await f.handler()(req(id(),{action:'preview'}))).status,502);
-    assert.deepEqual(f.logs,[{operation:'registration_stores_lookup',status,code:'remote_rejected'}]);
-    assert.equal(f.calls.filter(c=>c.url.pathname==='/api/v2/site/loja')[0].url.search,'?ativo=1');
+    assert.deepEqual(f.logs,[{operation:'registration_category_lookup',status,code:'remote_rejected'}]);
   }
   const f=fixture();assert.equal((await f.handler()(req(id(),{action:'preview'}))).status,200);
   assert.deepEqual(f.logs,[]);assert.equal(writes(f).length,0);assert.equal(f.jobs.size,0);

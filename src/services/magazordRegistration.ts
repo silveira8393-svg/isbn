@@ -20,6 +20,8 @@ export async function submitMagazordRegistration(action: 'preview' | 'create', o
       operation_payload_changed: 'Os dados desta operação mudaram. Preserve os dados e reconcilie os códigos antes de iniciar outra operação.',
       invalid_registration: 'Confira os códigos (até 25 caracteres), título (até 100), origem fiscal e IDs obrigatórios.',
       invalid_catalog_reference: 'Marca, categoria ou loja/canal não confirmados na homologação.',
+      channel_not_configured: 'Vínculo da loja ISBN com o canal de homologação não configurado no backend.',
+      channel_access_denied: 'O canal informado não corresponde ao vínculo de homologação autorizado para esta loja ISBN.',
       journal_not_configured: 'Diário persistente não configurado no backend. Nenhuma nova criação foi iniciada.',
       journal_unavailable: 'Diário persistente indisponível. O resultado anterior deve ser reconciliado antes de continuar.',
     };

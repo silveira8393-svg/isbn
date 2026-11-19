@@ -8,12 +8,22 @@ const HOMOLOGATION = 'https://homologacaosilveiralab.painel.magazord.com.br/api'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 class RegistrationError extends Error { constructor(public status: number, public code: string) { super(code); } }
 const fail = (status: number, code: string): never => { throw new RegistrationError(status, code); };
+
+/** Explicit homologation-only bindings, independently configured for each ISBN store. No default channel. */
+function homologationChannel(env: NodeJS.ProcessEnv, storeId: string): number {
+  let bindings: unknown;
+  try { bindings = JSON.parse(env.MAGAZORD_HOMOLOGATION_CHANNELS || ''); }
+  catch { return fail(503, 'channel_not_configured'); }
+  if (!bindings || typeof bindings !== 'object' || Array.isArray(bindings)
+    || Object.entries(bindings).some(([store, channel]) => !UUID.test(store) || !Number.isSafeInteger(channel) || Number(channel) <= 0)
+    || !Object.hasOwn(bindings, storeId)) return fail(503, 'channel_not_configured');
+  return (bindings as Record<string, number>)[storeId];
+}
 type ReadRejection = { operation: string; status: number; code: 'remote_rejected' };
 // Fixed operation names only: never include paths containing commercial codes or query values.
 function readOperation(path: string): string {
   const pathname = path.split('?')[0];
   if (pathname === '/v2/site/marca') return 'registration_brand_lookup';
-  if (pathname === '/v2/site/loja') return 'registration_stores_lookup';
   if (pathname === '/v2/site/categoria') return 'registration_category_lookup';
   if (pathname === '/v2/site/produtoDerivacoes') return 'registration_commercial_code_lookup';
   if (pathname.startsWith('/v2/site/produto/')) return pathname.endsWith('/derivacao')
@@ -54,6 +64,10 @@ export function createMagazordRegistrationFunction(options: { env?: NodeJS.Proce
         fail(400, 'invalid_registration');
       }
       if (input.categoryStoreId !== storeId) fail(403, 'store_access_denied');
+      // The browser cannot select another channel, including a valid active channel in the same tenant.
+      // This configuration is consulted only AFTER the exact homologation-host and ISBN authorization gates.
+      const channelId = homologationChannel(env, storeId);
+      if (input.channelId !== channelId) fail(403, 'channel_access_denied');
       const signal = AbortSignal.timeout(20000);
       const headers = { Accept: 'application/json', Authorization: 'Basic ' + Buffer.from(`${env.MAGAZORD_API_USER}:${env.MAGAZORD_API_PASSWORD}`).toString('base64') };
       async function remote(path: string, method: 'GET' | 'POST' = 'GET', data?: unknown, missing = false): Promise<any> {
@@ -94,10 +108,8 @@ export function createMagazordRegistrationFunction(options: { env?: NodeJS.Proce
       }
       async function references() {
         const brand = await remote('/v2/site/marca?' + new URLSearchParams({ id: String(input.brandId), limit: '100', page: '1' }));
-        const channels = await remote('/v2/site/loja?ativo=1');
         const category = await remote('/v2/site/categoria?' + new URLSearchParams({ id: String(input.categoryId), limit: '100', page: '1' }));
         if (!Array.isArray(brand.items) || !brand.items.some((b: any) => b.id === input.brandId)
-          || !Array.isArray(channels.items) || !channels.items.some((c: any) => c.id === input.channelId && c.ativo === true)
           || !Array.isArray(category.items) || !category.items.some((c: any) => c.id === input.categoryId)) fail(400, 'invalid_catalog_reference');
       }
       if (body.action === 'preview') {
