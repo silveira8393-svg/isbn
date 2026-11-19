@@ -20,7 +20,7 @@ function backend(flags={}){
     if(url.origin==='https://auth.invalid'){
       if(url.pathname==='/rest/v1/magazord_price_jobs'){
         if(flags.missingJournal)return Response.json({message:'private journal error'},{status:404});
-        if(init.method==='GET')return Response.json(url.searchParams.get('limit')==='0'?[]:saved?[{...saved}]:[]);
+        if(init.method==='GET')return Response.json(url.searchParams.get('limit')==='0'?[]:saved && (!url.searchParams.get('registration_id') || url.searchParams.get('registration_id')==='eq.'+saved.registration_id)?[{...saved}]:[]);
         if(init.method==='POST'){assert.equal(saved,null);saved=JSON.parse(init.body);return Response.json([{...saved}],{status:201});}
         assert.equal(init.method,'PATCH');
         assert.equal(url.searchParams.get('fingerprint'),'eq.'+saved.fingerprint);
@@ -68,11 +68,11 @@ function backend(flags={}){
 }
 const priceEntry=(changes={})=>({produto:'FIXTURE-C',tabelaPreco:1,anuncio:null,precoVenda:30,precoAntigo:null,...changes});
 
-const sendRequest=(changes={},headers={})=>request({action:'send',operationId:priceId,...changes},headers);
+const sendRequest=(changes={},headers={})=>request({action:'send',operationId:api.priceOperationId(priceId,registration),...changes},headers);
 const remotePosts=f=>f.calls.filter(c=>c.url.pathname==='/api/v1/preco');
 test('connected send persists intention, posts only the child and verifies by GET without resending',async()=>{
   const f=backend({enable:true});
-  const preview=await (await f.handler(request())).json();assert.equal(preview.writesEnabled,true);assert.equal(preview.operationId,priceId);
+  const preview=await (await f.handler(request())).json();assert.equal(preview.writesEnabled,true);assert.equal(preview.operationId,api.priceOperationId(priceId,registration));
   const response=await f.handler(sendRequest());assert.equal(response.status,200);assert.equal((await response.json()).stage,'price_verified');
   assert.equal(f.job().stage,'price_verified');assert.equal(remotePosts(f).length,1);
   assert.equal((await f.handler(sendRequest())).status,200);assert.equal(remotePosts(f).length,1);
@@ -96,6 +96,21 @@ test('decimal-string sale price is strict: malformed, extra digits, zero and wro
     assert.throws(()=>api.priceSnapshot({data:[priceEntry({precoVenda:value})],total:1},'FIXTURE-C',1));
   }
   assert.throws(()=>api.priceSnapshot({data:[priceEntry({precoVenda:'30.00',produto:'outro'})],total:1},'FIXTURE-C',1));
+});
+test('each verified registration gets its own stable price operation UUID',async()=>{
+  const first=api.priceOperationId(priceId,registration);
+  const second=api.priceOperationId(priceId,'55555555-5555-4555-8555-555555555555');
+  assert.notEqual(first,second);assert.equal(first,api.priceOperationId(priceId,registration));
+  assert.notEqual(first,priceId);
+  const f=backend({enable:true});
+  const preview=await (await f.handler(request({action:'prepare'}))).json();
+  assert.equal(preview.operationId,first);assert.equal(preview.operationStage,'not_started');
+  assert.equal(remotePosts(f).length,0);
+});
+test('old fixed operation ID cannot authorize a new price',async()=>{
+  const f=backend({enable:true});
+  const blocked=await f.handler(sendRequest({operationId:priceId}));
+  assert.equal(blocked.status,423);assert.equal(remotePosts(f).length,0);
 });
 test('connected send requires exact backend operation, journal, CAS, verified creation and homologation',async()=>{
   for(const flags of [{missingJournal:true},{casFailure:true},{noRegistration:true},
@@ -131,7 +146,7 @@ test('prepare uses only authorization and verified journal; first remote call of
   // These diagnostic routes would fail, but none is a prerequisite for creating the first price.
   const f=backend({enable:true,remoteFailurePath:'/api/v2/site/produto/FIXTURE-P'});
   const ready=await f.handler(request({action:'prepare'}));assert.equal(ready.status,200);
-  const prepared=await ready.json();assert.equal(prepared.operationId,priceId);assert.equal(prepared.tableId,1);assert.equal(prepared.cents,3000);
+  const prepared=await ready.json();assert.equal(prepared.operationId,api.priceOperationId(priceId,registration));assert.equal(prepared.tableId,1);assert.equal(prepared.cents,3000);
   assert.equal(f.calls.filter(c=>c.url.origin===new URL(base).origin).length,0);assert.equal(f.job(),null);
   const response=await f.handler(sendRequest());assert.equal(response.status,200);
   const remote=f.calls.filter(c=>c.url.origin===new URL(base).origin);
