@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { authorizeAmazonSearch, AmazonAccessError, readLimitedJson } from './amazonAuthorization.js';
 import { resolveMagazordBaseUrl } from './magazordBaseUrl.js';
 import { priceDatabase, createPriceStore } from './magazordPriceStore.js';
@@ -20,6 +21,17 @@ function binding(env: NodeJS.ProcessEnv, store: string): { channelId: number; ta
     tables.add(b.tableId); // Shared tables across ISBN stores need an explicit later design/review.
   }
   return map[store];
+}
+
+/** Stable, separate operation ID for each verified registration. The environment UUID is only an enablement seed. */
+export function priceOperationId(enabledId: string, registrationId: string): string {
+  if (!priceUuid(enabledId) || !priceUuid(registrationId)) return priceFail('invalid_price_operation', 400);
+  const hex = createHash('sha256').update('isbn-magazord-price:v2:').update(enabledId.toLowerCase())
+    .update(':').update(registrationId.toLowerCase()).digest('hex').slice(0, 32).split('');
+  hex[12] = '4'; // RFC 4122 variant/version for UUID storage.
+  hex[16] = '89ab'[parseInt(hex[16], 16) % 4];
+  const id = hex.join('');
+  return [id.slice(0,8), id.slice(8,12), id.slice(12,16), id.slice(16,20), id.slice(20)].join('-');
 }
 
 /** Prepare uses the verified ISBN registration; preview remains an optional remote diagnostic. */
@@ -47,7 +59,6 @@ export function createMagazordPriceFunction(options: { env?: NodeJS.ProcessEnv; 
       if (!readOnly && (!enabled || !['send', 'reconcile'].includes(input?.action))) return priceFail('price_writes_disabled', 423);
       if (Object.keys(input).some(k => !['action', 'registrationId', 'price', ...(readOnly ? [] : ['operationId'])].includes(k))
         || !priceUuid(input.registrationId)) return priceFail('invalid_price_request', 400);
-      if (!readOnly && input.operationId !== enabledId) return priceFail('price_writes_disabled', 423);
       const cents = priceCents(input.price), configured = binding(env, store);
       if (input.action !== 'preview' && configured.tableId !== 1) return priceFail('invalid_price_table');
       const call = priceDatabase(env, fetcher);
@@ -59,18 +70,34 @@ export function createMagazordPriceFunction(options: { env?: NodeJS.ProcessEnv; 
       const payload = salePricePayload(job.child_code, configured.tableId, cents);
       salePricePayload(job.parent_code, configured.tableId, cents);
       if (job.parent_code === job.child_code) return priceFail('invalid_relationship');
+      // An operation already journaled takes precedence over a newly derived ID.
+      // This preserves old started operations (LVP009) without a second remote POST.
+      let existing: any | undefined;
+      if (enabled && input.action !== 'preview') {
+        const rows = await call('magazord_price_jobs', 'GET', { registration_id: `eq.${job.id}`,
+          store_id: `eq.${store}`, actor_id: `eq.${actor}`, select: '*', limit: '2' });
+        if (rows.length > 1) return priceFail('price_persistence_unavailable', 503);
+        existing = rows[0];
+        if (existing && (existing.registration_id !== job.id || existing.store_id !== store
+          || existing.actor_id !== actor || existing.child_code !== job.child_code
+          || existing.parent_code !== job.parent_code || existing.table_id !== configured.tableId
+          || existing.channel_id !== configured.channelId || existing.cents !== cents))
+          return priceFail('price_payload_changed');
+      }
+      const resolvedId = enabled ? (existing?.id || priceOperationId(enabledId!, job.id)) : undefined;
+      if (!readOnly && input.operationId !== resolvedId) return priceFail('price_writes_disabled', 423);
       // verified is reached only by the new-product registration state machine.
       // Preexisting codes are rejected there; products created by that same operation can resume here.
       if (input.action === 'prepare') {
         if (enabled) await call('magazord_price_jobs', 'GET', { select: 'id', limit: '0' });
         const result: PricePreview = { status: 'preview', environment: 'homologation', writesEnabled: enabled,
-          ...(enabled ? { operationId: enabledId } : {}), parentCode: job.parent_code, childCode: job.child_code,
+          ...(enabled ? { operationId: resolvedId } : {}), parentCode: job.parent_code, childCode: job.child_code,
           tableId: 1, tableName: 'Padrão', cents, eligible: true, state: 'ready_for_local_review', payload };
         return reply(result);
       }
       const transport = createPriceTransport(env, fetcher), get = transport.get;
       if (input.action !== 'preview') {
-        const priceOperation = priceJob({ id: enabledId!, registration_id: job.id, store_id: store, actor_id: actor,
+        const priceOperation = priceJob({ id: resolvedId!, registration_id: job.id, store_id: store, actor_id: actor,
           parent_code: job.parent_code, child_code: job.child_code, channel_id: configured.channelId, table_id: configured.tableId, cents });
         const stage = await exercisePriceOperation(priceOperation, {
           baseUrl: PRICE_HOMOLOGATION, store: createPriceStore(env, fetcher), verifiedRegistration: async () => true,
@@ -83,7 +110,7 @@ export function createMagazordPriceFunction(options: { env?: NodeJS.ProcessEnv; 
             return present[0] || { kind: 'absent' };
           },
         });
-        return reply({ status: 'verified', operationId: enabledId, stage, childCode: job.child_code, tableId: configured.tableId, cents });
+        return reply({ status: 'verified', operationId: resolvedId, stage, childCode: job.child_code, tableId: configured.tableId, cents });
       }
       const unwrap = (body: any) => body?.status === 'success' && body.data != null ? body.data : priceFail('invalid_remote_response', 502);
       const parent = unwrap(await get('/v2/site/produto/' + encodeURIComponent(job.parent_code)));
