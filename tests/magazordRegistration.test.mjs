@@ -12,7 +12,7 @@ const input={parentCode:'USED-01-P',childCode:'USED-01',title:'Livro fixture',co
 const id=()=>crypto.randomUUID();
 const req=(operationId,changes={},headers={})=>new Request('https://isbn.invalid/api/magazord/registration',{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${mfaToken(uid)}`,'x-isbn-store-id':store,...headers},body:JSON.stringify({action:'create',operationId,input,...changes})});
 function fixture(flags={}) {
-  const calls=[],jobs=new Map(),codes=new Set(),parents=new Map(),children=new Map();
+  const calls=[],logs=[],jobs=new Map(),codes=new Set(),parents=new Map(),children=new Map();
   const journal={
     async reserve(row){if(jobs.has(row.id))return {...jobs.get(row.id)};for(const c of [row.parent_code,row.child_code])if(codes.has(c.toLowerCase()))throw new api.JournalError('code_reserved');for(const c of [row.parent_code,row.child_code])codes.add(c.toLowerCase());jobs.set(row.id,{...row});return {...row};},
     async advance(row,next){if(jobs.get(row.id)?.stage!==row.stage)return false;jobs.set(row.id,{...row,stage:next});return true;},
@@ -45,6 +45,7 @@ function fixture(flags={}) {
       return Response.json({status:'success',data:[]},{status:201});
     }
     assert.equal(init.method,'GET');
+    if(flags.rejectGet===url.pathname)return new Response('upstream private body fixture-token fixture-password',{status:flags.rejectStatus||403});
     if(flags.remoteRedirect)return new Response(null,{status:302,headers:{location:'https://livrariasul.painel.magazord.com.br/api'}});
     if(url.pathname==='/api/v2/site/marca')return page(flags.noBrand?[]:[{id:20}]);
     if(url.pathname==='/api/v2/site/categoria')return page([{id:10}]);
@@ -54,9 +55,41 @@ function fixture(flags={}) {
     const p=parents.get(decodeURIComponent(url.pathname.split('/').at(-1)));
     return p?Response.json({status:'success',data:p}):new Response(null,{status:404});
   };
-  return {calls,jobs,parents,children,journal,fetcher,handler:()=>api.createMagazordRegistrationFunction({env,fetcher,journal})};
+  return {calls,logs,jobs,parents,children,journal,fetcher,handler:()=>api.createMagazordRegistrationFunction({env,fetcher,journal,logReadRejection:entry=>logs.push(entry)})};
 }
 const writes=f=>f.calls.filter(c=>c.init.method==='POST');
+
+test('read rejection diagnostics identify each preview GET without sensitive data or fallback',async()=>{
+  for(const [path,operation] of [
+    ['/api/v2/site/marca','registration_brand_lookup'],
+    ['/api/v2/site/loja','registration_stores_lookup'],
+    ['/api/v2/site/categoria','registration_category_lookup'],
+    ['/api/v2/site/produto/'+input.parentCode,'registration_product_lookup'],
+    ['/api/v2/site/produto/'+input.childCode,'registration_product_lookup'],
+    ['/api/v2/site/produtoDerivacoes','registration_commercial_code_lookup'],
+  ]){
+    const f=fixture({rejectGet:path});
+    const response=await f.handler()(req(id(),{action:'preview'}));
+    assert.equal(response.status,502);assert.deepEqual(await response.json(),{code:'remote_rejected'});
+    assert.deepEqual(f.logs,[{operation,status:403,code:'remote_rejected'}]);
+    const remote=f.calls.filter(c=>c.url.origin===new URL(base).origin);
+    assert.equal(remote.at(-1).url.pathname,path);
+    assert.equal(remote.filter(c=>c.url.pathname===path).length,1);
+    assert.equal(writes(f).length,0);assert.equal(f.jobs.size,0);
+    assert.doesNotMatch(JSON.stringify(f.logs),/fixture-token|fixture-password|Authorization|private body|USED-01/);
+  }
+});
+
+test('read rejection diagnostics preserve HTTP status and successful preview accepts missing codes without logging',async()=>{
+  for(const status of [401,403,429,503]){
+    const f=fixture({rejectGet:'/api/v2/site/loja',rejectStatus:status});
+    assert.equal((await f.handler()(req(id(),{action:'preview'}))).status,502);
+    assert.deepEqual(f.logs,[{operation:'registration_stores_lookup',status,code:'remote_rejected'}]);
+    assert.equal(f.calls.filter(c=>c.url.pathname==='/api/v2/site/loja')[0].url.search,'?ativo=1');
+  }
+  const f=fixture();assert.equal((await f.handler()(req(id(),{action:'preview'}))).status,200);
+  assert.deepEqual(f.logs,[]);assert.equal(writes(f).length,0);assert.equal(f.jobs.size,0);
+});
 
 test('creates parent then child, confirms direct relationship, replays across handler instances without another POST',async()=>{
   const f=fixture(),key=id();const response=await f.handler()(req(key));assert.equal(response.status,200);assert.equal((await response.json()).status,'verified');assert.equal(writes(f).length,2);assert.equal(f.jobs.get(key).stage,'verified');

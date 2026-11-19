@@ -8,9 +8,22 @@ const HOMOLOGATION = 'https://homologacaosilveiralab.painel.magazord.com.br/api'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 class RegistrationError extends Error { constructor(public status: number, public code: string) { super(code); } }
 const fail = (status: number, code: string): never => { throw new RegistrationError(status, code); };
+type ReadRejection = { operation: string; status: number; code: 'remote_rejected' };
+// Fixed operation names only: never include paths containing commercial codes or query values.
+function readOperation(path: string): string {
+  const pathname = path.split('?')[0];
+  if (pathname === '/v2/site/marca') return 'registration_brand_lookup';
+  if (pathname === '/v2/site/loja') return 'registration_stores_lookup';
+  if (pathname === '/v2/site/categoria') return 'registration_category_lookup';
+  if (pathname === '/v2/site/produtoDerivacoes') return 'registration_commercial_code_lookup';
+  if (pathname.startsWith('/v2/site/produto/')) return pathname.endsWith('/derivacao')
+    ? 'registration_relationship_lookup' : 'registration_product_lookup';
+  return 'registration_read';
+}
 
-export function createMagazordRegistrationFunction(options: { env?: NodeJS.ProcessEnv; fetcher?: typeof fetch; journal?: RegistrationStore } = {}) {
+export function createMagazordRegistrationFunction(options: { env?: NodeJS.ProcessEnv; fetcher?: typeof fetch; journal?: RegistrationStore; logReadRejection?: (entry: ReadRejection) => void } = {}) {
   const env = options.env || process.env, fetcher = options.fetcher || fetch;
+  const logReadRejection = options.logReadRejection || ((entry: ReadRejection) => console.warn(JSON.stringify(entry)));
   return async (request: Request): Promise<Response> => {
     const reply = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'private, no-store',
       'X-Content-Type-Options': 'nosniff', ...(status === 405 ? { Allow: 'POST' } : {}) } });
@@ -47,7 +60,14 @@ export function createMagazordRegistrationFunction(options: { env?: NodeJS.Proce
         const response = await fetcher(HOMOLOGATION + path, { method, signal, redirect: 'error', credentials: 'omit', cache: 'no-store',
           headers: { ...headers, ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}) }, ...(data ? { body: JSON.stringify(data) } : {}) });
         if (missing && response.status === 404) { void response.body?.cancel(); return null; }
-        if (!response.ok || (method === 'POST' && response.status !== 201)) { void response.body?.cancel(); fail(502, 'remote_rejected'); }
+        if (!response.ok || (method === 'POST' && response.status !== 201)) {
+          void response.body?.cancel();
+          if (method === 'GET') {
+            // Logging cannot change the rejection, expose the upstream body, or initiate retries.
+            try { logReadRejection({ operation: readOperation(path), status: response.status, code: 'remote_rejected' }); } catch { /* fail closed below */ }
+          }
+          fail(502, 'remote_rejected');
+        }
         if (!/^application\/json(?:;|$)/i.test(response.headers.get('content-type') || '')) { void response.body?.cancel(); fail(502, 'invalid_remote_response'); }
         const result = await readLimitedJson(response.body, 512 * 1024, signal);
         if (result?.status !== 'success' || result.data == null) fail(502, 'invalid_remote_response');
