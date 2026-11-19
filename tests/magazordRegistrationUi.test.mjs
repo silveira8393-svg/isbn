@@ -7,7 +7,7 @@ const built=await build({stdin:{resolveDir:process.cwd(),contents:`export {defau
   b.onResolve({filter:/\/services\/magazordRegistration$/},()=>({path:'service',namespace:'service'}));b.onLoad({filter:/.*/,namespace:'service'},()=>({contents:'exports.submitMagazordRegistration=(...args)=>deps.submit(...args)'}));
 }}]});
 const user={id:'11111111-1111-4111-8111-111111111111',storeId:'22222222-2222-4222-8222-222222222222',active:true};
-const draft={parentCode:'U1-P',childCode:'U1',title:'Fixture',condition:'usado',magazordCategoryId:10,magazordCategoryStoreId:user.storeId,unit:'UN',ncm:'49019900',fiscalOrigin:'0',synopsis:'Sinopse',usedBookConditionNotes:'Estado',ean:''};
+const draft={parentCode:'U1-P',childCode:'U1',title:'Fixture',condition:'usado',magazordCategoryId:10,magazordCategoryStoreId:user.storeId,unit:'UN',ncm:'49019900',fiscalOrigin:'0 - Nacional',synopsis:'Sinopse',usedBookConditionNotes:'Estado',ean:''};
 function harness(submit,storage=new Map()){
   const slots=[],deps={submit};let cursor=0,effects=[],tree,done=0,started=0;const props={draft:{...draft},user:{...user},onBusy(){},onStarted(){started++;},onDone(){done++;}};
   deps.react={useState(init){const i=cursor++;if(!(i in slots))slots[i]=typeof init==='function'?init():init;return[slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v;}];},useRef(init){const i=cursor++;return slots[i]??={current:init};},useEffect(fn,ds){const i=cursor++;if(!slots[i]||ds.some((d,n)=>d!==slots[i][n])){slots[i]=ds;effects.push(fn);}}};
@@ -23,7 +23,7 @@ test('review and create are separate; double click is locked, error preserves op
   const calls=[];let fail=true,resolve;
   const submit=async(action,key,input)=>{calls.push({action,key,input});if(action==='preview')return{payload:{parent:{codigo:input.parentCode},child:{codigo:input.childCode}}};await new Promise(r=>resolve=r);if(fail)throw new Error('Falha sanitizada');return{parentCode:input.parentCode,childCode:input.childCode};};
   const h=harness(submit);h.fill('ID da Marca Magazord','20');h.fill('ID da loja/canal Magazord','30');h.render();await h.button('Consultar códigos').props.onClick();h.render();
-  assert.equal(calls.length,1);assert.equal(h.storage.size,0);
+  assert.equal(calls.length,1);assert.equal(h.storage.size,0);assert.equal(JSON.parse(JSON.stringify(calls[0].input)).fiscalOrigin,0);
   const create=h.button('Confirmar criação real').props.onClick;const first=create();await create();assert.equal(calls.length,2);assert.equal(h.storage.size,1);resolve();await first;h.render();assert.ok(h.button('Consultar estado'));
   const reloaded=harness(submit,h.storage);assert.equal(reloaded.started(),1);reloaded.props.draft.title='Changed after reload';reloaded.render();fail=false;
   const retry=reloaded.button('Consultar estado').props.onClick();resolve();await retry;reloaded.render();assert.equal(calls[1].key,calls[2].key);assert.deepEqual(calls[1].input,calls[2].input);

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { authorizeAmazonSearch, AmazonAccessError, readLimitedJson } from './amazonAuthorization.js';
 import { resolveMagazordBaseUrl } from './magazordBaseUrl.js';
-import { registrationPayload, type RegistrationInput } from '../shared/magazordRegistration.js';
+import { registrationPayload, RegistrationValidationError, type RegistrationInput } from '../shared/magazordRegistration.js';
 import { createRegistrationStore, JournalError, type RegistrationStore, type RegistrationRecord, type Stage } from './magazordRegistrationStore.js';
 
 const HOMOLOGATION = 'https://homologacaosilveiralab.painel.magazord.com.br/api';
@@ -35,7 +35,11 @@ export function createMagazordRegistrationFunction(options: { env?: NodeJS.Proce
         || Object.keys(body).some(k => !['action', 'operationId', 'input'].includes(k))) fail(400, 'invalid_registration');
       const input = body.input as RegistrationInput;
       let payload: ReturnType<typeof registrationPayload>;
-      try { payload = registrationPayload(input); } catch { fail(400, 'invalid_registration'); }
+      try { payload = registrationPayload(input); }
+      catch (error) {
+        if (error instanceof RegistrationValidationError) return reply({ code: 'invalid_registration', fields: error.fields }, 400);
+        fail(400, 'invalid_registration');
+      }
       if (input.categoryStoreId !== storeId) fail(403, 'store_access_denied');
       const signal = AbortSignal.timeout(20000);
       const headers = { Accept: 'application/json', Authorization: 'Basic ' + Buffer.from(`${env.MAGAZORD_API_USER}:${env.MAGAZORD_API_PASSWORD}`).toString('base64') };

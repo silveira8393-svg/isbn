@@ -1,5 +1,6 @@
 import type { User } from '../types';
 import type { RegistrationInput } from '../../shared/magazordRegistration';
+import { registrationValidationMessage } from '../../shared/magazordRegistration.js';
 
 export async function submitMagazordRegistration(action: 'preview' | 'create', operationId: string, input: RegistrationInput, user: User) {
   const { supabase } = await import('../lib/supabase');
@@ -10,6 +11,8 @@ export async function submitMagazordRegistration(action: 'preview' | 'create', o
       Authorization: `Bearer ${data.session.access_token}`, 'x-isbn-store-id': user.storeId }, body: JSON.stringify({ action, operationId, input }) });
   const result = await response.json();
   if (!response.ok) {
+    const validationMessage = result.code === 'invalid_registration' ? registrationValidationMessage(result.fields) : undefined;
+    if (validationMessage) throw new Error(validationMessage);
     const messages: Record<string, string> = {
       homologation_only: 'Cadastro real permitido somente na homologação. Produção bloqueada.',
       commercial_code_conflict: 'Código Pai ou Filho já utilizado. Confira os códigos comerciais; o ISBN pode se repetir.',
