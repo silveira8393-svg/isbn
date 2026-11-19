@@ -44,10 +44,15 @@ export function priceSnapshot(body: any, childCode: string, tableId: number): Pr
     return priceFail('ambiguous_price_response', 502);
   // No old-price policy is authorized. Even zero or an unexpected representation requires review.
   if (Object.hasOwn(item, 'precoAntigo') && item.precoAntigo !== null) return priceFail('existing_price_review_required');
-  if (typeof item.precoVenda !== 'number' || !Number.isFinite(item.precoVenda) || item.precoVenda <= 0)
+  // Magazord v1/listPreco returns decimal sale prices as strings (e.g. "35.00").
+  // Accept only a complete positive amount with two decimal places; never parseFloat.
+  const raw = item.precoVenda;
+  const decimal = typeof raw === 'string' && raw.length <= 32 && /^(?:0|[1-9]\d*)\.\d{2}$/.test(raw);
+  if (!decimal && (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0))
     return priceFail('existing_price_review_required');
-  const cents = priceCents(item.precoVenda.toFixed(2));
-  if (cents / 100 !== item.precoVenda) return priceFail('ambiguous_price_response', 502);
+  if (typeof raw === 'string' && !decimal) return priceFail('existing_price_review_required');
+  const cents = priceCents(typeof raw === 'string' ? raw : raw.toFixed(2));
+  if (typeof raw === 'number' && cents / 100 !== raw) return priceFail('ambiguous_price_response', 502);
   return { kind: 'present', cents };
 }
 
