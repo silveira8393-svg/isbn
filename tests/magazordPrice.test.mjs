@@ -72,7 +72,7 @@ const sendRequest=(changes={},headers={})=>request({action:'send',operationId:ap
 const remotePosts=f=>f.calls.filter(c=>c.url.pathname==='/api/v1/preco');
 test('connected send persists intention, posts only the child and verifies by GET without resending',async()=>{
   const f=backend({enable:true});
-  const preview=await (await f.handler(request())).json();assert.equal(preview.writesEnabled,true);assert.equal(preview.operationId,api.priceOperationId(priceId,registration));
+  const preview=await (await f.handler(request({action:'prepare'}))).json();assert.equal(preview.writesEnabled,true);assert.equal(preview.operationId,api.priceOperationId(priceId,registration));
   const response=await f.handler(sendRequest());assert.equal(response.status,200);assert.equal((await response.json()).stage,'price_verified');
   assert.equal(f.job().stage,'price_verified');assert.equal(remotePosts(f).length,1);
   assert.equal((await f.handler(sendRequest())).status,200);assert.equal(remotePosts(f).length,1);
