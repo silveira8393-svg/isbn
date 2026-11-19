@@ -49,6 +49,8 @@ function backend(flags={}){
       return Response.json({sucesso:true});
     }
     assert.equal(init.method,'GET');
+    if(flags.remoteFailurePath===url.pathname && (!flags.remoteFailureActive || flags.remoteFailureActive===url.searchParams.get('ativo')))
+      return new Response('private remote body',{status:403,headers:{'Content-Type':'text/html; charset=utf-8'}});
     if(flags.remoteFailure)return new Response('private remote value',{status:403});
     if(flags.redirect)return new Response(null,{status:302,headers:{location:'https://livrariasul.painel.magazord.com.br/api'}});
     if(url.pathname==='/api/v2/site/produto/FIXTURE-P')return Response.json({status:'success',data:{codigo:'FIXTURE-P',produtoLoja:[{loja:flags.channel||1}]}});
@@ -182,6 +184,29 @@ test('remote denial/redirect or malformed input never exposes private transport 
   }
   const f=backend();assert.equal((await f.handler(request({price:'1e3'}))).status,400);
   assert.equal((await f.handler(new Request('https://isbn.invalid/api/magazord/price'))).status,405);
+});
+
+test('price API identifies each failing external GET with safe metadata and stops without writes',async(t)=>{
+  const logs=[];t.mock.method(console,'warn',entry=>logs.push(JSON.parse(entry)));
+  for(const [path,active,operation,endpoint] of [
+    ['/api/v2/site/produto/FIXTURE-P',undefined,'read_parent','/api/v2/site/produto/{pai}'],
+    ['/api/v2/site/produto/FIXTURE-P/derivacao/FIXTURE-C',undefined,'read_child','/api/v2/site/produto/{pai}/derivacao/{filho}'],
+    ['/api/v2/site/tabelaPreco',undefined,'read_price_table','/api/v2/site/tabelaPreco'],
+    ['/api/v1/listPreco','0','read_prices_inactive','/api/v1/listPreco'],
+    ['/api/v1/listPreco','1','read_prices_active','/api/v1/listPreco'],
+  ]){
+    const f=backend({remoteFailurePath:path,remoteFailureActive:active});
+    const response=await f.handler(request({price:'12,00'}));
+    assert.equal(response.status,502);
+    const body=await response.json(),diagnostic={operation,endpoint,httpStatus:403,contentType:'text/html',reason:'http_error'};
+    assert.deepEqual(body,{code:'price_read_unavailable',diagnostic});
+    assert.deepEqual(logs.at(-1),{event:'magazord_price_read_failure',...diagnostic});
+    assert.equal(f.calls.at(-1).url.pathname,path);
+    assert.ok(f.calls.every(c=>c.init.method==='GET'));
+    for(const secret of ['private','fixture-token','fixture-password','sb_secret_fixture','FIXTURE-P','FIXTURE-C','tabelaPreco=','produto='])
+      assert.ok(!JSON.stringify([body,logs]).includes(secret));
+  }
+  assert.equal(logs.length,5);
 });
 
 function operation(){

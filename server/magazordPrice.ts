@@ -103,7 +103,7 @@ export function createMagazordPriceFunction(options: { env?: NodeJS.ProcessEnv; 
       return reply(result);
     } catch (error) {
       if (error instanceof AmazonAccessError) return reply({ code: 'price_access_denied' }, error.status);
-      if (error instanceof PriceError) return reply({ code: error.code }, error.status);
+      if (error instanceof PriceError) return reply({ code: error.code, ...(error.diagnostic ? { diagnostic: error.diagnostic } : {}) }, error.status);
       return reply({ code: 'price_preview_unavailable' }, 503);
     }
   };

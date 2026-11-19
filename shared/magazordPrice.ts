@@ -1,6 +1,13 @@
 export const PRICE_HOMOLOGATION = 'https://homologacaosilveiralab.painel.magazord.com.br/api';
+export interface PriceReadDiagnostic {
+  operation: 'read_parent' | 'read_child' | 'read_price_table' | 'read_prices_inactive' | 'read_prices_active';
+  endpoint: string;
+  httpStatus: number | null;
+  contentType: string;
+  reason: 'http_error' | 'unexpected_content_type' | 'invalid_response' | 'timeout' | 'network_error';
+}
 export class PriceError extends Error {
-  constructor(public code: string, public status = 409) { super(code); }
+  constructor(public code: string, public status = 409, public diagnostic?: PriceReadDiagnostic) { super(code); }
 }
 export const priceFail = (code: string, status = 409): never => { throw new PriceError(code, status); };
 export const priceUuid = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
