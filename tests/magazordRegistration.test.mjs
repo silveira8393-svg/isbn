@@ -66,6 +66,38 @@ function fixture(flags={}) {
 }
 const writes=f=>f.calls.filter(c=>c.init.method==='POST');
 
+test('physical measures are sent only on child POST, with weight in kg and depth as length',async()=>{
+  const measures={...input,weight:0.342,height:23,width:16,depth:1.51};
+  const payload=api.registrationPayload(measures);
+  assert.deepEqual([payload.child.peso,payload.child.altura,payload.child.largura,payload.child.comprimento],[0.342,23,16,1.51]);
+  for(const field of ['peso','altura','largura','comprimento'])assert.equal(Object.hasOwn(payload.parent,field),false);
+  const f=fixture(),response=await f.handler()(req(id(),{input:measures}));
+  assert.equal(response.status,200);
+  assert.equal(writes(f).length,2);
+  assert.deepEqual(JSON.parse(writes(f)[1].init.body).peso,0.342);
+  assert.equal(Object.hasOwn(JSON.parse(writes(f)[0].init.body),'peso'),false);
+});
+test('registrationInput converts grams to kg, preserves kg, and maps depth to length',()=>{
+  const draft={condition:'novo',parentCode:'P-123',childCode:'9788551003664',title:'Livro',
+    magazordCategoryId:10,magazordCategoryStoreId:store,fiscalOrigin:'0 - Nacional',unit:'UN',ncm:'49019900',
+    ean:'9788551003664',isbn13:'9788551003664',isbn10:'',synopsis:'',weight:342,weightUnit:'g',
+    height:23,width:16,depth:1.51};
+  const grams=api.registrationInput(draft,20,1);
+  assert.deepEqual([grams.weight,grams.height,grams.width,grams.depth],[0.342,23,16,1.51]);
+  const kg=api.registrationInput({...draft,weight:0.342,weightUnit:'kg'},20,1);
+  assert.equal(kg.weight,0.342);
+});
+test('invalid physical measures are rejected before any Magazord request, absent remain optional',async()=>{
+  for(const field of ['weight','height','width','depth'])for(const value of [0,-1,NaN,Infinity,'23']){
+    const f=fixture();
+    const response=await f.handler()(req(id(),{input:{...input,[field]:value}}));
+    assert.equal(response.status,400);
+    assert.deepEqual(await response.json(),{code:'invalid_registration',fields:['dimensions']});
+    assert.equal(writes(f).length,0);
+  }
+  const old=api.registrationPayload(input);
+  for(const field of ['peso','altura','largura','comprimento'])assert.equal(Object.hasOwn(old.child,field),false);
+});
 test('NCM normalization preserves the commercial payload and existing canonical operation fingerprint',async()=>{
   const f=fixture(),key=id();
   assert.equal((await f.handler()(req(key,{input:{...input,ncm:'4901.99.00'}}))).status,200);
