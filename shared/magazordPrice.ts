@@ -58,6 +58,7 @@ export function priceSnapshot(body: any, childCode: string, tableId: number): Pr
 
 export interface PricePreview {
   status: 'preview'; environment: 'homologation'; writesEnabled: boolean; operationId?: string;
+  operationStage?: 'not_started' | 'prepared' | 'price_started' | 'price_verified';
   parentCode: string; childCode: string; tableId: number; tableName: string; cents: number;
   eligible: boolean; state: 'ready_for_local_review' | 'existing_price_review_required' | 'ambiguous_price_response';
   payload: ReturnType<typeof salePricePayload>;
