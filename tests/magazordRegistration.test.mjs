@@ -637,7 +637,7 @@ test('new ISBN registration and interrupted recovery can price LVP007 once; pree
     const handler=api.createMagazordPriceFunction({env:{...env,SUPABASE_SERVICE_ROLE_KEY:'sb_secret_fixture',
       MAGAZORD_HOMOLOGATION_PRICES:JSON.stringify({[store]:{channelId:1,tableId:1}}),MAGAZORD_HOMOLOGATION_PRICE_OPERATION_ID:priceId},fetcher});
     const priceRequest=action=>new Request('https://isbn.invalid/api/magazord/price',{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${mfaToken(uid)}`,'x-isbn-store-id':store},
-      body:JSON.stringify({action,registrationId:key,price:'12,00',...(action==='prepare'?{}:{operationId:priceId})})});
+      body:JSON.stringify({action,registrationId:key,price:'12,00',...(action==='prepare'?{}:{operationId:api.priceOperationId(priceId,key)})})});
     assert.equal((await handler(priceRequest('prepare'))).status,scenario==='preexisting'?409:200);assert.equal(remoteOrder.length,0);
     const sent=await handler(priceRequest('send'));assert.equal(sent.status,scenario==='preexisting'?409:200);
     if(scenario==='preexisting'){
