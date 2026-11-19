@@ -66,6 +66,18 @@ function fixture(flags={}) {
 }
 const writes=f=>f.calls.filter(c=>c.init.method==='POST');
 
+test('NCM normalization preserves the commercial payload and existing canonical operation fingerprint',async()=>{
+  const f=fixture(),key=id();
+  assert.equal((await f.handler()(req(key,{input:{...input,ncm:'4901.99.00'}}))).status,200);
+  assert.equal(JSON.parse(writes(f)[0].init.body).ncm,'49019900');
+  assert.deepEqual(JSON.parse(writes(f)[0].init.body),configuredPayload().parent);
+  const before=structuredClone(f.jobs.get(key));
+  assert.equal((await f.handler()(req(key))).status,200);assert.deepEqual(f.jobs.get(key),before);assert.equal(writes(f).length,2);
+  const invalid=fixture(),r=await invalid.handler()(req(id(),{input:{...input,ncm:'4901.99.A0'}}));
+  assert.equal(r.status,400);assert.deepEqual(await r.json(),{code:'invalid_registration',fields:['ncm']});
+  assert.equal(invalid.jobs.size,0);assert.equal(writes(invalid).length,0);
+});
+
 test('record type capitalization is normalized in parent, child and relationship confirmation without duplicate POSTs',async()=>{
   for(const [parentRecordType,childRecordType] of [['Pai','Filho'],['PAI','FILHO'],['pAi','fIlHo'],['pai','filho']]){
     const f=fixture({includeParentsInList:true,parentRecordType,childRecordType}),key=id();

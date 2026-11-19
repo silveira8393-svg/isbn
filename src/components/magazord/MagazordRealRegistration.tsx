@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { RegistrationDraft, User } from '../../types';
 import { registrationInput, registrationPayload } from '../../../shared/magazordRegistration';
 import { submitMagazordRegistration } from '../../services/magazordRegistration';
+import MagazordPrice from './MagazordPrice';
 
 /** Separate action in the existing review; never invokes simulator callbacks or audit-as-simulation. */
 export default function MagazordRealRegistration({ draft, user, onBusy, onStarted, onDone }: {
@@ -61,6 +62,8 @@ export default function MagazordRealRegistration({ draft, user, onBusy, onStarte
     {(preview || started) && !verified && <button type="button" disabled={busy || operation.current?.identity !== identity} onClick={() => act('create')} className="rounded bg-amber-700 px-4 py-2 text-sm text-white disabled:opacity-50">{busy ? 'Consultando / confirmando...' : started ? 'Consultar estado / continuar' : 'Confirmar criação real na homologação'}</button>}
     {started && !verified && <p className="text-sm">Operação iniciada: os dados e a chave ficam preservados nesta aba, inclusive após recarregar. Em resultado incerto, consulte o estado com a mesma chave. Se a aba for encerrada, os códigos continuam reservados no backend e exigem reconciliação.</p>}
     {message && <p role="status" className="text-sm">{message}</p>}
+    {verified && user && operation.current && operation.current.identity === identity && <MagazordPrice registrationId={operation.current.id}
+      parentCode={operation.current.input.parentCode} childCode={operation.current.input.childCode} price={draft.price} user={user} />}
     {verified && <button type="button" onClick={onDone} className="rounded border px-4 py-2 text-sm">Continuar para outro livro</button>}
   </section>;
 }

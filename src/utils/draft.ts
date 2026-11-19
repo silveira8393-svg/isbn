@@ -10,6 +10,7 @@ import { canonicalBookIsbn, cleanIsbn } from './isbn.js';
 import { imageReferences, isImageReference } from './imageUrls.js';
 import { bookSourceLinks } from './bookSourceLinks.js';
 import { editionReferences } from './editionReferences.js';
+import { normalizeNcm } from '../../shared/ncm.js';
 import { formatPhysicalMeasurement, normalizeCoverFormat, normalizeLanguage, roundPhysicalMeasurement } from './bibliographicNormalization.js';
 
 export function registrationModeForCondition(condition: BookCondition, mode?: RegistrationMode): RegistrationMode {
@@ -229,6 +230,7 @@ export function validateRegistrationDraft(draft: RegistrationDraft, source?: Boo
   required('childCode', !draft.childCode?.trim(), draft.condition === 'usado' ? 'Informe o Código Filho manual deste exemplar usado.' : 'Informe o Código Filho do produto.');
   required('title', absentText(draft.title) || !/[\p{L}\p{N}]/u.test(draft.title || ''), 'Informe o título real da obra; mensagens de ausência não são um título.');
   required('category', !draft.category?.trim(), 'Selecione a categoria do produto.');
+  required('ncm', normalizeNcm(draft.ncm) === undefined, 'NCM inválido. Use oito dígitos ou o formato 4901.99.00, ou deixe vazio.');
   const amount = parseRegistrationPrice(draft.price || '');
   required('price', amount === undefined || amount <= 0, 'Informe um preço maior que zero, como 50,00 ou 1.234,56.');
   required('quantity', !Number.isSafeInteger(draft.quantity) || draft.quantity < 1, 'Informe uma quantidade inteira de pelo menos 1 exemplar.');

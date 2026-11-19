@@ -6,6 +6,7 @@ import { createGoogleBooksFunction } from './server/googleBooksFunction';
 import { createMagazordCategoriesFunction } from './server/magazordCategories';
 import { createMagazordProductsFunction } from './server/magazordProducts';
 import { createMagazordRegistrationFunction } from './server/magazordRegistration';
+import { createMagazordPriceFunction } from './server/magazordPrice';
 import { createSpapiHandler } from './server/spapi/handler';
 import { amazonTitleEnvironmentEnabled } from './shared/amazonTitleEnvironment';
 import { withMfa } from './server/mfaAuthorization';
@@ -20,6 +21,7 @@ export default defineConfig(({ mode }) => {
   const categories = createMagazordCategoriesFunction({ env: { ...loadEnv(mode, process.cwd(), ['MAGAZORD_', 'SUPABASE_', 'VITE_SUPABASE_']), ...process.env } });
   const products = createMagazordProductsFunction({ env: { ...loadEnv(mode, process.cwd(), ['MAGAZORD_', 'SUPABASE_', 'VITE_SUPABASE_']), ...process.env } });
   const registration = createMagazordRegistrationFunction({ env: { ...loadEnv(mode, process.cwd(), ['MAGAZORD_', 'SUPABASE_', 'VITE_SUPABASE_']), ...process.env } });
+  const price = createMagazordPriceFunction({ env: { ...loadEnv(mode, process.cwd(), ['MAGAZORD_', 'SUPABASE_', 'VITE_SUPABASE_']), ...process.env } });
   return {
     define: { 'import.meta.env.ISBN_AMAZON_TITLE_PREVIEW': JSON.stringify(amazonTitleEnvironmentEnabled(process.env)) },
     plugins: [react(), tailwindcss(), { name: 'google-books-local-api', configureServer(server) {
@@ -31,6 +33,15 @@ export default defineConfig(({ mode }) => {
         const result = await amazon(new Request(protocol + (req.headers.host || 'localhost:3000') + (req.originalUrl || '/api/amazon/spapi/catalog'), { method: req.method, headers }));
         res.statusCode = result.status; result.headers.forEach((value, key) => res.setHeader(key, value));
         res.end(await result.text());
+      });
+      server.middlewares.use('/api/magazord/price', async (req, res) => {
+        const chunks: Buffer[] = []; let size = 0;
+        for await (const chunk of req) { size += chunk.length; if (size > 4096) { res.statusCode = 413; res.end(); return; } chunks.push(Buffer.from(chunk)); }
+        const headers = new Headers();
+        for (const key of ['origin', 'sec-fetch-site', 'authorization', 'x-isbn-store-id', 'content-type']) if (typeof req.headers[key] === 'string') headers.set(key, req.headers[key]);
+        const result = await price(new Request('http://' + (req.headers.host || 'localhost:3000') + (req.originalUrl || '/api/magazord/price'),
+          { method: req.method, headers, ...(!['GET', 'HEAD'].includes(req.method || 'GET') ? { body: Buffer.concat(chunks) } : {}) }));
+        res.statusCode = result.status; result.headers.forEach((value, key) => res.setHeader(key, value)); res.end(await result.text());
       });
       server.middlewares.use('/api/magazord/registration', async (req, res) => {
         const chunks: Buffer[] = []; let size = 0;

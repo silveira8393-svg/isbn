@@ -41,7 +41,7 @@ test('existing fiscal select labels and numeric values retain their codes withou
 });
 
 test('field-specific diagnostics preserve the existing title, NCM, code, ID and ISBN rules', () => {
-  for (const [field, value] of [['title', 'x'.repeat(101)], ['ncm', '4901.99.00'], ['parentCode', 'x'.repeat(26)],
+  for (const [field, value] of [['title', 'x'.repeat(101)], ['ncm', '4901.99.A0'], ['parentCode', 'x'.repeat(26)],
     ['brandId', 0], ['categoryId', '6'], ['channelId', -1], ['unit', 'un'], ['ean', '9788584390671']]) {
     assert.throws(() => api.registrationPayload({ ...wireInput(), [field]: value }),
       error => error instanceof api.RegistrationValidationError && assert.deepEqual(error.fields, [field]) === undefined);

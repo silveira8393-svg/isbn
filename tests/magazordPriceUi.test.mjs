@@ -1,0 +1,74 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+import {readFile} from 'node:fs/promises';
+const built=await build({stdin:{resolveDir:process.cwd(),contents:`export {default} from './src/components/magazord/MagazordPrice';`},bundle:true,write:false,platform:'node',format:'cjs',jsx:'automatic',plugins:[{name:'price-ui-fixture',setup(b){
+  b.onResolve({filter:/^react$/},()=>({path:'react',namespace:'mock'}));b.onLoad({filter:/.*/,namespace:'mock'},()=>({contents:'module.exports=deps.react'}));
+  b.onResolve({filter:/^react\/jsx-runtime$/},()=>({path:'jsx',namespace:'jsx'}));b.onLoad({filter:/.*/,namespace:'jsx'},()=>({contents:'exports.jsx=exports.jsxs=(type,props)=>({type,props})'}));
+  b.onResolve({filter:/\/services\/magazordPrice$/},()=>({path:'service',namespace:'service'}));b.onLoad({filter:/.*/,namespace:'service'},()=>({contents:'exports.previewMagazordPrice=(...args)=>deps.preview(...args);exports.submitMagazordPrice=(...args)=>deps.submit(...args)'}));
+}}]});
+const user={id:'11111111-1111-4111-8111-111111111111',storeId:'22222222-2222-4222-8222-222222222222',active:true};
+const registrationId='33333333-3333-4333-8333-333333333333';
+const result={status:'preview',environment:'homologation',writesEnabled:false,parentCode:'FIXTURE-P',childCode:'FIXTURE-C',tableId:1,tableName:'Tabela fixture',cents:3000,eligible:true,state:'ready_for_local_review',payload:[{produto:'FIXTURE-C',tabelaPreco:1,precoVenda:30}]};
+function harness(preview,submit){
+  const slots=[],deps={preview,submit},props={registrationId,parentCode:'FIXTURE-P',childCode:'FIXTURE-C',price:'30,00',user:{...user}};let cursor=0,tree;
+  deps.react={useState(initial){const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return[slots[i],v=>slots[i]=v];},useRef(initial){const i=cursor++;return slots[i]??={current:initial};}};
+  const module={exports:{}};new Function('deps','module','exports',built.outputFiles[0].text)(deps,module,module.exports);
+  const render=()=>{cursor=0;tree=module.exports.default(props);};
+  const nodes=n=>!n||typeof n!=='object'?[]:Array.isArray(n)?n.flatMap(nodes):[n,...nodes(n.props?.children)];
+  render();return{props,render,button:text=>nodes(tree).find(n=>n.type==='button'&&String(n.props.children).includes(text)),text:()=>JSON.stringify(tree)};
+}
+const settle=()=>new Promise(resolve=>setImmediate(resolve));
+test('price review shows child/table/price/state and keeps sending disabled without backend release',async()=>{
+  let calls=0,finish;const h=harness(async(id,price,actor)=>{calls++;assert.equal(id,registrationId);assert.equal(price,'30,00');assert.equal(actor.id,user.id);return new Promise(resolve=>finish=resolve);});
+  h.button('Revisar').props.onClick();h.button('Revisar').props.onClick();assert.equal(calls,1);
+  finish(result);await settle();h.render();assert.ok(h.text().includes('Tabela fixture'));assert.ok(h.text().includes('FIXTURE-C'));assert.ok(h.text().includes('30,00'));
+  assert.equal(h.button('Enviar preço').props.disabled,true);assert.equal(h.button('Enviar preço').props.onClick,undefined);
+  for(const state of ['existing_price_review_required','ambiguous_price_response']){
+    const blocked=harness(async()=>({...result,state,eligible:false}));blocked.button('Revisar').props.onClick();await settle();blocked.render();assert.equal(blocked.button('Enviar preço').props.disabled,true);
+  }
+});
+
+test('explicit released preview allows one click and only read-only reconciliation after an uncertain result',async()=>{
+  const operationId='44444444-4444-4444-8444-444444444444';let calls=0,finish;
+  const h=harness(async()=>({...result,writesEnabled:true,operationId}),async(id,price,key,actor,reconcile)=>{
+    calls++;assert.equal(id,registrationId);assert.equal(price,'30,00');assert.equal(key,operationId);assert.equal(actor.id,user.id);
+    if(reconcile)return{status:'verified',stage:'price_verified',operationId,childCode:'FIXTURE-C',tableId:1,cents:3000};
+    return new Promise((resolve,reject)=>finish=()=>reject(new Error('Preço não confirmado. Consulte o estado, sem reenviar.')));
+  });
+  h.button('Revisar').props.onClick();await settle();h.render();assert.equal(h.button('Enviar preço').props.disabled,false);
+  h.button('Enviar preço').props.onClick();h.button('Enviar preço').props.onClick();assert.equal(calls,1);
+  finish();await settle();h.render();assert.equal(h.button('Enviar preço').props.disabled,true);
+  assert.equal(h.props.price,'30,00');h.button('Consultar estado').props.onClick();await settle();h.render();
+  assert.equal(calls,2);assert.ok(h.text().includes('Preço confirmado na Magazord por consulta.'));
+  h.props.user={...user,storeId:registrationId};h.render();assert.equal(h.button('Enviar preço').props.disabled,true);
+});
+test('price preview and errors do not erase input or cross user/store identity boundaries',async()=>{
+  let finish;const h=harness(async()=>new Promise(resolve=>finish=resolve));h.button('Revisar').props.onClick();h.props.user={...user,storeId:registrationId};h.render();finish(result);await settle();h.render();assert.ok(!h.text().includes('Tabela fixture'));
+  const failed=harness(async()=>{throw new Error('Falha sanitizada');});failed.button('Revisar').props.onClick();await settle();failed.render();assert.equal(failed.props.price,'30,00');assert.ok(failed.text().includes('Falha sanitizada'));assert.equal(failed.button('Enviar preço').props.disabled,true);
+});
+test('price section is mounted only after verified registration, independent from registration payload/state',async()=>{
+  const source=await readFile('src/components/magazord/MagazordRealRegistration.tsx','utf8');assert.match(source,/verified && user && operation.current && operation.current.identity === identity && <MagazordPrice/);
+  assert.match(source,/registrationId=\{operation.current.id\}/);assert.match(source,/price=\{draft.price\}/);
+});
+test('client transmits only preview, original price and registration ID with the active session',async()=>{
+  const bundle=await build({stdin:{resolveDir:process.cwd(),contents:`export * from './src/services/magazordPrice';`},bundle:true,write:false,platform:'node',format:'cjs',plugins:[{name:'session-fixture',setup(b){
+    b.onResolve({filter:/\/lib\/supabase$/},()=>({path:'session',namespace:'fixture'}));
+    b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:`exports.supabase={auth:{getSession:async()=>({data:{session:{user:{id:'${user.id}'},access_token:'fixture-session'}}})}};`}));
+  }}]});
+  const calls=[],module={exports:{}};
+  new Function('module','exports','fetch',bundle.outputFiles[0].text)(module,module.exports,async(url,init)=>{
+    calls.push({url,init});const input=JSON.parse(init.body);
+    return Response.json(input.action==='preview'?result:{status:'verified',stage:'price_verified',operationId:input.operationId,childCode:'FIXTURE-C',tableId:1,cents:3000});
+  });
+  assert.equal((await module.exports.previewMagazordPrice(registrationId,'30,00',user)).writesEnabled,false);
+  assert.deepEqual(JSON.parse(calls[0].init.body),{action:'preview',registrationId,price:'30,00'});assert.equal(calls[0].init.headers['x-isbn-store-id'],user.storeId);
+  assert.equal(calls[0].init.headers.Authorization,'Bearer fixture-session');assert.equal(calls[0].init.redirect,'error');
+  await assert.rejects(module.exports.previewMagazordPrice(registrationId,'30,',user),{message:'Informe um preço positivo completo, como 30,00 ou 1.234,56.'});assert.equal(calls.length,1);
+  assert.ok(!bundle.outputFiles[0].text.includes('MAGAZORD_HOMOLOGATION_PRICES'));
+  const key='44444444-4444-4444-8444-444444444444';
+  for(const reconcile of [false,true]){
+    assert.equal((await module.exports.submitMagazordPrice(registrationId,'30,00',key,user,reconcile)).stage,'price_verified');
+    assert.deepEqual(JSON.parse(calls.at(-1).init.body),{action:reconcile?'reconcile':'send',registrationId,price:'30,00',operationId:key});
+  }
+});
