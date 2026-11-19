@@ -10,6 +10,13 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 class RegistrationError extends Error { constructor(public status: number, public code: string) { super(code); } }
 const fail = (status: number, code: string): never => { throw new RegistrationError(status, code); };
 
+/** Accept only the known textual record types, differing in capitalization. No coercion or trimming. */
+function recordType(value: unknown): 'pai' | 'filho' | undefined {
+  if (typeof value !== 'string') return;
+  const normalized = value.toLowerCase();
+  return normalized === 'pai' || normalized === 'filho' ? normalized : undefined;
+}
+
 /** Explicit homologation-only bindings, independently configured for each ISBN store. No default channel. */
 function homologationChannel(env: NodeJS.ProcessEnv, storeId: string): number {
   let bindings: unknown;
@@ -154,10 +161,10 @@ export function createMagazordRegistrationFunction(options: { env?: NodeJS.Proce
         const otherParent = await remote('/v2/site/produto/' + encodeURIComponent(input.childCode), 'GET', undefined, true);
         const parentCodes = await exact(input.parentCode), children = await exact(input.childCode);
         if (otherParent || parentCodes.length > 1 || (parentCodes.length && !p)
-          || parentCodes.some((x: any) => x.tipoRegistro !== 'pai') || children.length > 1) fail(409, 'commercial_code_conflict');
+          || parentCodes.some((x: any) => recordType(x.tipoRegistro) !== 'pai') || children.length > 1) fail(409, 'commercial_code_conflict');
         if (p && (p.codigo !== input.parentCode || p.nome !== input.title || p.marca !== input.brandId)) fail(409, 'commercial_code_conflict');
         const child = children[0];
-        if (child && (child.codigo !== input.childCode || child.tipoRegistro !== 'filho' || child.agrupador !== input.parentCode || child.nome !== input.title)) fail(409, 'commercial_code_conflict');
+        if (child && (child.codigo !== input.childCode || recordType(child.tipoRegistro) !== 'filho' || child.agrupador !== input.parentCode || child.nome !== input.title)) fail(409, 'commercial_code_conflict');
         if (child && !p) fail(409, 'invalid_relationship');
         return { parent: p, child };
       }
@@ -214,7 +221,7 @@ export function createMagazordRegistrationFunction(options: { env?: NodeJS.Proce
         if (!s.parent || !s.child) fail(409, 'child_outcome_uncertain');
         phase = 'relationship_confirmation';
         const related = await remote(parentPath + '/derivacao');
-        if (!Array.isArray(related) || related.filter((c: any) => c.codigo === input.childCode && c.tipoRegistro === 'filho' && c.agrupador === input.parentCode).length !== 1)
+        if (!Array.isArray(related) || related.filter((c: any) => c.codigo === input.childCode && recordType(c.tipoRegistro) === 'filho' && c.agrupador === input.parentCode).length !== 1)
           fail(409, 'invalid_relationship');
         if (record.stage !== 'verified') await advance('verified');
         return reply({ status: 'verified', environment: 'homologation', parentCode: input.parentCode, childCode: input.childCode });

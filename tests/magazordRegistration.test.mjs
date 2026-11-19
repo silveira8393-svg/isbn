@@ -43,7 +43,7 @@ function fixture(flags={}) {
         if(flags.delayParent)await flags.delayParent;
       }else{
         if(flags.childRejected){flags.childRejected=false;return new Response('secret upstream details',{status:503});}
-        children.set(body.codigo,{...body,tipoRegistro:'filho',agrupador:decodeURIComponent(url.pathname.split('/')[5])});
+        children.set(body.codigo,{...body,tipoRegistro:Object.hasOwn(flags,'childRecordType')?flags.childRecordType:'filho',agrupador:decodeURIComponent(url.pathname.split('/')[5])});
         if(flags.childLost){flags.childLost=false;throw new Error('synthetic lost response');}
       }
       return Response.json({status:'success',data:[]},{status:201});
@@ -54,14 +54,88 @@ function fixture(flags={}) {
     if(flags.remoteRedirect)return new Response(null,{status:302,headers:{location:'https://livrariasul.painel.magazord.com.br/api'}});
     if(url.pathname==='/api/v2/site/marca')return page(flags.noBrand?[]:[{id:20}]);
     if(url.pathname==='/api/v2/site/categoria')return page([{id:10}]);
-    if(url.pathname==='/api/v2/site/produtoDerivacoes')return page([...children.values(),...(flags.parentOnlyInList?[{codigo:input.parentCode,tipoRegistro:'pai'}]:[])].filter(c=>c.codigo.toLowerCase()===url.searchParams.get('codigo').toLowerCase()));
-    if(url.pathname.endsWith('/derivacao'))return Response.json({status:'success',data:flags.badRelationship?[]:[...children.values()].filter(c=>c.agrupador===decodeURIComponent(url.pathname.split('/')[5]))});
+    if(url.pathname==='/api/v2/site/produtoDerivacoes')return page([...children.values(),
+      ...(flags.includeParentsInList?[...parents.values()].map(p=>({...p,tipoRegistro:Object.hasOwn(flags,'parentRecordType')?flags.parentRecordType:'pai'})):[]),
+      ...(flags.parentOnlyInList?[{codigo:input.parentCode,tipoRegistro:'pai'}]:[])].filter(c=>c.codigo.toLowerCase()===url.searchParams.get('codigo').toLowerCase()));
+    if(url.pathname.endsWith('/derivacao'))return Response.json({status:'success',data:flags.badRelationship?[]:[...children.values()].filter(c=>c.agrupador===decodeURIComponent(url.pathname.split('/')[5]))
+      .map(c=>Object.hasOwn(flags,'relationshipRecordType')?{...c,tipoRegistro:flags.relationshipRecordType}:c)});
     const p=parents.get(decodeURIComponent(url.pathname.split('/').at(-1)));
     return p?Response.json({status:'success',data:p}):new Response(null,{status:404});
   };
   return {calls,logs,jobs,parents,children,journal,fetcher,handler:()=>api.createMagazordRegistrationFunction({env,fetcher,journal,logDiagnostic:entry=>logs.push(entry)})};
 }
 const writes=f=>f.calls.filter(c=>c.init.method==='POST');
+
+test('record type capitalization is normalized in parent, child and relationship confirmation without duplicate POSTs',async()=>{
+  for(const [parentRecordType,childRecordType] of [['Pai','Filho'],['PAI','FILHO'],['pAi','fIlHo'],['pai','filho']]){
+    const f=fixture({includeParentsInList:true,parentRecordType,childRecordType}),key=id();
+    assert.equal((await f.handler()(req(key))).status,200);assert.equal(f.jobs.get(key).stage,'verified');
+    assert.deepEqual(JSON.parse(writes(f)[0].init.body),configuredPayload().parent);
+    assert.deepEqual(JSON.parse(writes(f)[1].init.body),configuredPayload().child);
+    assert.equal((await f.handler()(req(key))).status,200);assert.equal(writes(f).length,2);
+  }
+});
+
+test('missing, non-textual, padded or unknown record types fail closed in every confirmation location',async()=>{
+  const invalid=[undefined,null,0,1,true,{},[],['Filho'],'',' Pai','Pai ','Filho\n','agrupador','Parent','Child'];
+  for(const location of ['parent','child','relationship'])for(const value of [...invalid,location==='parent'?'Filho':'Pai']){
+    const flags={includeParentsInList:true,parentRecordType:'Pai',childRecordType:'Filho',
+      [location==='parent'?'parentRecordType':location==='child'?'childRecordType':'relationshipRecordType']:value};
+    const f=fixture(flags),key=id(),r=await f.handler()(req(key));assert.equal(r.status,409);
+    assert.deepEqual(await r.json(),{code:location==='relationship'?'invalid_relationship':'commercial_code_conflict'});
+    assert.equal(f.jobs.get(key).stage,location==='parent'?'parent_started':'child_started');
+    assert.equal(writes(f).length,location==='parent'?1:2);
+    const count=writes(f).length;assert.equal((await f.handler()(req(key))).status,409);assert.equal(writes(f).length,count);
+  }
+});
+
+test('capitalized types do not relax strict parent code, name or numeric brand comparisons',async()=>{
+  for(const changed of [{codigo:input.parentCode.toLowerCase()},{nome:input.title+' '},{marca:String(input.brandId)}]){
+    const f=fixture({includeParentsInList:true,parentRecordType:'Pai',childRecordType:'Filho',remote:async(url,init)=>{
+      if(init.method==='GET'&&url.pathname==='/api/v2/site/produto/'+input.parentCode&&f.parents.has(input.parentCode))
+        return Response.json({status:'success',data:{...f.parents.get(input.parentCode),...changed}});
+    }}),key=id();
+    const r=await f.handler()(req(key));assert.equal(r.status,409);assert.deepEqual(await r.json(),{code:'commercial_code_conflict'});
+    assert.equal(f.jobs.get(key).stage,'parent_started');assert.equal(writes(f).length,1);
+  }
+});
+
+test('capitalized types preserve strict child code, name and grouping comparisons',async()=>{
+  for(const changed of [{codigo:input.childCode.toLowerCase()},{nome:input.title+' '},{agrupador:input.parentCode.toLowerCase()}]){
+    const f=fixture({includeParentsInList:true,parentRecordType:'Pai',childRecordType:'Filho',remote:async(url,init)=>{
+      if(init.method==='GET'&&url.pathname==='/api/v2/site/produtoDerivacoes'&&url.searchParams.get('codigo')===input.childCode&&f.children.size){
+        const items=[{...f.children.get(input.childCode),...changed}];
+        return Response.json({status:'success',data:{items,page:1,limit:100,total:1,total_pages:1,has_more:false}});
+      }
+    }}),key=id();
+    const r=await f.handler()(req(key));assert.equal(r.status,409);assert.deepEqual(await r.json(),{code:'commercial_code_conflict'});
+    assert.equal(f.jobs.get(key).stage,'child_started');assert.equal(writes(f).length,2);
+  }
+});
+
+test('capitalized types preserve global result counts and strict relationship code, grouping and unique match',async()=>{
+  for(const location of ['parent_count','child_count','relationship_count','relationship_code','relationship_group']){
+    const f=fixture({includeParentsInList:true,parentRecordType:'Pai',childRecordType:'Filho',remote:async(url,init)=>{
+      if(init.method!=='GET')return;
+      const parent=location==='parent_count',code=parent?input.parentCode:input.childCode;
+      const record=parent?f.parents.get(code):f.children.get(code);
+      if(location.endsWith('_count')&&!location.startsWith('relationship')&&record&&url.pathname==='/api/v2/site/produtoDerivacoes'&&url.searchParams.get('codigo')===code){
+        const item={...record,tipoRegistro:parent?'Pai':'Filho'};
+        return Response.json({status:'success',data:{items:[item,item],page:1,limit:100,total:2,total_pages:1,has_more:false}});
+      }
+      if(location.startsWith('relationship')&&url.pathname.endsWith('/derivacao')&&record){
+        const item={...record,...(location==='relationship_code'?{codigo:code.toLowerCase()}:{}),
+          ...(location==='relationship_group'?{agrupador:input.parentCode.toLowerCase()}:{})};
+        return Response.json({status:'success',data:location==='relationship_count'?[item,item]:[item]});
+      }
+    }}),key=id();
+    const r=await f.handler()(req(key));assert.equal(r.status,409);
+    assert.deepEqual(await r.json(),{code:location.startsWith('relationship')?'invalid_relationship':'commercial_code_conflict'});
+    assert.equal(f.jobs.get(key).stage,location==='parent_count'?'parent_started':'child_started');
+    assert.equal(writes(f).length,location==='parent_count'?1:2);
+  }
+});
+
 const privateDetails='fixture-token fixture-password private-description private-person@example.invalid';
 function assertSafeDiagnostics(logs) {
   assert.ok(logs.length);
