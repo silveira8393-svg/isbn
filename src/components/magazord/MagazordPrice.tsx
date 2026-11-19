@@ -22,23 +22,33 @@ export default function MagazordPrice({ registrationId, parentCode, childCode, p
       // Keep the exact intent across reloads. A previous attempt may only be reconciled.
       const key = `isbn-magazord-price:v1:${user.id}:${user.storeId}:${registrationId}`;
       const saved = sessionStorage.getItem(key);
-      let operationId: string;
+      // Always obtain the operation ID from the verified backend journal, never reuse
+      // another book's old fixed UUID. A fresh registration has no price job yet.
+      const preview = await prepareMagazordPrice(registrationId, price, user);
+      if (current.current !== identity) return;
+      if (preview.parentCode !== parentCode || preview.childCode !== childCode || preview.tableId !== 1 || preview.cents !== cents)
+        throw new Error('Produto, preço ou tabela Padrão divergente. Envio bloqueado.');
+      if (!preview.writesEnabled || !preview.operationId) throw new Error('Envio de preço bloqueado no backend.');
+      const operationId = preview.operationId;
       if (saved) {
         const intent = JSON.parse(saved);
-        if (intent.identity !== identity || !priceUuid(intent.operationId)) throw new Error('A operação preservada possui dados diferentes. Preserve o preço e consulte o responsável.');
-        operationId = intent.operationId;
-        reconcile = true;
+        if (intent.identity !== identity || !priceUuid(intent.operationId))
+          throw new Error('A operação preservada possui dados diferentes. Preserve o preço e consulte o responsável.');
+        if (intent.operationId !== operationId) {
+          // A legacy intent can be replaced ONLY when the backend confirms there
+          // is no persistent price job for this verified registration.
+          if (preview.operationStage !== 'not_started')
+            throw new Error('Operação preservada divergente do diário. Revisão necessária.');
+          sessionStorage.setItem(key, JSON.stringify({ identity, operationId }));
+        } else {
+          reconcile = true;
+        }
       } else {
-        const preview = await prepareMagazordPrice(registrationId, price, user);
-        if (current.current !== identity) return;
-        if (preview.parentCode !== parentCode || preview.childCode !== childCode || preview.tableId !== 1 || preview.cents !== cents)
-          throw new Error('Produto, preço ou tabela Padrão divergente. Envio bloqueado.');
-        if (!preview.writesEnabled || !preview.operationId) throw new Error('Envio de preço bloqueado no backend.');
-        if (!reconcile && !preview.eligible) throw new Error('Preço existente ou resposta ambígua. Envio bloqueado para revisão.');
-        operationId = preview.operationId;
-        // If storage fails, no request capable of sending a price is made.
         sessionStorage.setItem(key, JSON.stringify({ identity, operationId }));
+        // A journaled operation can only be reconciled; never send another POST.
+        if (preview.operationStage !== 'not_started') reconcile = true;
       }
+      if (!reconcile && !preview.eligible) throw new Error('Preço existente ou resposta ambígua. Envio bloqueado para revisão.');
       if (current.current !== identity) return;
       if (!reconcile && attempted.current === identity) return;
       attempted.current = identity;
