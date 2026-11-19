@@ -62,7 +62,7 @@ function backend(flags={}){
     assert.equal(url.searchParams.get('tabelaPreco'),String(flags.tableId||1));
     assert.ok(['0','1'].includes(url.searchParams.get('ativo')));
     if(posted && flags.confirmationFailure)return Response.json({private:'hidden'},{status:403});
-    return Response.json(posted && url.searchParams.get('ativo')==='1'?{total:1,data:[priceEntry()]}:flags.pricesByActive?.[url.searchParams.get('ativo')]||flags.prices||{total:0,data:[]});
+    return Response.json(posted && url.searchParams.get('ativo')===(flags.magazordStringPrice?'0':'1')?{total:1,data:[priceEntry({precoVenda:flags.magazordStringPrice?'30.00':30})]}:flags.pricesByActive?.[url.searchParams.get('ativo')]||flags.prices||{total:0,data:[]});
   };
   return {calls,job:()=>saved,handler:api.createMagazordPriceFunction({env:configured,fetcher})};
 }
@@ -78,6 +78,24 @@ test('connected send persists intention, posts only the child and verifies by GE
   assert.equal((await f.handler(sendRequest())).status,200);assert.equal(remotePosts(f).length,1);
   assert.equal((await f.handler(sendRequest({action:'reconcile'}))).status,200);assert.equal(remotePosts(f).length,1);
   const changed=await f.handler(sendRequest({price:'40,00'}));assert.equal(changed.status,409);assert.equal((await changed.json()).code,'price_payload_changed');
+});
+test('Magazord decimal-string price is confirmed and reconciled without another POST',async()=>{
+  const fixture={data:[{produto:'9788532530790',produtoNome:'HARRY POTTER E A CAMARA SECRETA',tabelaPreco:1,
+    tabelaNome:'Padrão',anuncio:null,precoAntigo:null,precoVenda:'35.00',percentualDesconto:null,
+    dataHoraAtualizacao:'2026-11-19T15:31:49-03:00',ocultarPrecoSite:null}],total:1};
+  assert.deepEqual(api.priceSnapshot(fixture,'9788532530790',1),{kind:'present',cents:3500});
+  const f=backend({enable:true,magazordStringPrice:true});
+  const initial=await f.handler(sendRequest());assert.equal(initial.status,200);assert.equal(f.job().stage,'price_verified');
+  const again=await f.handler(sendRequest({action:'reconcile'}));assert.equal(again.status,200);
+  assert.equal(remotePosts(f).length,1);
+});
+test('decimal-string sale price is strict: malformed, extra digits, zero and wrong identity fail closed',()=>{
+  const row=priceEntry({precoVenda:'30.00'});
+  assert.deepEqual(api.priceSnapshot({data:[row],total:1},'FIXTURE-C',1),{kind:'present',cents:3000});
+  for(const value of ['0.00','30','30.0','30.001','30,00',' 30.00','30.00 ','1e2','NaN','Infinity','-30.00','030.00','30.00evil',null]){
+    assert.throws(()=>api.priceSnapshot({data:[priceEntry({precoVenda:value})],total:1},'FIXTURE-C',1));
+  }
+  assert.throws(()=>api.priceSnapshot({data:[priceEntry({precoVenda:'30.00',produto:'outro'})],total:1},'FIXTURE-C',1));
 });
 test('connected send requires exact backend operation, journal, CAS, verified creation and homologation',async()=>{
   for(const flags of [{missingJournal:true},{casFailure:true},{noRegistration:true},
