@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { build } from 'esbuild';
 import { mfaToken } from './helpers/mfa.mjs';
-const built = await build({ stdin: { resolveDir: process.cwd(), contents: `export * from './server/magazordRegistration';export * from './server/magazordRegistrationStore';export * from './shared/magazordRegistration';` }, bundle: true, write: false, platform: 'node', format: 'esm' });
+const built = await build({ stdin: { resolveDir: process.cwd(), contents: `export * from './server/magazordRegistration';export * from './server/magazordRegistrationStore';export * from './shared/magazordRegistration';export * from './server/magazordPrice';` }, bundle: true, write: false, platform: 'node', format: 'esm' });
 const api = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].text).toString('base64'));
 const uid='11111111-1111-4111-8111-111111111111', store='22222222-2222-4222-8222-222222222222';
 const base='https://homologacaosilveiralab.painel.magazord.com.br/api';
@@ -561,4 +561,58 @@ test('description permits only composer formatting and does not forward arbitrar
 });
 test('invalid catalog references are rejected before permanent reservation',async()=>{
   const f=fixture({noBrand:true});assert.equal((await f.handler()(req(id()))).status,400);assert.equal(f.jobs.size,0);assert.equal(writes(f).length,0);
+});
+
+test('new ISBN registration and interrupted recovery can price LVP007 once; preexisting products cannot',async()=>{
+  const book={...input,parentCode:'LVP007',childCode:'9788535931938',ean:'9788535931938'};
+  for(const scenario of ['new','recovered','preexisting']){
+    const f=fixture({childLost:scenario==='recovered'}),key=id(),priceId=id();
+    if(scenario==='preexisting')f.parents.set(book.parentCode,api.registrationPayload(book).parent);
+    let result=await f.handler()(req(key,{input:book}));
+    if(scenario==='recovered'){
+      assert.equal(result.status,503);assert.equal(f.jobs.get(key).stage,'child_started');assert.equal(writes(f).length,2);
+      result=await f.handler()(req(key,{input:book}));
+    }
+    assert.equal(result.status,scenario==='preexisting'?409:200);
+    assert.equal(f.jobs.get(key).stage,scenario==='preexisting'?'prepared':'verified');
+    let saved=null,pricePosts=0;const remoteOrder=[];
+    const fetcher=async(target,init)=>{
+      const url=new URL(target);
+      if(url.origin==='https://auth.invalid'){
+        if(url.pathname==='/rest/v1/magazord_registration_jobs'){
+          assert.equal(init.method,'GET');assert.equal(url.searchParams.get('id'),'eq.'+key);
+          return Response.json([{...f.jobs.get(key)}]);
+        }
+        if(url.pathname==='/rest/v1/magazord_price_jobs'){
+          if(init.method==='GET')return Response.json(url.searchParams.get('limit')==='0'?[]:saved?[{...saved}]:[]);
+          if(init.method==='POST'){assert.equal(saved,null);saved=JSON.parse(init.body);return Response.json([{...saved}]);}
+          assert.equal(init.method,'PATCH');assert.equal(url.searchParams.get('stage'),'eq.'+saved.stage);
+          assert.equal(url.searchParams.get('fingerprint'),'eq.'+saved.fingerprint);
+          saved={...saved,...JSON.parse(init.body)};return Response.json([{...saved}]);
+        }
+        return f.fetcher(target,init);
+      }
+      remoteOrder.push([init.method,url.pathname]);
+      if(url.pathname==='/api/v1/preco'){
+        assert.equal(init.method,'POST');assert.equal(f.jobs.get(key).stage,'verified');assert.equal(saved.stage,'price_started');
+        assert.deepEqual(JSON.parse(init.body),[{produto:book.childCode,tabelaPreco:1,precoVenda:12}]);
+        pricePosts++;return Response.json({sucesso:true});
+      }
+      assert.equal(url.pathname,'/api/v1/listPreco');assert.equal(init.method,'GET');assert.equal(pricePosts,1);
+      return Response.json(url.searchParams.get('ativo')==='0'?{total:0,data:[]}:
+        {total:1,data:[{produto:book.childCode,tabelaPreco:1,anuncio:null,precoVenda:12,precoAntigo:null}]});
+    };
+    const handler=api.createMagazordPriceFunction({env:{...env,SUPABASE_SERVICE_ROLE_KEY:'sb_secret_fixture',
+      MAGAZORD_HOMOLOGATION_PRICES:JSON.stringify({[store]:{channelId:1,tableId:1}}),MAGAZORD_HOMOLOGATION_PRICE_OPERATION_ID:priceId},fetcher});
+    const priceRequest=action=>new Request('https://isbn.invalid/api/magazord/price',{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${mfaToken(uid)}`,'x-isbn-store-id':store},
+      body:JSON.stringify({action,registrationId:key,price:'12,00',...(action==='prepare'?{}:{operationId:priceId})})});
+    assert.equal((await handler(priceRequest('prepare'))).status,scenario==='preexisting'?409:200);assert.equal(remoteOrder.length,0);
+    const sent=await handler(priceRequest('send'));assert.equal(sent.status,scenario==='preexisting'?409:200);
+    if(scenario==='preexisting'){
+      assert.equal(pricePosts,0);assert.equal(writes(f).length,0);assert.equal(remoteOrder.length,0);assert.equal(saved,null);
+    }else{
+      assert.equal(saved.stage,'price_verified');assert.equal(pricePosts,1);assert.deepEqual(remoteOrder[0],['POST','/api/v1/preco']);
+      await handler(priceRequest('send'));await handler(priceRequest('reconcile'));assert.equal(pricePosts,1);assert.equal(writes(f).length,2);
+    }
+  }
 });

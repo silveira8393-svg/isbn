@@ -35,7 +35,7 @@ function backend(flags={}){
       assert.equal(url.pathname,'/rest/v1/magazord_registration_jobs');
       assert.equal(url.searchParams.get('store_id'),'eq.'+configured.MAGAZORD_STORE_ID);assert.equal(url.searchParams.get('actor_id'),'eq.'+actor);
       assert.equal(init.headers.apikey,'sb_secret_fixture');
-      return Response.json([flags.job||{...row,store_id:configured.MAGAZORD_STORE_ID}]);
+      return Response.json(flags.noRegistration?[]:[flags.job||{...row,store_id:configured.MAGAZORD_STORE_ID}]);
     }
     assert.equal(url.origin,new URL(base).origin);assert.equal(init.headers.Authorization,'Basic '+Buffer.from('fixture-token:fixture-password').toString('base64'));
     if(url.pathname==='/api/v1/preco'){
@@ -79,11 +79,11 @@ test('connected send persists intention, posts only the child and verifies by GE
   assert.equal((await f.handler(sendRequest({action:'reconcile'}))).status,200);assert.equal(remotePosts(f).length,1);
   const changed=await f.handler(sendRequest({price:'40,00'}));assert.equal(changed.status,409);assert.equal((await changed.json()).code,'price_payload_changed');
 });
-test('connected send requires exact backend operation, journal, CAS, absent price and homologation',async()=>{
-  for(const flags of [{missingJournal:true},{casFailure:true},{prices:{total:1,data:[priceEntry()]}},
-    {prices:{total:1,data:[priceEntry({precoAntigo:0})]}},{prices:{total:1,data:[priceEntry({anuncio:7})]}},
-    {prices:{total:1,data:[]}},{env:{MAGAZORD_BASE_URL:'https://livrariasul.painel.magazord.com.br/api'}},
-    {env:{MAGAZORD_HOMOLOGATION_PRICES:'{}'}},{job:{...row,stage:'parent_started'}},{wrongChild:true}]){
+test('connected send requires exact backend operation, journal, CAS, verified creation and homologation',async()=>{
+  for(const flags of [{missingJournal:true},{casFailure:true},{noRegistration:true},
+    {env:{MAGAZORD_BASE_URL:'https://livrariasul.painel.magazord.com.br/api'}},
+    {env:{MAGAZORD_HOMOLOGATION_PRICES:'{}'}},...['prepared','parent_started','parent_confirmed','child_started'].map(stage=>({job:{...row,stage}})),
+    {job:{...row,actor_id:store}},{job:{...row,store_id:actor}}]){
     const f=backend({enable:true,...flags}),r=await f.handler(sendRequest());assert.notEqual(r.status,200);assert.equal(remotePosts(f).length,0);
   }
   const f=backend({enable:true});assert.equal((await f.handler(sendRequest({operationId:registration}))).status,423);assert.equal(f.job(),null);
@@ -97,6 +97,53 @@ test('connected rejected, lost, timed out or malformed POST and failed confirmat
     await f.handler(sendRequest());await f.handler(sendRequest({action:'reconcile'}));assert.equal(remotePosts(f).length,1);
     if(flags.lostResponse||flags.invalidSuccess)assert.equal(f.job().stage,'price_verified');else assert.equal(f.job().stage,'price_started');
   }
+});
+
+test('connected send refuses a configured table other than Padrao ID 1 before reserving or posting',async()=>{
+  const f=backend({enable:true,env:{MAGAZORD_HOMOLOGATION_PRICES:JSON.stringify({[store]:{channelId:1,tableId:2}})}});
+  const r=await f.handler(sendRequest());assert.equal((await r.json()).code,'invalid_price_table');
+  assert.equal(f.job(),null);assert.equal(remotePosts(f).length,0);
+});
+
+test('homologation price is exactly the operator amount for the child and Padrao table',()=>{
+  assert.deepEqual(api.salePricePayload('9788535931938',1,api.priceCents('12,00')),[{produto:'9788535931938',tabelaPreco:1,precoVenda:12}]);
+});
+
+test('prepare uses only authorization and verified journal; first remote call of send is the price POST',async()=>{
+  // These diagnostic routes would fail, but none is a prerequisite for creating the first price.
+  const f=backend({enable:true,remoteFailurePath:'/api/v2/site/produto/FIXTURE-P'});
+  const ready=await f.handler(request({action:'prepare'}));assert.equal(ready.status,200);
+  const prepared=await ready.json();assert.equal(prepared.operationId,priceId);assert.equal(prepared.tableId,1);assert.equal(prepared.cents,3000);
+  assert.equal(f.calls.filter(c=>c.url.origin===new URL(base).origin).length,0);assert.equal(f.job(),null);
+  const response=await f.handler(sendRequest());assert.equal(response.status,200);
+  const remote=f.calls.filter(c=>c.url.origin===new URL(base).origin);
+  assert.deepEqual(remote.map(c=>[c.init.method,c.url.pathname]),[['POST','/api/v1/preco'],['GET','/api/v1/listPreco'],['GET','/api/v1/listPreco']]);
+  assert.equal(f.job().stage,'price_verified');
+});
+
+test('products without a verified ISBN creation and price-update requests cannot send or prepare',async()=>{
+  for(const action of ['prepare','send']){
+    const f=backend({enable:true,noRegistration:true}),response=await f.handler(action==='prepare'?request({action}):sendRequest());
+    assert.equal((await response.json()).code,'registration_not_verified');assert.equal(f.job(),null);
+    assert.equal(f.calls.filter(c=>c.url.origin===new URL(base).origin).length,0);
+  }
+  for(const changes of [{action:'update'},{existingProduct:true},{replacePrice:true}]){
+    const f=backend({enable:true});assert.notEqual((await f.handler(sendRequest(changes))).status,200);assert.equal(remotePosts(f).length,0);
+  }
+});
+
+test('failed confirmation happens after one POST and neither new send nor reconciliation repeats it',async()=>{
+  const f=backend({enable:true,confirmationFailure:true});
+  const first=await f.handler(sendRequest());assert.equal((await first.json()).code,'price_outcome_uncertain');
+  assert.equal(f.job().stage,'price_started');assert.equal(remotePosts(f).length,1);
+  await f.handler(sendRequest());await f.handler(sendRequest({action:'reconcile'}));assert.equal(remotePosts(f).length,1);
+});
+
+test('orchestration never reads before the single POST and persists intention first',async()=>{
+  const f=operation(),order=[];let posted=false;
+  f.ports.write=async()=>{assert.equal(f.jobs.get(f.job.id).stage,'price_started');posted=true;order.push('post');return{status:200,body:{sucesso:true}};};
+  f.ports.read=async()=>{assert.equal(posted,true);order.push('read');return{kind:'present',cents:3000};};
+  assert.equal(await f.run(),'price_verified');assert.deepEqual(order,['post','read']);
 });
 test('connected sends preserve MFA, store and authorization guards; reconciliation never starts a POST',async()=>{
   for(const [flags,headers] of [[{}, {authorization:'Bearer '+mfaToken(actor,'aal1')}],[{denied:true},{}],[{inactive:true},{}],
@@ -241,8 +288,7 @@ test('lost responses, timeouts, invalid success and failed confirmation never re
     assert.equal(attempts,1);
   }
 });
-test('existing prices, wrong reconciliation amounts, unverified registration and production never write in offline orchestration',async()=>{
-  const f=operation();f.setSnapshot({kind:'present',cents:3000});await assert.rejects(f.run(),{code:'existing_price_review_required'});assert.equal(f.writes.length,0);
+test('wrong reconciliation amounts, unverified registration and production never write in offline orchestration',async()=>{
   const g=operation();g.ports.verifiedRegistration=async()=>false;await assert.rejects(g.run(),{code:'registration_not_verified'});assert.equal(g.jobs.size,0);
   const h=operation();h.ports.baseUrl='https://livrariasul.painel.magazord.com.br/api';await assert.rejects(h.run(),{code:'homologation_only'});assert.equal(h.jobs.size,0);
   const k=operation();await k.run();k.setSnapshot({kind:'present',cents:4000});await assert.rejects(k.run(),{code:'price_outcome_uncertain'});assert.equal(k.writes.length,1);

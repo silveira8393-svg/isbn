@@ -41,15 +41,16 @@ export async function exercisePriceOperation(job: PriceJob, ports: {
     if (!await ports.store.advance(record, stage)) return priceFail('price_operation_in_progress');
     record = { ...record, stage };
   };
-  const current = await ports.read();
   if (record.stage === 'price_started' || record.stage === 'price_verified') {
+    const current = await ports.read();
     if (current.kind !== 'present' || current.cents !== job.cents) return priceFail('price_outcome_uncertain');
     if (record.stage === 'price_started') await advance('price_verified');
     return record.stage;
   }
   if (record.stage !== 'prepared') return priceFail('invalid_price_operation');
   if (ports.reconcileOnly) return priceFail('price_not_started');
-  if (current.kind !== 'absent') return priceFail('existing_price_review_required');
+  // This is the first price of a product created by the verified ISBN registration,
+  // never a price-update workflow. No remote reads precede its single POST.
   await advance('price_started'); // Persistent CAS intention before the only POST attempt.
   try {
     const response: any = await ports.write(salePricePayload(job.child_code, job.table_id, job.cents));

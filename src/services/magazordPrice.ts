@@ -1,17 +1,23 @@
 import type { User } from '../types';
 import { priceCents, priceUuid, type PricePreview } from '../../shared/magazordPrice';
 
-export async function previewMagazordPrice(registrationId: string, price: string, user: User): Promise<PricePreview> {
+/** Read-only preparation for a new product already verified by the ISBN registration journal. */
+export function prepareMagazordPrice(registrationId: string, price: string, user: User): Promise<PricePreview> {
+  return previewMagazordPrice(registrationId, price, user, 'prepare');
+}
+
+// prepare checks authorization and the journal only; preview is an optional remote diagnostic.
+export async function previewMagazordPrice(registrationId: string, price: string, user: User, action: 'preview' | 'prepare' = 'preview'): Promise<PricePreview> {
   let expectedCents: number;
   try { expectedCents = priceCents(price); }
   catch { throw new Error('Informe um preço positivo completo, como 30,00 ou 1.234,56.'); }
   if (!priceUuid(registrationId) || !user.active || !priceUuid(user.storeId)) throw new Error('Sessão ou cadastro inválido.');
   const { supabase } = await import('../lib/supabase');
   const { data, error } = await supabase.auth.getSession();
-  if (error || data.session?.user.id !== user.id || !data.session.access_token) throw new Error('Entre novamente para revisar o preço.');
+  if (error || data.session?.user.id !== user.id || !data.session.access_token) throw new Error('Entre novamente para processar o preço.');
   const response = await fetch('/api/magazord/price', { method: 'POST', credentials: 'same-origin', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(30000),
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session.access_token}`, 'x-isbn-store-id': user.storeId },
-    body: JSON.stringify({ action: 'preview', registrationId, price }) });
+    body: JSON.stringify({ action, registrationId, price }) });
   const result = await response.json();
   if (!response.ok) {
     const messages: Record<string, string> = {
@@ -22,7 +28,7 @@ export async function previewMagazordPrice(registrationId: string, price: string
       price_persistence_not_configured: 'Leitura do cadastro confirmado não configurada no backend.',
       invalid_price_table: 'Tabela de preços não confirmada como ativa.',
     };
-    throw new Error(messages[result?.code] || 'Não foi possível revisar o preço. Nenhuma gravação foi enviada.');
+    throw new Error(messages[result?.code] || 'Não foi possível verificar o preço. Nenhuma gravação foi enviada.');
   }
   if (result?.status !== 'preview' || result.environment !== 'homologation' || typeof result.writesEnabled !== 'boolean'
     || (result.writesEnabled && !priceUuid(result.operationId)) || result.cents !== expectedCents

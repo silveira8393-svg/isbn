@@ -9,7 +9,7 @@ const built=await build({stdin:{resolveDir:process.cwd(),contents:`export {defau
 const user={id:'11111111-1111-4111-8111-111111111111',storeId:'22222222-2222-4222-8222-222222222222',active:true};
 const draft={parentCode:'U1-P',childCode:'U1',title:'Fixture',condition:'usado',magazordCategoryId:10,magazordCategoryStoreId:user.storeId,unit:'UN',ncm:'49019900',fiscalOrigin:'0 - Nacional',synopsis:'Sinopse',usedBookConditionNotes:'Estado',ean:''};
 function harness(submit,storage=new Map()){
-  const slots=[],deps={submit};let cursor=0,effects=[],tree,done=0,started=0;const props={draft:{...draft},user:{...user},onBusy(){},onStarted(){started++;},onDone(){done++;}};
+  const slots=[],deps={submit};let cursor=0,effects=[],tree,done=0,started=0;const props={draft:{...draft,price:'12,00'},user:{...user},onBusy(){},onStarted(){started++;},onDone(){done++;}};
   deps.react={useState(init){const i=cursor++;if(!(i in slots))slots[i]=typeof init==='function'?init():init;return[slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v;}];},useRef(init){const i=cursor++;return slots[i]??={current:init};},useEffect(fn,ds){const i=cursor++;if(!slots[i]||ds.some((d,n)=>d!==slots[i][n])){slots[i]=ds;effects.push(fn);}}};
   const module={exports:{}};const sessionStorage={getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)};
   new Function('deps','module','exports','sessionStorage',built.outputFiles[0].text)(deps,module,module.exports,sessionStorage);
@@ -17,7 +17,7 @@ function harness(submit,storage=new Map()){
   function nodes(n){return!n||typeof n!=='object'?[]:Array.isArray(n)?n.flatMap(nodes):[n,...nodes(n.props?.children)];}
   const button=text=>nodes(tree).find(n=>n.type==='button'&&String(n.props.children).includes(text));
   const fill=(label,value)=>nodes(tree).find(n=>n.type==='input'&&n.props['aria-label']===label).props.onChange({target:{value}});
-  render();return{render,button,fill,props,storage,preview:()=>nodes(tree).find(n=>n.type==='pre'),started:()=>started,done:()=>done};
+  render();return{render,button,fill,props,storage,price:()=>nodes(tree).find(n=>typeof n.type==='function'&&n.type.name==='MagazordPrice')?.props.price,preview:()=>nodes(tree).find(n=>n.type==='pre'),started:()=>started,done:()=>done};
 }
 test('review and create are separate; double click is locked, error preserves operation and reload resumes same frozen data',async()=>{
   const calls=[];let fail=true,resolve;
@@ -40,4 +40,19 @@ test('review displays backend derivations without adding free browser configurat
 test('changing active store cannot submit an operation prepared in another store',async()=>{
   let calls=0;const h=harness(async()=>{calls++;return{payload:{}};});h.fill('ID da Marca Magazord','20');h.fill('ID da loja/canal Magazord','30');h.render();await h.button('Consultar códigos').props.onClick();h.render();
   h.props.user={...user,storeId:'33333333-3333-4333-8333-333333333333'};h.render();assert.equal(h.button('Confirmar criação real').props.disabled,true);await h.button('Confirmar criação real').props.onClick();assert.equal(calls,1);
+});
+
+test('price frozen at creation survives a lost registration response and a changed form after reload',async()=>{
+  let fail=true;
+  const submit=async(action,key,input)=>{if(action==='preview')return{payload:{}};if(fail)throw Error('Lost response');return{parentCode:input.parentCode,childCode:input.childCode};};
+  const h=harness(submit);h.fill('ID da Marca Magazord','1');h.fill('ID da loja/canal Magazord','1');h.render();
+  await h.button('Consultar códigos').props.onClick();h.render();h.props.draft.price='15,00';h.render();
+  await h.button('Confirmar criação real').props.onClick();assert.equal(JSON.parse([...h.storage.values()][0]).price,'15,00');
+  fail=false;const reload=harness(submit,h.storage);reload.props.draft.price='99,00';reload.render();
+  await reload.button('Consultar estado').props.onClick();reload.render();assert.equal(reload.price(),'15,00');
+});
+
+test('invalid price stops registration before any remote request',async()=>{
+  let calls=0;const h=harness(async()=>{calls++;});h.props.draft.price='12,';h.fill('ID da Marca Magazord','1');h.fill('ID da loja/canal Magazord','1');h.render();
+  await h.button('Consultar códigos').props.onClick();assert.equal(calls,0);assert.equal(h.storage.size,0);
 });

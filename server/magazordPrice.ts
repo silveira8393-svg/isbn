@@ -22,7 +22,7 @@ function binding(env: NodeJS.ProcessEnv, store: string): { channelId: number; ta
   return map[store];
 }
 
-/** Preview is read-only. Sending requires a separately authorized operation UUID in the backend. */
+/** Prepare uses the verified ISBN registration; preview remains an optional remote diagnostic. */
 export function createMagazordPriceFunction(options: { env?: NodeJS.ProcessEnv; fetcher?: typeof fetch } = {}) {
   const env = options.env || process.env, fetcher = options.fetcher || fetch;
   return async (request: Request): Promise<Response> => {
@@ -43,11 +43,13 @@ export function createMagazordPriceFunction(options: { env?: NodeJS.ProcessEnv; 
       const input = await readLimitedJson(request.body, 4096, AbortSignal.timeout(5000));
       const enabledId = env.MAGAZORD_HOMOLOGATION_PRICE_OPERATION_ID;
       const enabled = priceUuid(enabledId);
-      if (input?.action !== 'preview' && (!enabled || !['send', 'reconcile'].includes(input?.action))) return priceFail('price_writes_disabled', 423);
-      if (Object.keys(input).some(k => !['action', 'registrationId', 'price', ...(input.action === 'preview' ? [] : ['operationId'])].includes(k))
+      const readOnly = ['preview', 'prepare'].includes(input?.action);
+      if (!readOnly && (!enabled || !['send', 'reconcile'].includes(input?.action))) return priceFail('price_writes_disabled', 423);
+      if (Object.keys(input).some(k => !['action', 'registrationId', 'price', ...(readOnly ? [] : ['operationId'])].includes(k))
         || !priceUuid(input.registrationId)) return priceFail('invalid_price_request', 400);
-      if (input.action !== 'preview' && input.operationId !== enabledId) return priceFail('price_writes_disabled', 423);
+      if (!readOnly && input.operationId !== enabledId) return priceFail('price_writes_disabled', 423);
       const cents = priceCents(input.price), configured = binding(env, store);
+      if (input.action !== 'preview' && configured.tableId !== 1) return priceFail('invalid_price_table');
       const call = priceDatabase(env, fetcher);
       const jobs = await call('magazord_registration_jobs', 'GET', { id: `eq.${input.registrationId}`, store_id: `eq.${store}`,
         actor_id: `eq.${actor}`, select: 'id,store_id,actor_id,parent_code,child_code,stage', limit: '1' });
@@ -57,17 +59,16 @@ export function createMagazordPriceFunction(options: { env?: NodeJS.ProcessEnv; 
       const payload = salePricePayload(job.child_code, configured.tableId, cents);
       salePricePayload(job.parent_code, configured.tableId, cents);
       if (job.parent_code === job.child_code) return priceFail('invalid_relationship');
+      // verified is reached only by the new-product registration state machine.
+      // Preexisting codes are rejected there; products created by that same operation can resume here.
+      if (input.action === 'prepare') {
+        if (enabled) await call('magazord_price_jobs', 'GET', { select: 'id', limit: '0' });
+        const result: PricePreview = { status: 'preview', environment: 'homologation', writesEnabled: enabled,
+          ...(enabled ? { operationId: enabledId } : {}), parentCode: job.parent_code, childCode: job.child_code,
+          tableId: 1, tableName: 'Padrão', cents, eligible: true, state: 'ready_for_local_review', payload };
+        return reply(result);
+      }
       const transport = createPriceTransport(env, fetcher), get = transport.get;
-      const unwrap = (body: any) => body?.status === 'success' && body.data != null ? body.data : priceFail('invalid_remote_response', 502);
-      const parent = unwrap(await get('/v2/site/produto/' + encodeURIComponent(job.parent_code)));
-      const child = unwrap(await get('/v2/site/produto/' + encodeURIComponent(job.parent_code) + '/derivacao/' + encodeURIComponent(job.child_code)));
-      if (parent.codigo !== job.parent_code || child.codigo !== job.child_code || child.agrupador !== job.parent_code
-        || typeof child.tipoRegistro !== 'string' || child.tipoRegistro.toLowerCase() !== 'filho'
-        || !Array.isArray(child.lojas) || !child.lojas.includes(configured.channelId)
-        || !Array.isArray(parent.produtoLoja) || !parent.produtoLoja.some((l: any) => l?.loja === configured.channelId)) return priceFail('invalid_relationship');
-      const table = unwrap(await get('/v2/site/tabelaPreco?' + new URLSearchParams({ id: String(configured.tableId), limit: '100', page: '1' })));
-      if (!Array.isArray(table.items) || table.items.length !== 1 || table.total !== 1 || table.page !== 1 || table.limit !== 100 || table.has_more !== false
-        || table.items[0]?.id !== configured.tableId || table.items[0]?.ativa !== true || typeof table.items[0]?.nome !== 'string') return priceFail('invalid_price_table');
       if (input.action !== 'preview') {
         const priceOperation = priceJob({ id: enabledId!, registration_id: job.id, store_id: store, actor_id: actor,
           parent_code: job.parent_code, child_code: job.child_code, channel_id: configured.channelId, table_id: configured.tableId, cents });
@@ -84,6 +85,16 @@ export function createMagazordPriceFunction(options: { env?: NodeJS.ProcessEnv; 
         });
         return reply({ status: 'verified', operationId: enabledId, stage, childCode: job.child_code, tableId: configured.tableId, cents });
       }
+      const unwrap = (body: any) => body?.status === 'success' && body.data != null ? body.data : priceFail('invalid_remote_response', 502);
+      const parent = unwrap(await get('/v2/site/produto/' + encodeURIComponent(job.parent_code)));
+      const child = unwrap(await get('/v2/site/produto/' + encodeURIComponent(job.parent_code) + '/derivacao/' + encodeURIComponent(job.child_code)));
+      if (parent.codigo !== job.parent_code || child.codigo !== job.child_code || child.agrupador !== job.parent_code
+        || typeof child.tipoRegistro !== 'string' || child.tipoRegistro.toLowerCase() !== 'filho'
+        || !Array.isArray(child.lojas) || !child.lojas.includes(configured.channelId)
+        || !Array.isArray(parent.produtoLoja) || !parent.produtoLoja.some((l: any) => l?.loja === configured.channelId)) return priceFail('invalid_relationship');
+      const table = unwrap(await get('/v2/site/tabelaPreco?' + new URLSearchParams({ id: String(configured.tableId), limit: '100', page: '1' })));
+      if (!Array.isArray(table.items) || table.items.length !== 1 || table.total !== 1 || table.page !== 1 || table.limit !== 100 || table.has_more !== false
+        || table.items[0]?.id !== configured.tableId || table.items[0]?.ativa !== true || typeof table.items[0]?.nome !== 'string') return priceFail('invalid_price_table');
       // An absent/unreadable journal prevents enabling the button or attempting a remote POST.
       if (enabled) await call('magazord_price_jobs', 'GET', { select: 'id', limit: '0' });
       let state: PricePreview['state'] = 'ready_for_local_review';
