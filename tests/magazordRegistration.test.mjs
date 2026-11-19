@@ -30,6 +30,7 @@ function fixture(flags={}) {
       assert.fail('Unexpected Auth path');
     }
     assert.equal(url.origin,new URL(base).origin);assert.equal(init.headers.Authorization,'Basic '+Buffer.from('fixture-token:fixture-password').toString('base64'));
+    const intercepted=await flags.remote?.(url,init);if(intercepted)return intercepted;
     if(init.method==='POST'){
       assert.ok(['/api/v2/site/produto',...Array.from(parents.keys(),c=>'/api/v2/site/produto/'+encodeURIComponent(c)+'/derivacao')].includes(url.pathname));
       const body=JSON.parse(init.body);
@@ -56,9 +57,157 @@ function fixture(flags={}) {
     const p=parents.get(decodeURIComponent(url.pathname.split('/').at(-1)));
     return p?Response.json({status:'success',data:p}):new Response(null,{status:404});
   };
-  return {calls,logs,jobs,parents,children,journal,fetcher,handler:()=>api.createMagazordRegistrationFunction({env,fetcher,journal,logReadRejection:entry=>logs.push(entry)})};
+  return {calls,logs,jobs,parents,children,journal,fetcher,handler:()=>api.createMagazordRegistrationFunction({env,fetcher,journal,logDiagnostic:entry=>logs.push(entry)})};
 }
 const writes=f=>f.calls.filter(c=>c.init.method==='POST');
+const privateDetails='fixture-token fixture-password private-description private-person@example.invalid';
+function assertSafeDiagnostics(logs) {
+  assert.ok(logs.length);
+  for(const entry of logs){
+    assert.deepEqual(Object.keys(entry).sort(),['code','operation','phase','status']);
+    assert.match(entry.operation,/^registration_[a-z_]+$/);assert.match(entry.phase,/^[a-z_]+$/);
+    assert.ok(entry.status===null||Number.isInteger(entry.status));
+  }
+  for(const value of [privateDetails,...privateDetails.split(' '),uid,store,input.parentCode,input.childCode,input.title,input.ean])
+    assert.ok(!JSON.stringify(logs).includes(value));
+}
+
+test('POST diagnostics: parent HTTP 400/401/403/406 preserve parent_started and never replay the POST',async()=>{
+  for(const status of [400,401,403,406]){
+    const f=fixture({remote:async(_url,init)=>init.method==='POST'?new Response(privateDetails,{status}):undefined}),key=id();
+    const r=await f.handler()(req(key));assert.equal(r.status,502);assert.deepEqual(await r.json(),{code:'remote_rejected'});
+    assert.equal(f.jobs.get(key).stage,'parent_started');assert.equal(writes(f).length,1);
+    assert.deepEqual(f.logs,[{operation:'registration_parent_create',phase:'parent_creation',status:null,code:'remote_started'},
+      {operation:'registration_parent_create',phase:'parent_creation',status,code:'remote_rejected'}]);
+    assertSafeDiagnostics(f.logs);const retry=await f.handler()(req(key));assert.equal(retry.status,409);
+    assert.deepEqual(await retry.json(),{code:'parent_outcome_uncertain'});assert.equal(writes(f).length,1);assert.equal(f.jobs.size,1);
+    assert.equal(f.jobs.get(key).stage,'parent_started');
+  }
+});
+
+test('POST diagnostics: child refusal retains durable child intent and never recreates the parent or retries child',async()=>{
+  const f=fixture({remote:async(url,init)=>init.method==='POST'&&url.pathname.endsWith('/derivacao')?new Response(privateDetails,{status:403}):undefined}),key=id();
+  const r=await f.handler()(req(key));assert.equal(r.status,502);assert.deepEqual(await r.json(),{code:'remote_rejected'});
+  assert.equal(f.jobs.get(key).stage,'child_started');assert.equal(f.parents.size,1);assert.equal(f.children.size,0);
+  assert.deepEqual(f.logs.filter(e=>e.operation==='registration_child_create'),[
+    {operation:'registration_child_create',phase:'child_creation',status:null,code:'remote_started'},
+    {operation:'registration_child_create',phase:'child_creation',status:403,code:'remote_rejected'}]);
+  const retry=await f.handler()(req(key));assert.equal(retry.status,409);assert.equal(writes(f).length,2);assertSafeDiagnostics(f.logs);
+});
+
+test('POST diagnostics: timeout and transport failure are distinct for parent and child, without HTTP status',async()=>{
+  for(const child of [false,true])for(const timeout of [false,true]){
+    const f=fixture({remote:async(url,init)=>{
+      if(init.method==='POST'&&url.pathname.endsWith('/derivacao')===child)throw timeout?new DOMException(privateDetails,'TimeoutError'):new TypeError(privateDetails);
+    }}),key=id();
+    const r=await f.handler()(req(key));assert.equal(r.status,503);assert.deepEqual(await r.json(),{code:'operation_uncertain_reconcile_before_retry'});
+    const operation=child?'registration_child_create':'registration_parent_create';
+    assert.deepEqual(f.logs.filter(e=>e.operation===operation).at(-1),{operation,phase:child?'child_creation':'parent_creation',status:null,code:timeout?'remote_timeout':'remote_transport_error'});
+    assert.equal(f.jobs.get(key).stage,child?'child_started':'parent_started');
+    const before=writes(f).length;assert.equal((await f.handler()(req(key))).status,409);assert.equal(writes(f).length,before);assertSafeDiagnostics(f.logs);
+  }
+});
+
+test('POST diagnostics: actual shared deadline expiration is classified without changing the production timeout',async t=>{
+  const original=AbortSignal.timeout.bind(AbortSignal);t.mock.method(AbortSignal,'timeout',ms=>original(ms===20000?30:ms));
+  const f=fixture({remote:async(_url,init)=>{
+    if(init.method==='POST')await new Promise((_,reject)=>{if(init.signal.aborted)reject(init.signal.reason);else init.signal.addEventListener('abort',()=>reject(init.signal.reason),{once:true});});
+  }}),key=id();
+  const r=await f.handler()(req(key));assert.equal(r.status,503);assert.equal(f.jobs.get(key).stage,'parent_started');
+  assert.deepEqual(f.logs.at(-1),{operation:'registration_parent_create',phase:'parent_creation',status:null,code:'remote_timeout'});
+  assert.equal(writes(f).length,1);assertSafeDiagnostics(f.logs);
+});
+
+test('POST diagnostics: failed confirmation GETs identify parent, child and relationship phases',async()=>{
+  for(const phase of ['parent_confirmation','child_confirmation','relationship_confirmation']){
+    let parentSent=false,childSent=false;
+    const f=fixture({remote:async(url,init)=>{
+      if(init.method==='POST'){if(url.pathname.endsWith('/derivacao'))childSent=true;else parentSent=true;return;}
+      if((phase==='parent_confirmation'&&parentSent&&!childSent&&url.pathname.endsWith('/'+input.parentCode))
+        ||(phase==='child_confirmation'&&childSent&&url.pathname.endsWith('/'+input.parentCode))
+        ||(phase==='relationship_confirmation'&&url.pathname.endsWith('/derivacao')))return new Response(privateDetails,{status:503});
+    }}),key=id();
+    const r=await f.handler()(req(key));assert.equal(r.status,502);assert.deepEqual(await r.json(),{code:'remote_rejected'});
+    const rejected=f.logs.filter(e=>e.code==='remote_rejected').at(-1);
+    assert.deepEqual(rejected,{operation:phase==='relationship_confirmation'?'registration_relationship_lookup':'registration_product_lookup',phase,status:503,code:'remote_rejected'});
+    assert.equal(f.jobs.get(key).stage,phase==='parent_confirmation'?'parent_started':'child_started');
+    const before=writes(f).length;await f.handler()(req(key));assert.equal(writes(f).length,before);assertSafeDiagnostics(f.logs);
+  }
+});
+
+test('POST diagnostics: success HTTP with invalid content, JSON, encoding, size or envelope never confirms or retries',async()=>{
+  const cases=[
+    [()=>new Response(privateDetails,{status:201}),502,'invalid_remote_response'],
+    [()=>new Response('{"private":"'+privateDetails,{status:201,headers:{'content-type':'application/json'}}),503,'invalid_remote_response'],
+    [()=>new Response(null,{status:201,headers:{'content-type':'application/json'}}),503,'invalid_remote_response'],
+    [()=>new Response(new Uint8Array([0xff]),{status:201,headers:{'content-type':'application/json'}}),503,'invalid_remote_response'],
+    [()=>new Response('x'.repeat(512*1024+1),{status:201,headers:{'content-type':'application/json'}}),503,'invalid_remote_response'],
+    [()=>Response.json({status:'error',message:privateDetails,data:[]},{status:201}),502,'invalid_remote_response'],
+    [()=>Response.json({status:'success'},{status:201}),502,'invalid_remote_response'],
+    [()=>Response.json({status:'success',data:[]},{status:200}),502,'remote_rejected'],
+  ];
+  for(const [response,http,code] of cases){
+    const f=fixture({remote:async(_url,init)=>init.method==='POST'?response():undefined}),key=id();
+    assert.equal((await f.handler()(req(key))).status,http);assert.equal(f.jobs.get(key).stage,'parent_started');
+    assert.equal(f.logs.at(-1).code,code);assert.equal(f.logs.at(-1).status,code==='remote_rejected'?200:201);
+    assert.equal((await f.handler()(req(key))).status,409);assert.equal(writes(f).length,1);assertSafeDiagnostics(f.logs);
+  }
+});
+
+test('POST diagnostics: body stream failure and timeout retain the received HTTP status',async()=>{
+  for(const timeout of [false,true]){
+    const f=fixture({remote:async(_url,init)=>init.method==='POST'?new Response(new ReadableStream({start(c){c.error(timeout?new DOMException(privateDetails,'TimeoutError'):new Error(privateDetails));}}),{status:201,headers:{'content-type':'application/json'}}):undefined}),key=id();
+    assert.equal((await f.handler()(req(key))).status,503);assert.equal(f.jobs.get(key).stage,'parent_started');
+    assert.deepEqual(f.logs.at(-1),{operation:'registration_parent_create',phase:'parent_creation',status:201,code:timeout?'remote_timeout':'remote_transport_error'});
+    assertSafeDiagnostics(f.logs);
+  }
+});
+
+test('POST diagnostics: missing parent and invalid relationships log existing confirmation guards without changing them',async()=>{
+  for(const [flags,phase,code,stage] of [[{parentInvisible:true},'parent_confirmation','parent_outcome_uncertain','parent_started'],
+    [{badRelationship:true},'relationship_confirmation','invalid_relationship','child_started']]){
+    const f=fixture(flags),key=id(),r=await f.handler()(req(key));assert.equal(r.status,409);assert.deepEqual(await r.json(),{code});
+    assert.deepEqual(f.logs.at(-1),{operation:'registration_confirmation',phase,status:null,code});assert.equal(f.jobs.get(key).stage,stage);
+    assertSafeDiagnostics(f.logs);
+  }
+});
+
+test('POST diagnostics: confirmation timeout, transport and format errors retain their phase and existing responses',async()=>{
+  for(const [kind,http,code,status] of [['timeout',503,'remote_timeout',null],['transport',503,'remote_transport_error',null],
+    ['content',502,'invalid_remote_response',200],['json',503,'invalid_remote_response',200],['pagination',502,'incomplete_code_lookup',null]]){
+    let parentSent=false;
+    const f=fixture({remote:async(url,init)=>{
+      if(init.method==='POST'){parentSent=true;return;}
+      if(!parentSent)return;
+      if(kind==='pagination'){
+        if(url.pathname.endsWith('/produtoDerivacoes'))return Response.json({status:'success',data:{items:{},page:1,limit:100,has_more:false,total:0}});
+        return;
+      }
+      if(!url.pathname.endsWith('/'+input.parentCode))return;
+      if(kind==='timeout')throw new DOMException(privateDetails,'TimeoutError');
+      if(kind==='transport')throw new TypeError(privateDetails);
+      return new Response(kind==='json'?'{'+privateDetails:privateDetails,{headers:{'content-type':kind==='json'?'application/json':'text/plain'}});
+    }}),key=id();
+    assert.equal((await f.handler()(req(key))).status,http);assert.equal(f.jobs.get(key).stage,'parent_started');
+    assert.deepEqual(f.logs.at(-1),{operation:kind==='pagination'?'registration_confirmation':'registration_product_lookup',phase:'parent_confirmation',status,code});
+    await f.handler()(req(key));assert.equal(writes(f).length,1);assertSafeDiagnostics(f.logs);
+  }
+});
+
+test('POST diagnostics: default logger emits only JSON metadata and logger failures never affect registration',async t=>{
+  const printed=[];t.mock.method(console,'warn',value=>printed.push(JSON.parse(value)));
+  const f=fixture(),key=id(),handler=api.createMagazordRegistrationFunction({env,fetcher:f.fetcher,journal:f.journal});
+  assert.equal((await handler(req(key))).status,200);assertSafeDiagnostics(printed);
+  assert.ok(printed.some(e=>e.operation==='registration_parent_create'&&e.status===201&&e.code==='remote_success'));
+  assert.ok(printed.some(e=>e.operation==='registration_child_create'&&e.status===201&&e.code==='remote_success'));
+  assert.ok(printed.some(e=>e.phase==='parent_confirmation'&&e.code==='remote_success'));
+  assert.ok(printed.some(e=>e.phase==='child_confirmation'&&e.code==='remote_success'));
+  for(const rejected of [false,true]){
+    const f=fixture(rejected?{remote:async(_url,init)=>init.method==='POST'?new Response(privateDetails,{status:403}):undefined}:{}),key=id();
+    const handler=api.createMagazordRegistrationFunction({env,fetcher:f.fetcher,journal:f.journal,logDiagnostic(){throw new Error(privateDetails);}});
+    assert.equal((await handler(req(key))).status,rejected?502:200);assert.equal(f.jobs.get(key).stage,rejected?'parent_started':'verified');
+  }
+});
 
 test('homologation binding 1 unblocks preview with brand/category/code GETs and no store lookup or journal',async()=>{
   const f=fixture(),r=await f.handler()(req(id(),{action:'preview'}));
@@ -127,7 +276,7 @@ test('read rejection diagnostics identify each preview GET without sensitive dat
     const f=fixture({rejectGet:path});
     const response=await f.handler()(req(id(),{action:'preview'}));
     assert.equal(response.status,502);assert.deepEqual(await response.json(),{code:'remote_rejected'});
-    assert.deepEqual(f.logs,[{operation,status:403,code:'remote_rejected'}]);
+    assert.deepEqual(f.logs,[{operation,phase:path.endsWith('/marca')||path.endsWith('/categoria')?'catalog_validation':'code_availability',status:403,code:'remote_rejected'}]);
     const remote=f.calls.filter(c=>c.url.origin===new URL(base).origin);
     assert.equal(remote.at(-1).url.pathname,path);
     assert.equal(remote.filter(c=>c.url.pathname===path).length,1);
@@ -140,7 +289,7 @@ test('read rejection diagnostics preserve HTTP status and successful preview acc
   for(const status of [401,403,429,503]){
     const f=fixture({rejectGet:'/api/v2/site/categoria',rejectStatus:status});
     assert.equal((await f.handler()(req(id(),{action:'preview'}))).status,502);
-    assert.deepEqual(f.logs,[{operation:'registration_category_lookup',status,code:'remote_rejected'}]);
+    assert.deepEqual(f.logs,[{operation:'registration_category_lookup',phase:'catalog_validation',status,code:'remote_rejected'}]);
   }
   const f=fixture();assert.equal((await f.handler()(req(id(),{action:'preview'}))).status,200);
   assert.deepEqual(f.logs,[]);assert.equal(writes(f).length,0);assert.equal(f.jobs.size,0);
