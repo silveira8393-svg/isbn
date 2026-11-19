@@ -91,7 +91,8 @@ export function createMagazordPriceFunction(options: { env?: NodeJS.ProcessEnv; 
       if (input.action === 'prepare') {
         if (enabled) await call('magazord_price_jobs', 'GET', { select: 'id', limit: '0' });
         const result: PricePreview = { status: 'preview', environment: 'homologation', writesEnabled: enabled,
-          ...(enabled ? { operationId: resolvedId } : {}), parentCode: job.parent_code, childCode: job.child_code,
+          ...(enabled ? { operationId: resolvedId } : {}), operationStage: existing?.stage || 'not_started',
+          parentCode: job.parent_code, childCode: job.child_code,
           tableId: 1, tableName: 'Padrão', cents, eligible: true, state: 'ready_for_local_review', payload };
         return reply(result);
       }
