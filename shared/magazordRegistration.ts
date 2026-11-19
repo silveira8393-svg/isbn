@@ -7,6 +7,7 @@ export interface RegistrationInput {
   parentCode: string; childCode: string; title: string; condition: 'novo' | 'usado';
   categoryId: number; categoryStoreId: string; brandId: number; channelId: number;
   fiscalOrigin: number; unit: string; ncm: string; description: string; ean: string;
+  weight?: number; height?: number; width?: number; depth?: number;
 }
 export const registrationValidationMessages = {
   input: 'Os dados do cadastro não foram informados corretamente.',
@@ -23,6 +24,7 @@ export const registrationValidationMessages = {
   ncm: 'NCM inválido: use oito dígitos ou o formato 4901.99.00, ou deixe vazio.',
   description: 'Descrição inválida: use texto com até 30.000 caracteres.',
   ean: 'EAN/ISBN inválido: informe um ISBN válido, com dígito verificador correto, ou deixe vazio.',
+  dimensions: 'As medidas informadas devem ser números positivos e finitos.',
 } as const;
 type ValidationField = keyof typeof registrationValidationMessages;
 export class RegistrationValidationError extends Error {
@@ -41,7 +43,11 @@ export function registrationInput(draft: RegistrationDraft, brandId: number, cha
   return { parentCode: draft.parentCode.trim(), childCode: draft.childCode.trim(), title: draft.title.trim(), condition: draft.condition,
     categoryId: draft.magazordCategoryId!, categoryStoreId: draft.magazordCategoryStoreId!, brandId, channelId,
     fiscalOrigin: Number(origin?.[1] ?? draft.fiscalOrigin), unit: draft.unit, ncm: normalizeNcm(draft.ncm) ?? draft.ncm,
-    description: buildFinalDescription(draft, 'html'), ean: draft.ean || draft.isbn13 || draft.isbn10 || '' };
+    description: buildFinalDescription(draft, 'html'), ean: draft.ean || draft.isbn13 || draft.isbn10 || '',
+    ...(draft.weight !== undefined ? { weight: draft.weightUnit === 'kg' ? draft.weight : draft.weight / 1000 } : {}),
+    ...(draft.height !== undefined ? { height: draft.height } : {}),
+    ...(draft.width !== undefined ? { width: draft.width } : {}),
+    ...(draft.depth !== undefined ? { depth: draft.depth } : {}) };
 }
 export function registrationPayload(input: RegistrationInput) {
   const code = (v: unknown): v is string => typeof v === 'string' && /^[\p{L}\p{N}][\p{L}\p{N}._ -]{0,24}$/u.test(v) && v.trim() === v;
@@ -63,6 +69,7 @@ export function registrationPayload(input: RegistrationInput) {
   invalid('ncm', ncm === undefined);
   invalid('description', typeof input.description !== 'string' || input.description.length > 30000);
   invalid('ean', typeof input.ean !== 'string' || (input.ean !== '' && !canonicalBookIsbn(input.ean)));
+  invalid('dimensions', [input.weight, input.height, input.width, input.depth].some(v => v !== undefined && (typeof v !== 'number' || !Number.isFinite(v) || v <= 0)));
   if (fields.length) throw new RegistrationValidationError(fields);
   // Reconstruct an allowlist, never forward a client-supplied remote payload.
   return {
@@ -73,6 +80,10 @@ export function registrationPayload(input: RegistrationInput) {
         // Only the formatting produced by our existing used-book composer is allowed.
         descricao: input.description.replace(/<(?!strong>|\/strong>|br>)/g, '&lt;') }] },
     child: { codigo: input.childCode, nome: input.title, ativo: false, derivacoes: [] as unknown[], lojas: [input.channelId],
+      ...(input.weight !== undefined ? { peso: input.weight } : {}),
+      ...(input.height !== undefined ? { altura: input.height } : {}),
+      ...(input.width !== undefined ? { largura: input.width } : {}),
+      ...(input.depth !== undefined ? { comprimento: input.depth } : {}),
       ...(input.ean ? { ean: canonicalBookIsbn(input.ean)! } : {}) },
   };
 }
