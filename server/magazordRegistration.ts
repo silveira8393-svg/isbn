@@ -3,6 +3,7 @@ import { authorizeAmazonSearch, AmazonAccessError, readLimitedJson } from './ama
 import { resolveMagazordBaseUrl } from './magazordBaseUrl.js';
 import { registrationPayload, RegistrationValidationError, type RegistrationInput } from '../shared/magazordRegistration.js';
 import { createRegistrationStore, JournalError, type RegistrationStore, type RegistrationRecord, type Stage } from './magazordRegistrationStore.js';
+import { readValidationDiagnosticCodes, type ValidationDiagnosticCode } from './magazordValidationDiagnostics.js';
 
 const HOMOLOGATION = 'https://homologacaosilveiralab.painel.magazord.com.br/api';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -19,10 +20,25 @@ function homologationChannel(env: NodeJS.ProcessEnv, storeId: string): number {
     || !Object.hasOwn(bindings, storeId)) return fail(503, 'channel_not_configured');
   return (bindings as Record<string, number>)[storeId];
 }
+
+/** Tenant IDs are backend configuration, never browser input or production defaults. */
+function homologationDerivation(env: NodeJS.ProcessEnv, storeId: string): { definitionId: number; itemId: number } {
+  let bindings: unknown;
+  try { bindings = JSON.parse(env.MAGAZORD_HOMOLOGATION_DERIVATIONS || ''); }
+  catch { return fail(503, 'derivation_not_configured'); }
+  if (!bindings || typeof bindings !== 'object' || Array.isArray(bindings)
+    || Object.entries(bindings).some(([store, binding]) => !UUID.test(store) || !binding || typeof binding !== 'object'
+      || Array.isArray(binding) || Object.keys(binding).length !== 2
+      || !Object.hasOwn(binding, 'definitionId') || !Object.hasOwn(binding, 'itemId')
+      || !Number.isSafeInteger(binding.definitionId) || binding.definitionId <= 0
+      || !Number.isSafeInteger(binding.itemId) || binding.itemId <= 0)
+    || !Object.hasOwn(bindings, storeId)) return fail(503, 'derivation_not_configured');
+  return (bindings as Record<string, { definitionId: number; itemId: number }>)[storeId];
+}
 type DiagnosticPhase = 'catalog_validation' | 'code_availability' | 'parent_creation' | 'parent_confirmation'
   | 'child_creation' | 'child_confirmation' | 'reconciliation' | 'relationship_confirmation';
 type DiagnosticCode = 'remote_started' | 'remote_success' | 'remote_not_found' | 'remote_rejected'
-  | 'remote_timeout' | 'remote_transport_error' | 'invalid_remote_response' | typeof CONFIRMATION_ERRORS[number];
+  | 'remote_timeout' | 'remote_transport_error' | 'invalid_remote_response' | typeof CONFIRMATION_ERRORS[number] | ValidationDiagnosticCode;
 const CONFIRMATION_ERRORS = ['incomplete_code_lookup', 'commercial_code_conflict', 'invalid_relationship',
   'parent_outcome_uncertain', 'child_outcome_uncertain'] as const;
 type RegistrationDiagnostic = { operation: string; phase: DiagnosticPhase; status: number | null; code: DiagnosticCode };
@@ -79,6 +95,10 @@ export function createMagazordRegistrationFunction(options: { env?: NodeJS.Proce
       // This configuration is consulted only AFTER the exact homologation-host and ISBN authorization gates.
       const channelId = homologationChannel(env, storeId);
       if (input.channelId !== channelId) fail(403, 'channel_access_denied');
+      const derivation = homologationDerivation(env, storeId);
+      payload = { ...payload,
+        parent: { ...payload.parent, derivacoes: [derivation.definitionId] },
+        child: { ...payload.child, derivacoes: [{ derivacao: derivation.definitionId, derivacaoItemId: derivation.itemId }] } };
       const signal = AbortSignal.timeout(20000);
       const headers = { Accept: 'application/json', Authorization: 'Basic ' + Buffer.from(`${env.MAGAZORD_API_USER}:${env.MAGAZORD_API_PASSWORD}`).toString('base64') };
       const timedOut = (error: unknown) => signal.aborted || (error instanceof Error && error.name === 'TimeoutError');
@@ -101,8 +121,10 @@ export function createMagazordRegistrationFunction(options: { env?: NodeJS.Proce
           return null;
         }
         if (!response.ok || (method === 'POST' && response.status !== 201)) {
-          void response.body?.cancel();
           log('remote_rejected', response.status);
+          if (method === 'POST' && response.status === 400) {
+            for (const code of await readValidationDiagnosticCodes(response,signal)) log(code,response.status);
+          } else { void response.body?.cancel(); }
           fail(502, 'remote_rejected');
         }
         if (!/^application\/json(?:;|$)/i.test(response.headers.get('content-type') || '')) {

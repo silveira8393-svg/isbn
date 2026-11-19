@@ -17,7 +17,7 @@ function harness(submit,storage=new Map()){
   function nodes(n){return!n||typeof n!=='object'?[]:Array.isArray(n)?n.flatMap(nodes):[n,...nodes(n.props?.children)];}
   const button=text=>nodes(tree).find(n=>n.type==='button'&&String(n.props.children).includes(text));
   const fill=(label,value)=>nodes(tree).find(n=>n.type==='input'&&n.props['aria-label']===label).props.onChange({target:{value}});
-  render();return{render,button,fill,props,storage,started:()=>started,done:()=>done};
+  render();return{render,button,fill,props,storage,preview:()=>nodes(tree).find(n=>n.type==='pre'),started:()=>started,done:()=>done};
 }
 test('review and create are separate; double click is locked, error preserves operation and reload resumes same frozen data',async()=>{
   const calls=[];let fail=true,resolve;
@@ -26,8 +26,16 @@ test('review and create are separate; double click is locked, error preserves op
   assert.equal(calls.length,1);assert.equal(h.storage.size,0);assert.equal(JSON.parse(JSON.stringify(calls[0].input)).fiscalOrigin,0);
   const create=h.button('Confirmar criação real').props.onClick;const first=create();await create();assert.equal(calls.length,2);assert.equal(h.storage.size,1);resolve();await first;h.render();assert.ok(h.button('Consultar estado'));
   const reloaded=harness(submit,h.storage);assert.equal(reloaded.started(),1);reloaded.props.draft.title='Changed after reload';reloaded.render();fail=false;
+  assert.equal(reloaded.preview(),undefined,'Reload must not reconstruct a false payload with empty backend derivations');
   const retry=reloaded.button('Consultar estado').props.onClick();resolve();await retry;reloaded.render();assert.equal(calls[1].key,calls[2].key);assert.deepEqual(calls[1].input,calls[2].input);
   reloaded.button('Continuar para outro livro').props.onClick();assert.equal(reloaded.done(),1);
+});
+
+test('review displays backend derivations without adding free browser configuration fields',async()=>{
+  const payload={parent:{derivacoes:[3],ativo:false},child:{derivacoes:[{derivacao:3,derivacaoItemId:8}],ativo:false}};
+  const h=harness(async(action,key,input)=>{assert.equal(action,'preview');assert.equal(Object.hasOwn(input,'derivacoes'),false);assert.equal(Object.hasOwn(input,'definitionId'),false);return{payload};});
+  h.fill('ID da Marca Magazord','1');h.fill('ID da loja/canal Magazord','1');h.render();await h.button('Consultar códigos').props.onClick();h.render();
+  assert.deepEqual(JSON.parse(h.preview().props.children),payload);
 });
 test('changing active store cannot submit an operation prepared in another store',async()=>{
   let calls=0;const h=harness(async()=>{calls++;return{payload:{}};});h.fill('ID da Marca Magazord','20');h.fill('ID da loja/canal Magazord','30');h.render();await h.button('Consultar códigos').props.onClick();h.render();

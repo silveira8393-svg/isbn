@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { build } from 'esbuild';
 import { mfaToken } from './helpers/mfa.mjs';
@@ -7,8 +8,9 @@ const built = await build({ stdin: { resolveDir: process.cwd(), contents: `expor
 const api = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].text).toString('base64'));
 const uid='11111111-1111-4111-8111-111111111111', store='22222222-2222-4222-8222-222222222222';
 const base='https://homologacaosilveiralab.painel.magazord.com.br/api';
-const env={MAGAZORD_BASE_URL:base,MAGAZORD_API_USER:'fixture-token',MAGAZORD_API_PASSWORD:'fixture-password',MAGAZORD_STORE_ID:store,MAGAZORD_HOMOLOGATION_CHANNELS:JSON.stringify({[store]:1}),SUPABASE_URL:'https://auth.invalid',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_fixture'};
+const env={MAGAZORD_BASE_URL:base,MAGAZORD_API_USER:'fixture-token',MAGAZORD_API_PASSWORD:'fixture-password',MAGAZORD_STORE_ID:store,MAGAZORD_HOMOLOGATION_CHANNELS:JSON.stringify({[store]:1}),MAGAZORD_HOMOLOGATION_DERIVATIONS:JSON.stringify({[store]:{definitionId:3,itemId:8}}),SUPABASE_URL:'https://auth.invalid',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_fixture'};
 const input={parentCode:'USED-01-P',childCode:'USED-01',title:'Livro fixture',condition:'usado',categoryId:10,categoryStoreId:store,brandId:20,channelId:1,fiscalOrigin:0,unit:'UN',ncm:'49019900',description:'Conservacao fixture',ean:'9788551003664'};
+const configuredPayload=()=>{const payload=api.registrationPayload(input);return {...payload,parent:{...payload.parent,derivacoes:[3]},child:{...payload.child,derivacoes:[{derivacao:3,derivacaoItemId:8}]}};};
 const id=()=>crypto.randomUUID();
 const req=(operationId,changes={},headers={})=>new Request('https://isbn.invalid/api/magazord/registration',{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${mfaToken(uid)}`,'x-isbn-store-id':store,...headers},body:JSON.stringify({action:'create',operationId,input,...changes})});
 function fixture(flags={}) {
@@ -78,7 +80,8 @@ test('POST diagnostics: parent HTTP 400/401/403/406 preserve parent_started and 
     const r=await f.handler()(req(key));assert.equal(r.status,502);assert.deepEqual(await r.json(),{code:'remote_rejected'});
     assert.equal(f.jobs.get(key).stage,'parent_started');assert.equal(writes(f).length,1);
     assert.deepEqual(f.logs,[{operation:'registration_parent_create',phase:'parent_creation',status:null,code:'remote_started'},
-      {operation:'registration_parent_create',phase:'parent_creation',status,code:'remote_rejected'}]);
+      {operation:'registration_parent_create',phase:'parent_creation',status,code:'remote_rejected'},
+      ...(status===400?[{operation:'registration_parent_create',phase:'parent_creation',status,code:'remote_validation_detail_unavailable'}]:[])]);
     assertSafeDiagnostics(f.logs);const retry=await f.handler()(req(key));assert.equal(retry.status,409);
     assert.deepEqual(await retry.json(),{code:'parent_outcome_uncertain'});assert.equal(writes(f).length,1);assert.equal(f.jobs.size,1);
     assert.equal(f.jobs.get(key).stage,'parent_started');
@@ -93,6 +96,41 @@ test('POST diagnostics: child refusal retains durable child intent and never rec
     {operation:'registration_child_create',phase:'child_creation',status:null,code:'remote_started'},
     {operation:'registration_child_create',phase:'child_creation',status:403,code:'remote_rejected'}]);
   const retry=await f.handler()(req(key));assert.equal(retry.status,409);assert.equal(writes(f).length,2);assertSafeDiagnostics(f.logs);
+});
+
+test('validation HTTP 400: parent fields and rules are sanitized without payload changes, releases or POST replay',async()=>{
+  const f=fixture({remote:async(_url,init)=>init.method==='POST'?Response.json({status:'error',message:privateDetails,
+    errors:[{field:'derivacoes',rule:'minItems',message:privateDetails},{field:'marca',code:'not_found',value:privateDetails},
+      {field:'categorias',code:'invalid'},{field:'origemFiscal',rule:'required'},{field:'ncm',code:'format'},
+      {path:['produtoLoja',0,'loja'],rule:'required'},{field:privateDetails,rule:'required'}]},{status:400}):undefined}),key=id();
+  const r=await f.handler()(req(key));assert.equal(r.status,502);assert.deepEqual(await r.json(),{code:'remote_rejected'});
+  assert.deepEqual(f.logs.filter(e=>e.code.startsWith('remote_validation_')).map(e=>e.code),[
+    'remote_validation_categorias_invalid','remote_validation_derivacoes_min_items','remote_validation_marca_not_found',
+    'remote_validation_ncm_format','remote_validation_origem_fiscal_required','remote_validation_produto_loja_loja_required']);
+  assert.deepEqual(JSON.parse(writes(f)[0].init.body),configuredPayload().parent);
+  assert.equal(f.jobs.get(key).stage,'parent_started');assertSafeDiagnostics(f.logs);
+  assert.equal((await f.handler()(req(key))).status,409);assert.equal(writes(f).length,1);assert.equal(f.jobs.size,1);
+});
+
+test('validation HTTP 400: unknown, broken and oversized error bodies preserve the known rejection',async()=>{
+  for(const response of [()=>Response.json({message:'marca derivacoes '+privateDetails},{status:400}),
+    ()=>new Response('{'+privateDetails,{status:400,headers:{'content-type':'application/json'}}),
+    ()=>new Response('x'.repeat(16*1024+1),{status:400,headers:{'content-type':'application/json'}}),
+    ()=>new Response(new ReadableStream({start(c){c.error(new Error(privateDetails));}}),{status:400,headers:{'content-type':'application/json'}})]){
+    const f=fixture({remote:async(_url,init)=>init.method==='POST'?response():undefined}),key=id();
+    const r=await f.handler()(req(key));assert.equal(r.status,502);assert.deepEqual(await r.json(),{code:'remote_rejected'});
+    assert.equal(f.logs.at(-1).code,'remote_validation_detail_unavailable');assert.equal(f.logs.at(-1).status,400);
+    assert.equal(f.jobs.get(key).stage,'parent_started');assertSafeDiagnostics(f.logs);
+  }
+});
+
+test('validation HTTP 400: child rejection has child phase and keeps the parent and child intent intact',async()=>{
+  const f=fixture({remote:async(url,init)=>init.method==='POST'&&url.pathname.endsWith('/derivacao')
+    ?Response.json({errors:{lojas:{rule:'invalid',value:privateDetails}}},{status:400}):undefined}),key=id();
+  const r=await f.handler()(req(key));assert.equal(r.status,502);assert.deepEqual(await r.json(),{code:'remote_rejected'});
+  assert.deepEqual(f.logs.at(-1),{operation:'registration_child_create',phase:'child_creation',status:400,code:'remote_validation_lojas_invalid'});
+  assert.equal(f.parents.size,1);assert.equal(f.jobs.get(key).stage,'child_started');
+  assert.equal((await f.handler()(req(key))).status,409);assert.equal(writes(f).length,2);assertSafeDiagnostics(f.logs);
 });
 
 test('POST diagnostics: timeout and transport failure are distinct for parent and child, without HTTP status',async()=>{
@@ -241,12 +279,61 @@ test('browser channel divergence is denied before remote GETs, reservations or c
 test('independent ISBN stores select only their own backend channel binding, without a global default',async()=>{
   const other='33333333-3333-4333-8333-333333333333',bindings=JSON.stringify({[store]:1,[other]:2});
   for(const [selected,channel] of [[store,1],[other,2]]){
-    const f=fixture({store:selected});const handler=api.createMagazordRegistrationFunction({env:{...env,MAGAZORD_STORE_ID:selected,MAGAZORD_HOMOLOGATION_CHANNELS:bindings},fetcher:f.fetcher,journal:f.journal});
+    const f=fixture({store:selected});const handler=api.createMagazordRegistrationFunction({env:{...env,MAGAZORD_STORE_ID:selected,MAGAZORD_HOMOLOGATION_CHANNELS:bindings,MAGAZORD_HOMOLOGATION_DERIVATIONS:JSON.stringify({[store]:{definitionId:3,itemId:8},[other]:{definitionId:4,itemId:9}})},fetcher:f.fetcher,journal:f.journal});
     const r=await handler(req(id(),{action:'preview',input:{...input,categoryStoreId:selected,channelId:channel}},{'x-isbn-store-id':selected}));
     assert.equal(r.status,200);const body=await r.json();assert.equal(body.payload.parent.produtoLoja[0].loja,channel);assert.deepEqual(body.payload.child.lojas,[channel]);
+    assert.deepEqual(body.payload.parent.derivacoes,[selected===store?3:4]);
+    assert.deepEqual(body.payload.child.derivacoes,[{derivacao:selected===store?3:4,derivacaoItemId:selected===store?8:9}]);
     const denied=await handler(req(id(),{action:'preview',input:{...input,categoryStoreId:selected,channelId:channel===1?2:1}},{'x-isbn-store-id':selected}));
     assert.equal(denied.status,403);assert.equal(writes(f).length,0);
   }
+});
+
+test('tenant derivation bindings fail closed before remote reads or reservations when missing or invalid',async()=>{
+  const other='33333333-3333-4333-8333-333333333333';
+  const invalid=[undefined,'','invalid','null','[]','{}',JSON.stringify({[other]:{definitionId:3,itemId:8}}),
+    ...[{definitionId:0,itemId:8},{definitionId:3,itemId:-1},{definitionId:'3',itemId:8},
+      {definitionId:3,itemId:8.5},{definitionId:3},{definitionId:3,itemId:8,extra:1},null,[],
+      {definitionId:Number.MAX_SAFE_INTEGER+1,itemId:8}].map(binding=>JSON.stringify({[store]:binding})),
+    JSON.stringify({bad:{definitionId:3,itemId:8},[store]:{definitionId:3,itemId:8}})];
+  for(const action of ['preview','create'])for(const binding of invalid){
+    const f=fixture();const handler=api.createMagazordRegistrationFunction({env:{...env,MAGAZORD_HOMOLOGATION_DERIVATIONS:binding},fetcher:f.fetcher,journal:f.journal});
+    const r=await handler(req(id(),{action}));assert.equal(r.status,503);assert.deepEqual(await r.json(),{code:'derivation_not_configured'});
+    assert.ok(f.calls.every(c=>c.url.origin==='https://auth.invalid'));assert.equal(f.jobs.size,0);assert.equal(writes(f).length,0);
+  }
+});
+
+test('only backend tenant derivations enter preview and POSTs; all other payload fields stay identical',async()=>{
+  for(const condition of ['novo','usado']){
+    const f=fixture(),key=id(),data={...input,condition,derivacoes:[999],definitionId:999,itemId:999};
+    const preview=await f.handler()(req(key,{action:'preview',input:data}));assert.equal(preview.status,200);
+    assert.deepEqual((await preview.json()).payload,configuredPayload());assert.equal(f.jobs.size,0);
+    assert.equal((await f.handler()(req(key,{input:data}))).status,200);
+    assert.deepEqual(JSON.parse(writes(f)[0].init.body),configuredPayload().parent);
+    assert.deepEqual(JSON.parse(writes(f)[1].init.body),configuredPayload().child);
+    assert.equal((await f.handler()(req(key,{input:data}))).status,200);assert.equal(writes(f).length,2);
+  }
+});
+
+test('derivation configuration changes and legacy empty arrays cannot mutate a frozen operation fingerprint',async()=>{
+  for(const legacy of [false,true]){
+    const f=fixture({parentInvisible:true}),key=id();
+    if(legacy){
+      const fingerprint=createHash('sha256').update(JSON.stringify({storeId:store,condition:input.condition,payload:api.registrationPayload(input)})).digest('hex');
+      await f.journal.reserve({id:key,store_id:store,actor_id:uid,parent_code:input.parentCode,child_code:input.childCode,fingerprint,stage:'parent_started'});
+    }else assert.equal((await f.handler()(req(key))).status,409);
+    const before=structuredClone(f.jobs.get(key)),count=writes(f).length;
+    const handler=api.createMagazordRegistrationFunction({env:{...env,MAGAZORD_HOMOLOGATION_DERIVATIONS:JSON.stringify({[store]:{definitionId:legacy?3:4,itemId:legacy?8:9}})},fetcher:f.fetcher,journal:f.journal});
+    const r=await handler(req(key));assert.equal(r.status,409);assert.deepEqual(await r.json(),{code:'operation_payload_changed'});
+    assert.deepEqual(f.jobs.get(key),before);assert.equal(writes(f).length,count);
+  }
+});
+
+test('derivation binding from another establishment never falls back to the first store',async()=>{
+  const other='33333333-3333-4333-8333-333333333333',f=fixture({store:other});
+  const handler=api.createMagazordRegistrationFunction({env:{...env,MAGAZORD_STORE_ID:other,MAGAZORD_HOMOLOGATION_CHANNELS:JSON.stringify({[other]:1})},fetcher:f.fetcher,journal:f.journal});
+  const r=await handler(req(id(),{action:'preview',input:{...input,categoryStoreId:other}},{'x-isbn-store-id':other}));
+  assert.equal(r.status,503);assert.deepEqual(await r.json(),{code:'derivation_not_configured'});assert.equal(f.jobs.size,0);assert.equal(writes(f).length,0);
 });
 
 test('channel bindings cannot enable production or other hosts in preview or create',async()=>{
@@ -336,8 +423,8 @@ test('concurrent requests share durable CAS; at most one parent and child POST',
   assert.ok(results.some(r=>r.status===200));assert.ok(results.every(r=>[200,409].includes(r.status)));assert.equal(writes(f).length,2);
 });
 test('preview only reads and exposes exact allowlisted payload, no price/stock/images',async()=>{
-  const f=fixture(),r=await f.handler()(req(id(),{action:'preview'}));assert.equal(r.status,200);const b=await r.json();assert.deepEqual(b.payload,api.registrationPayload(input));assert.equal(writes(f).length,0);assert.equal(f.jobs.size,0);
-  assert.deepEqual(b.payload.parent.derivacoes,[]);assert.equal(b.payload.parent.ativo,false);assert.equal(b.payload.child.ativo,false);
+  const f=fixture(),r=await f.handler()(req(id(),{action:'preview'}));assert.equal(r.status,200);const b=await r.json();assert.deepEqual(b.payload,configuredPayload());assert.equal(writes(f).length,0);assert.equal(f.jobs.size,0);
+  assert.deepEqual(b.payload.parent.derivacoes,[3]);assert.deepEqual(b.payload.child.derivacoes,[{derivacao:3,derivacaoItemId:8}]);assert.equal(b.payload.parent.ativo,false);assert.equal(b.payload.child.ativo,false);
 });
 test('production, invalid configuration, missing journal configuration, redirects and invalid relationship fail closed',async()=>{
   for(const baseUrl of ['https://livrariasul.painel.magazord.com.br/api','https://evil.invalid/api',undefined]){const f=fixture();assert.equal((await api.createMagazordRegistrationFunction({env:{...env,MAGAZORD_BASE_URL:baseUrl},fetcher:f.fetcher,journal:f.journal})(req(id()))).status,403);assert.equal(f.calls.length,0);}
