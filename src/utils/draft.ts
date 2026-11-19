@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BookInfo, BookCondition, RegistrationDraft, RegistrationMode } from '../types';
-import { generateMetaDescription } from './metaDescription';
-import { sanitizeSynopsis } from './sanitizer';
-import { canonicalBookIsbn, cleanIsbn } from './isbn';
-import { imageReferences, isImageReference } from './imageUrls';
-import { bookSourceLinks } from './bookSourceLinks';
-import { editionReferences } from './editionReferences';
-import { formatPhysicalMeasurement, normalizeCoverFormat, normalizeLanguage, roundPhysicalMeasurement } from './bibliographicNormalization';
+import { BookInfo, BookCondition, RegistrationDraft, RegistrationMode } from '../types.js';
+import { generateMetaDescription } from './metaDescription.js';
+import { sanitizeSynopsis } from './sanitizer.js';
+import { canonicalBookIsbn, cleanIsbn } from './isbn.js';
+import { imageReferences, isImageReference } from './imageUrls.js';
+import { bookSourceLinks } from './bookSourceLinks.js';
+import { editionReferences } from './editionReferences.js';
+import { formatPhysicalMeasurement, normalizeCoverFormat, normalizeLanguage, roundPhysicalMeasurement } from './bibliographicNormalization.js';
 
 export function registrationModeForCondition(condition: BookCondition, mode?: RegistrationMode): RegistrationMode {
   if (condition === 'usado') return 'new_used_from_known_edition';

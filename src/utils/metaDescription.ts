@@ -1,5 +1,5 @@
-import type { RegistrationDraft } from '../types';
-import { sanitizeSynopsis } from './sanitizer';
+import type { RegistrationDraft } from '../types.js';
+import { sanitizeSynopsis } from './sanitizer.js';
 
 type SeoSource = Partial<Pick<RegistrationDraft, 'title' | 'authors' | 'publisher' | 'synopsis'>>;
 const seoFields = ['title', 'authors', 'publisher', 'synopsis'] as const;

@@ -1,6 +1,6 @@
-import type { RegistrationDraft } from '../src/types';
-import { buildFinalDescription } from '../src/utils/draft';
-import { canonicalBookIsbn } from '../src/utils/isbn';
+import type { RegistrationDraft } from '../src/types.js';
+import { buildFinalDescription } from '../src/utils/draft.js';
+import { canonicalBookIsbn } from '../src/utils/isbn.js';
 
 export interface RegistrationInput {
   parentCode: string; childCode: string; title: string; condition: 'novo' | 'usado';

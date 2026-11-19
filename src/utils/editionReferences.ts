@@ -1,6 +1,6 @@
-import type { BookInfo, EditionReference } from '../types';
-import { bookSourceLinks, validSourceLink } from './bookSourceLinks';
-import { canonicalBookIsbn } from './isbn';
+import type { BookInfo, EditionReference } from '../types.js';
+import { bookSourceLinks, validSourceLink } from './bookSourceLinks.js';
+import { canonicalBookIsbn } from './isbn.js';
 
 export function validEditionReference(reference: EditionReference): boolean {
   if (!reference || typeof reference.url !== 'string' || typeof reference.id !== 'string') return false;
