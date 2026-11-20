@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import type { User } from '../../types';
 import { imageReferences } from '../../utils/imageUrls';
 import { lookupMagazordMedia } from '../../services/magazordMedia';
@@ -53,7 +53,7 @@ export default function MagazordExistingMedia({user,references,onBusy}:{
    </button>:<button type="button" disabled={busy} className="rounded border px-3 py-2 text-sm"
     onClick={()=>{setFound(null);setSelected([]);setMessage('');}}>Selecionar outro cadastro</button>}
   {message&&<p className="text-sm" role="status">{message}</p>}
-  {found&&<>
+  {found&&<Fragment key={found.registrationId}>
    <p className="text-sm">Imagens disponíveis no formulário: {images.length}</p>
    <div className="flex flex-wrap gap-2">
     <input className="min-w-64 flex-1 rounded border p-2 text-sm" value={extraUrl} onChange={e=>setExtraUrl(e.target.value)}
@@ -62,8 +62,8 @@ export default function MagazordExistingMedia({user,references,onBusy}:{
       Incluir URL
     </button>
    </div>
-   <MagazordMedia key={found.registrationId} registrationId={found.registrationId}
+   <MagazordMedia registrationId={found.registrationId}
      childCode={found.childCode} references={images} user={user} onBusy={onBusy}/>
-  </>}
+  </Fragment>}
  </section>;
 }

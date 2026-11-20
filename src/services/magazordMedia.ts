@@ -34,6 +34,7 @@ export async function magazordMedia(
    media_outcome_uncertain:'Resultado incerto. Não reenvie; verifique o Banco de Mídias antes de reconciliar.',
    previous_media_not_linked:'Associe primeiro as imagens anteriores, na ordem definida.',
    media_source_invalid:'Arquivo inválido ou formato não aceito.',
+   media_preparation_unavailable:'Não foi possível concluir a preparação da imagem. Consulte o estado antes de tentar novamente.',
    media_source_unavailable:'Imagem não pode ser obtida. Preserve a operação para revisão.',
    media_source_denied:'Foto privada não pertence ao cadastro autenticado.',
    media_source_too_large:'Imagem maior que o limite de 5 MiB.',

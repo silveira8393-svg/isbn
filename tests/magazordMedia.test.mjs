@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
+import { mediaImages } from './helpers/mediaImages.mjs';
 
 const bundled = await build({stdin:{resolveDir:process.cwd(),contents:"export * from './shared/magazordMedia';"},
  bundle:true,write:false,platform:'node',format:'esm'});
 const api = await import('data:text/javascript;base64,'+Buffer.from(bundled.outputFiles[0].text).toString('base64'));
-const jpeg = new Uint8Array([255,216,255,224,0,16,74,70,73,70,0,1]);
+const jpeg = mediaImages.jpg;
 const photo = {bytes:jpeg, format:'jpg', name:'capa-9788532530837.jpg'};
 
 test('imagem JSON Base64 no contrato Magazord com tipo derivação',()=>{

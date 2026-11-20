@@ -1773,3 +1773,104 @@ Os intervalos abaixo indicam as linhas adicionadas/alteradas; trechos não relac
 - Limites da validação: SQL revisado estaticamente e adaptador testado com PostgREST simulado; criação/constraints/triggers ainda precisam ser validados em PostgreSQL autorizado antes do primeiro POST Magazord. Sem diário/configuração, criação falha fechada. Nenhuma garantia de sucesso remoto é inferida das fixtures.
 - Pendências para o primeiro cadastro: revisão e autorização separadas do SQL/diário; confirmar configuração backend de homologação, credencial administrativa já disponível e IDs de Marca/canal/categoria; revisar payload e códigos escolhidos; só então autorizar explicitamente o primeiro cadastro remoto. Preparação local concluída, execução operacional e publicação não autorizadas nesta entrega.
 - Histórico local preexistente do relatório e backups/ preservados. O commit inclui somente este novo resumo documental, deixando alterações documentais anteriores fora do commit.
+
+## ISBN — Etapa 6 — Correção local controlada do upload de imagens (2026-11-20)
+
+Escopo autorizado: somente branch `feature/magazord-homologacao-etapa3`, implementação e testes locais simulados. Nenhum acesso operacional à Magazord, Supabase ou Vercel. Nenhum upload real, migração, alteração de registro existente, commit, push ou deployment. O registro de LVP013 / 9788532530837 permanece intocado e bloqueado. Alterações locais preexistentes dos documentos e `backups/` preservadas.
+
+### Causas identificadas e limite da conclusão
+
+- O backend anterior unificava rejeições HTTP, timeout, transporte, parsing/ID inválido e falha de persistência em `media_outcome_uncertain`, sem diagnóstico sanitizado. Portanto o estado `upload_started` com ID nulo não permite recuperar a causa exata da primeira tentativa.
+- O JSON/Base64 era construído depois de gravar `upload_started`. Falhas locais de construção podiam deixar a reserva sem qualquer envio remoto.
+- O limite global de 30s não coordenava os prazos independentes de autenticação, diário, download de 15s, envio de 20s e persistência. Havia risco de interrupção após a reserva ou após sucesso remoto.
+- A imagem era validada somente por MIME/assinatura inicial. Os testes utilizavam 12 bytes de cabeçalho JPEG, sem arquivo completo. Corrupção/truncamento além do cabeçalho não era coberta.
+- O download privado pelo SDK não aplicava o mesmo limite de streaming/prazo do download externo.
+- O contrato permanece inalterado: POST JSON, Basic Auth, tipo=6, plataforma=1, tipoMidia=1, midiaFile Base64 sem data URI e nomeArquivo com extensão. Confirmação continua exigindo 201, application/json, status=success e data.id inteiro positivo. Nenhuma hipótese de HTTP 200 ou outro envelope foi promovida a sucesso.
+- A causa remota do incidente original continua não comprovada: não foram examinados logs reais nem executadas novas consultas operacionais.
+
+### Implementação e arquivos
+
+| Arquivo / linha inicial | Alteração |
+| --- | --- |
+| `server/magazordMedia.ts:38` | Diário com prazos compartilhados, duração/status/resultado sanitizados; confirmação de identidade, estágio, fingerprint e ID no retorno da persistência. CAS vazio é conflito. |
+| `server/magazordMedia.ts:71` | Leitura binária limitada por streaming e cancelável por prazo; cancelamento de corpos recusados. |
+| `server/magazordMedia.ts:83` | Download externo e privado usam os mesmos limites; caminho autenticado privado continua restrito a loja/ator, sem URL assinada e sem redirects. |
+| `server/magazordMedia.ts:118` | Runtime por requisição; prazo compartilhado também envolve a autorização MFA existente, sem alterar suas regras. |
+| `server/magazordMedia.ts:205` | Validação estrutural, construção completa do JSON e conferência de tamanho antes do CAS para upload_started. Falta de orçamento também impede reservar. |
+| `server/magazordMedia.ts:221` | Upload e leitura do retorno com diagnósticos distintos de timeout, transporte, rejeição HTTP e resposta inválida; persistência continua separada e sem reenvio automático. |
+| `server/magazordMedia.ts:253` | Associação continua exclusiva ao Filho verificado, por POST aditivo, com mesmo orçamento e bloqueio persistente. |
+| `server/magazordMediaRuntime.ts:3` | Schema fechado de diagnóstico e requestId aleatório; relógio monotônico e reserva de tempo. Códigos remotos somente de lista conhecida; mensagens livres nunca são registradas. |
+| `server/magazordMediaImage.ts:17` | Validação estrutural de JPEG/PNG/WebP, limite de 16 milhões de pixels e descompressão PNG limitada. Sem dependência nova. |
+| `src/services/magazordMedia.ts:37` | Mensagem simples para falha de preparação/orçamento; detalhes internos permanecem exclusivos dos logs. |
+| `tests/magazordMedia.test.mjs:4` | Fixture JPEG completa no contrato puro. |
+| `tests/magazordMediaFlow.test.mjs:5` | Matriz de erros, persistência, concorrência, sigilo, isolamento, download privado e prazos. |
+| `tests/magazordMediaImage.test.mjs:1` | Arquivos completos, formatos divergentes, todos os truncamentos das fixtures, CRC/dimensões e orçamento. |
+| `tests/helpers/mediaImages.mjs:1`, `tests/fixtures/media/cover.{jpg,png,webp}` | Fixtures locais completas: JPEG/PNG 2x2 produzidos com System.Drawing e WebP 1x1. Nenhum download externo. |
+| `tests/helpers/noNetwork.mjs:1` | Preload que recusa fetch real; chamadas permitidas nos testes usam mocks/injeção. |
+
+### Diagnóstico e tempo
+
+- Logs JSON `event=magazord_media`, com requestId aleatório de correlação por requisição; fases auth, request, journal, source, preparation, reserve, upload, response, persistence e link.
+- Campos permitidos: fase, duração em ms, resultado controlado, status HTTP quando recebido, formato permitido, tamanho binário e tamanho do JSON. Não há ator, loja, códigos de produto, referência de imagem, URLs, headers, credenciais, tokens, Base64, mensagens de exceção, respostas integrais ou ID da mídia nos logs.
+- Resultado de validação e de persistência ficam em eventos próprios. Erros HTTP preservam o status mesmo quando a leitura diagnóstica falha. Códigos remotos são opcionais e passam por lista explícita; valores desconhecidos são descartados. Logger com falha não muda o resultado da operação.
+- Budget total de 28s, reservando 2s abaixo do limite já existente de 30s da função/cliente. A configuração Vercel não foi aumentada e nenhum endpoint foi criado.
+- Autorização mantém seu limite existente de 5s e recebe também o deadline global; corpo de entrada até 1s; diário/reserva até 3s por chamada; download até 8s; upload/link até 12s, reduzidos pelo saldo global e preservando 5s para confirmação final. Leitura do retorno até 1s dentro desse saldo; leitura diagnóstica de rejeição até 500ms / 16KiB; persistência até 4s. Retorno de sucesso continua limitado a 64KiB.
+- Antes de reservar são exigidos ao menos 13s restantes: até 3s de CAS, ao menos 5s de envio e 5s finais. Os limites são tetos coordenados pelo mesmo relógio, não prazos somados que precisem caber integralmente.
+- Depois de qualquer reserva, erros continuam preservando *_started. Nem rejeição HTTP, timeout ou falha local autorizam reset ou repetição do POST. A resposta ao operador continua genérica e segura.
+
+### Verificações locais executadas
+
+- Runtime local: Node v26.13.0; projeto continua direcionado a Node 24. O teste existente de inicialização ESM nativa da rota de preço inclui o grafo de mídias e passou; não houve execução em Preview real nesta etapa.
+- `node --import ./tests/helpers/noNetwork.mjs --test tests/magazordMedia.test.mjs tests/magazordMediaImage.test.mjs tests/magazordMediaFlow.test.mjs`: **53 testes aprovados**, zero falhas.
+- Cobertura inclui JPEG/PNG/WebP completos; truncamentos; MIME/formato divergentes; CRC e dimensões inválidos; excesso de bytes; HTTP 200 inesperado/400/401/413/500; JSON, envelope, MIME de resposta e ID inválidos; corpo excessivo; transporte; timeout simulado e timeout real do corpo; sucesso remoto seguido de falha HTTP/timeout/CAS/ID divergente na persistência; confirmação perdida após commit; reserva perdida; concorrência no upload e no vínculo; loja/MFA; produção bloqueada; nenhuma consulta extra de existência de Pai/Filho; sigilo dos logs e logger defeituoso.
+- Regressão com preload sem rede, 15 arquivos de imagens/preço/estoque/cadastro/resolução de ambiente: **177 testes, 166 aprovados, 10 falhas preexistentes, 1 ignorado**. Estoque e testes de backend/runtime de cadastro/preço passaram. O teste SQL de preço é ignorado quando seu PostgreSQL isolado não está disponível.
+- Falhas preexistentes: `tests/magazordPriceContract.test.mjs:14`; `tests/magazordPriceUi.test.mjs:27,34,40,57`; `tests/magazordRegistrationUi.test.mjs:22,34,40,45,55`. As mesmas dez posições falharam em cópia temporária local com as versões anteriores de server/magazordMedia.ts e src/services/magazordMedia.ts obtidas de HEAD, sem substituir o working tree. Cópia temporária removida após conferir o destino de limpeza.
+- Motivos observados: contrato de preço espera bloqueio para sentinelas null/zero; fixtures/UI de preço divergem do fluxo atual; fixture de cadastro não fornece additionalImageUrls iterável. Esses arquivos não foram corrigidos fora do escopo autorizado de imagens.
+- Typecheck completo (`node node_modules/typescript/bin/tsc --noEmit`): resta somente erro preexistente em `src/components/magazord/MagazordExistingMedia.tsx:65`, propriedade JSX key não reconhecida na tipagem disponível. O mesmo erro aparece com o arquivo anterior de mídias. Os módulos implementados não apresentam erros TypeScript. Não declarar typecheck global aprovado.
+- `git diff --check` dos arquivos de código/teste alterados: aprovado. Alterações preexistentes dos documentos não foram reformatadas. Relatório atualizado exclusivamente por acréscimo.
+
+### Pendências e reconciliação de LVP013
+
+- Não publicar esta alteração enquanto não forem revisadas as falhas preexistentes e o typecheck global. A correção local não constitui homologação do contrato remoto nem comprova o resultado do incidente anterior.
+- A validação é estrutural: PNG inclui CRC, descompressão completa limitada e tamanho/filtros; JPEG/WebP não passam por decodificação completa de pixels. Corrupção interna de entropia ainda pode escapar. WebP animado e imagens acima de 16 milhões de pixels são recusados antes da reserva. Um decoder completo futuro exige avaliação de dependência e compatibilidade Node 24/Vercel.
+- Limites reais da Magazord/proxy e eventuais diferenças do ambiente continuam sem validação remota. O limite local permanece 5MiB binários, com JSON/Base64 conferido antes do envio; não foi inventado um novo limite contratual remoto.
+- Logs são emitidos para stdout estruturado e sujeitos à retenção do runtime; não foi criada tabela de diagnósticos nem migração. Um encerramento abrupto do processo ainda pode impedir o último log ou PATCH; a reserva persistente continua impedindo duplicidade.
+- A operação de LVP013 / 9788532530837 não foi consultada, alterada, desbloqueada ou reenviada. Não existe nova ação de reconciliação/reset neste patch.
+- Plano seguro, dependente de autorização futura: correlacionar horário/deployment/logs existentes; examinar exclusivamente o acervo de mídias da homologação com filtros/paginação e nome hash da imagem; nunca consultar novamente a existência de Pai/Filho. Se houver correspondência inequívoca, revisar e autorizar uma transição CAS upload_started → uploaded com aquele ID, sem upload, e só depois a associação controlada ao Filho. Se houver ausência ou ambiguidade, manter bloqueado; ausência visual isolada não autoriza reset, mudança de posição/UUID ou reenvio.
+
+## ISBN — Etapa 6 — Finalização local e correção de tipagem (2026-11-20)
+
+- Branch conferida antes da alteração: `feature/magazord-homologacao-etapa3`. Nesta execução, somente `src/components/magazord/MagazordExistingMedia.tsx` e este acréscimo ao relatório foram modificados. Correções de imagens da execução anterior foram revisadas e preservadas. Nenhuma instalação de dependências, operação remota, alteração Supabase, consulta/upload Magazord, deploy, commit, push ou staging.
+- Causa do erro TypeScript na linha 65: a instalação atual não contém `@types/react`; com a tipagem disponível, `key` não é reconhecida como atributo JSX especial no componente MagazordMedia com props explícitas. Não era uma prop funcional de upload nem um erro de identificador de cadastro.
+- Correção mínima preservando o comportamento: importar Fragment na linha 1; substituir o fragmento anônimo pelo Fragment com `key={found.registrationId}` na linha 56; remover somente a key do componente MagazordMedia na linha 65; fechar Fragment na linha 67. A mudança de cadastro continua remontando a subárvore e reinicializando o estado de imagens. Nenhum cast, supressão TypeScript, dependência nova ou mudança das props de MagazordMedia foi introduzido.
+- `npm.cmd run typecheck` (equivalente a `npm run typecheck`, usando o launcher .cmd porque a política do PowerShell bloqueia npm.ps1): **aprovado, exit 0**, sem erros. Este resultado resolve e substitui a pendência de tipagem descrita na seção anterior.
+- `node --import ./tests/helpers/noNetwork.mjs --test tests/magazordMedia.test.mjs tests/magazordMediaImage.test.mjs tests/magazordMediaFlow.test.mjs`: **53 testes aprovados**, zero falhas, zero ignorados. O preload recusa fetch real; os cenários usam exclusivamente mocks. Inclui bloqueio de produção, MFA/loja, upload_started sem reenvio e concorrência de upload/associação com um único POST.
+- `git diff --check`: **aprovado** no diff local completo; somente avisos informativos de conversão futura LF/CRLF nos documentos preexistentes, sem erro de whitespace. Arquivos novos também revisados; não foi usado git add para ocultar ou incluir alterações alheias.
+- Revisão das proteções: server/magazordMedia.ts:129 mantém homologação exclusiva; linhas 132–138 mantêm loja/MFA; linha 202 bloqueia upload se não estiver prepared; linhas 217–218 mantêm CAS/fingerprint/loja/ator antes do envio; linha 254 mantém bloqueio de link_started. Diário e migração não foram alterados. Não há diff em api/, supabase/, shared/, package.json, package-lock.json ou vercel.json; nenhum endpoint novo ou dependência foi criado nesta correção.
+- Produção do Marcos permanece isolada pelas guardas locais existentes; nenhum ambiente real foi acessado. LVP013 / 9788532530837 não foi consultado, modificado ou desbloqueado. Dado o estado upload_started informado anteriormente, o backend continua recusando seu reenvio. Esta confirmação é estática e por testes simulados; não houve nova leitura do registro remoto.
+
+### Arquivos para o próximo commit da Etapa 6
+
+Modificados (selecionar apenas os trechos da Etapa 6 do relatório, que já continha outras alterações locais):
+
+- `server/magazordMedia.ts`
+- `src/components/magazord/MagazordExistingMedia.tsx`
+- `src/services/magazordMedia.ts`
+- `tests/magazordMedia.test.mjs`
+- `tests/magazordMediaFlow.test.mjs`
+- `RELATORIO_CODEX.md` — acréscimos da Etapa 6
+
+Novos e ainda não rastreados — os oito arquivos precisam ser incluídos explicitamente:
+
+- `server/magazordMediaImage.ts`
+- `server/magazordMediaRuntime.ts`
+- `tests/magazordMediaImage.test.mjs`
+- `tests/helpers/mediaImages.mjs`
+- `tests/helpers/noNetwork.mjs`
+- `tests/fixtures/media/cover.jpg`
+- `tests/fixtures/media/cover.png`
+- `tests/fixtures/media/cover.webp`
+
+Não incluir neste commit: `docs/MAGAZORD_PRECO_SIMPLIFICACAO.md`, `docs/MAGAZORD_PRICE_READ_DIAGNOSTICO.md`, alterações anteriores não relacionadas do relatório e `backups/`. Todos foram preservados. Nenhum arquivo foi staged ou commitado.
+
+As dez falhas preexistentes na regressão ampliada de preço/UI de cadastro, reproduzidas na execução anterior, não foram reexecutadas ou corrigidas nesta finalização restrita. O plano de reconciliação e as limitações da validação estrutural de JPEG/WebP continuam os da seção anterior; passar nos testes locais não autoriza publicar, reconciliar ou reenviar LVP013.
