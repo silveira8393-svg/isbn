@@ -7,7 +7,7 @@ const built=await build({stdin:{resolveDir:process.cwd(),contents:"export * from
 const api=await import('data:text/javascript;base64,'+Buffer.from(built.outputFiles[0].text).toString('base64'));
 const actor='11111111-1111-4111-8111-111111111111',store='22222222-2222-4222-8222-222222222222',registrationId='33333333-3333-4333-8333-333333333333';
 const env={MAGAZORD_BASE_URL:'https://homologacaosilveiralab.painel.magazord.com.br/api',MAGAZORD_API_USER:'fixture',MAGAZORD_API_PASSWORD:'fixture',
- MAGAZORD_STORE_ID:store,MAGAZORD_HOMOLOGATION_STOCK:JSON.stringify({[store]:1}),SUPABASE_URL:'https://auth.invalid',SUPABASE_SERVICE_ROLE_KEY:'sb_secret_fixture'};
+ MAGAZORD_STORE_ID:store,MAGAZORD_HOMOLOGATION_STOCK:JSON.stringify({[store]:1}),SUPABASE_URL:'https://auth.invalid',SUPABASE_SERVICE_ROLE_KEY:'sb_secret_fixture',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_fixture'};
 const req=(action,quantity=1,operationId)=>new Request('https://isbn.invalid/api/magazord/price?stock=1',{
  method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+mfaToken(actor),'x-isbn-store-id':store},
  body:JSON.stringify({action,registrationId,quantity,...(operationId?{operationId}:{})})});
