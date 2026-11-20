@@ -46,3 +46,30 @@ Nenhuma etapa deste documento executa upload, associação, ativação ou qualqu
 - Fonte OpenAPI v1 pesquisável: https://docs-v1.api.magazord.com.br/ (Adicionar Mídia; Relacionar Mídias com Produto Derivação).
 - `shared/magazordMedia.ts` apenas constrói/valida payloads, não envia requests; `tests/magazordMedia.test.mjs` cobre contrato e campos inválidos.
 - Ainda não há journal de mídia, backend de envio nem acionamento pela UI. Não concluir que o fluxo está homologado.
+
+## Implementação — 20/11/2026 (continuação)
+- Journal `public.magazord_media_jobs` aplicado no projeto Supabase ISBN, RLS habilitada, nenhuma operação registrada até a conferência de 20/11.
+- `server/magazordMedia.ts`: `lookup`, `prepare`, `upload`, `link`, `status`. Produção bloqueada pela URL exata de homologação. MFA e vínculo de loja ativos.
+- `lookup` consulta apenas `magazord_registration_jobs`, filtrando usuário, loja, Pai e Filho; o LVP013 consta como `verified`.
+- `api/magazord/price.ts` despacha `?media=1` à implementação dedicada sem aumentar o número de functions Hobby.
+- `src/services/magazordMedia.ts` e `src/components/magazord/MagazordMedia.tsx`: sessão autenticada e ações separadas com confirmação manual. `MagazordExistingMedia.tsx` retoma cadastro já registrado entre diferentes URLs de Preview sem recriar produto.
+- As imagens selecionadas são congeladas em `sessionStorage` na preparação. O servidor valida o fingerprint/posição contra o journal e recusa trocar referência de mídia após reserva.
+- Cada mídia só avança `prepared → upload_started → uploaded → link_started → linked` por CAS persistente; ações interrompidas em `*_started` não são reenviadas. A imagem fonte é obtida antes do marco irreversível de envio externo.
+- `GET` de produto Pai/Filho na Magazord **não ocorre nesta etapa**. Associação `POST`, sem `PUT` destrutivo; retorna confirmação apenas com HTTP 201 e envelope `status:success`.
+- Fontes aceitas pelo backend: fotos privadas do bucket e hosts conhecidos da Amazon / Google Books HTTPS; capas HTTP do Google Books são normalizadas para HTTPS. URLs externas genéricas não são prometidas como suportadas e exigem fluxo local autorizado. JPEG/PNG/WebP até 5 MiB.
+- `tests/magazordMedia.test.mjs` e `tests/magazordMediaFlow.test.mjs` incluem fixtures de payload, upload, associação, perda de respostas, bloqueio de produção e recuperação por journal. **Testes adicionados, ainda não executados com Node**.
+- O build da Vercel em Preview não comprova a execução da suíte Node; executar antes do teste real:
+  `npm run typecheck`
+  `node --test tests/magazordMedia.test.mjs tests/magazordMediaFlow.test.mjs`
+  `node --test tests/magazordStock.test.mjs tests/magazordPrice.test.mjs`
+
+## Homologação manual pendente (LVP013)
+1. Abrir o último Preview da branch, autenticar com a conta que criou LVP013 e confirmar MFA.
+2. Se não houver sessão do cadastro antigo, usar **Retomar imagens de livro já homologado**, Pai `LVP013`, Filho `9788532530837`.
+3. Selecionar somente **uma capa** válida da Amazon/Google Books ou uma foto local já armazenada pelo ISBN. Verificar visualmente antes.
+4. Acionar **Preparar imagem (sem envio)** e conferir o estado.
+5. Após testes automatizados, acionar **Confirmar upload desta imagem** e **Associar imagem ao Filho** individualmente.
+6. Conferir a imagem na aba **4 — Mídias** do LVP013 na Magazord de homologação; confirmar a posição da capa principal e eventual imagem auxiliar. Não ativar produto nem fazer qualquer gravação em produção.
+7. Se um estado for incerto, parar: reconciliar manualmente; nunca repetir POST.
+
+**Não homologado ainda:** retorno real com imagem, comportamento da capa principal e ordenação de várias imagens no painel, formatos externos fora da lista segura.
