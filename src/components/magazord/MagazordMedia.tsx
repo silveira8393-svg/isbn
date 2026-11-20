@@ -49,7 +49,13 @@ export default function MagazordMedia({ registrationId, childCode, references, u
     setMessage('Operação iniciada com resultado incerto. Não reenviar; solicite reconciliação.');
    else setMessage('Imagem preparada. Nenhuma escrita remota foi realizada.');
   }catch(error){
-   if(current.current===key)setMessage(error instanceof Error?error.message:'Resultado desconhecido. Não reenviar.');
+   if(current.current===key){
+    // Never leave the "upload" or "link" button visible after an ambiguous attempt.
+    // A status-only read can restore the exact persisted stage later.
+    if(action==='upload')setStage('upload_started');
+    if(action==='link')setStage('link_started');
+    setMessage(error instanceof Error?error.message:'Resultado desconhecido. Não reenviar.');
+   }
   }finally{locked.current=false;setBusy(false);onBusy?.(false)}
  }
  // A new position only reads the existing journal; no external calls or automatic writes.
