@@ -1,6 +1,7 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import type { User } from '../../types';
-import { imageReferences } from '../../utils/imageUrls';
+import { imageReferences, prepareLocalBookImage, uploadLocalBookImage, type LocalBookImage } from '../../utils/imageUrls';
+import { supabase, supabaseUrl } from '../../lib/supabase';
 import { lookupMagazordMedia } from '../../services/magazordMedia';
 import MagazordMedia from './MagazordMedia';
 
@@ -15,6 +16,34 @@ export default function MagazordExistingMedia({user,references,onBusy}:{
  const [message,setMessage]=useState('');
  const [extraUrl,setExtraUrl]=useState('');
  const [selected,setSelected]=useState<string[]>([]);
+ const [pending,setPending]=useState<(LocalBookImage & { preview:string })|null>(null);
+ const [localBusy,setLocalBusy]=useState(false);
+ const [localMessage,setLocalMessage]=useState('');
+ useEffect(()=>()=>{if(pending)URL.revokeObjectURL(pending.preview);},[pending]);
+ const clearPending=()=>{setPending(null);setLocalMessage('');};
+ async function chooseLocal(file:File|undefined){
+  if(!file||localBusy||!found)return;
+  setLocalMessage('');
+  try{
+   if(file.type!=='image/jpeg')throw new Error('Para este teste, selecione uma imagem JPEG (.jpg).');
+   const prepared=await prepareLocalBookImage(file);
+   setPending({...prepared,preview:URL.createObjectURL(file)});
+  }catch(error){setLocalMessage(error instanceof Error?error.message:'Imagem inválida.');}
+ }
+ async function confirmLocal(){
+  if(!pending||!found||localBusy||!user.active)return;
+  const source=pending,registration=found.registrationId,identity=user.id+':'+user.storeId;
+  setLocalBusy(true);onBusy?.(true);setLocalMessage('');
+  try{
+   const url=await uploadLocalBookImage(source,user,{client:supabase,projectUrl:supabaseUrl});
+   // Never assign a private file to a different account or registration after a navigation.
+   if(found.registrationId!==registration||user.id+':'+user.storeId!==identity)return;
+   setSelected(current=>imageReferences([...current,url]).slice(0,20));
+   clearPending();
+   setLocalMessage('JPEG armazenado no Supabase privado. Nenhum upload foi feito à Magazord.');
+  }catch(error){setLocalMessage(error instanceof Error?error.message:'Falha ao armazenar a imagem.');}
+  finally{setLocalBusy(false);onBusy?.(false)}
+ }
  const images=imageReferences([...references,...selected]).slice(0,20);
  async function lookup(){
   if(busy||!user.active)return;
@@ -51,7 +80,7 @@ export default function MagazordExistingMedia({user,references,onBusy}:{
     disabled={busy||!parent.trim()||!child.trim()} onClick={()=>void lookup()}>
     {busy?'Consultando o diário...':'Localizar cadastro homologado'}
    </button>:<button type="button" disabled={busy} className="rounded border px-3 py-2 text-sm"
-    onClick={()=>{setFound(null);setSelected([]);setMessage('');}}>Selecionar outro cadastro</button>}
+    onClick={()=>{setFound(null);setSelected([]);clearPending();setMessage('');}}>Selecionar outro cadastro</button>}
   {message&&<p className="text-sm" role="status">{message}</p>}
   {found&&<Fragment key={found.registrationId}>
    <p className="text-sm">Imagens disponíveis no formulário: {images.length}</p>
@@ -61,6 +90,28 @@ export default function MagazordExistingMedia({user,references,onBusy}:{
     <button className="rounded border px-3 py-2 text-sm" type="button" onClick={addImage} disabled={!extraUrl.trim()}>
       Incluir URL
     </button>
+   </div>
+   <div className="space-y-2 rounded border border-slate-200 bg-white p-3">
+    <p className="text-sm font-semibold">Imagem do computador — teste JPEG</p>
+    <p className="text-xs text-slate-600">Selecione um JPG de até 5 MiB. A confirmação abaixo guarda a foto no Supabase privado; não envia para a Magazord.</p>
+    <label className="inline-flex cursor-pointer items-center rounded border border-slate-300 px-3 py-2 text-sm">
+     Selecionar imagem JPG
+     <input type="file" accept=".jpg,.jpeg,image/jpeg" className="sr-only" disabled={localBusy||!user.active}
+      aria-label="Selecionar imagem JPG do computador"
+      onChange={event=>{const file=event.target.files?.[0];event.target.value='';void chooseLocal(file);}}/>
+    </label>
+    {pending&&<div className="space-y-2">
+     <img src={pending.preview} alt="Prévia do JPEG selecionado" className="max-h-48 max-w-40 rounded border object-contain"/>
+     <p className="break-all text-xs">{pending.file.name}</p>
+     <div className="flex flex-wrap gap-2">
+      <button type="button" disabled={localBusy} className="rounded bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50" onClick={()=>void confirmLocal()}>
+       {localBusy?'Armazenando...':'Confirmar imagem no Supabase (sem Magazord)'}
+      </button>
+      <button type="button" disabled={localBusy} className="rounded border px-3 py-2 text-sm" onClick={clearPending}>Cancelar</button>
+     </div>
+    </div>}
+    {localMessage&&<p role="status" className="text-sm">{localMessage}</p>}
+    <p className="text-xs text-amber-800">Atenção: a primeira imagem de LVP013 já possui uma operação incerta e não pode ser reenviada, mesmo com outro arquivo.</p>
    </div>
    <MagazordMedia registrationId={found.registrationId}
      childCode={found.childCode} references={images} user={user} onBusy={onBusy}/>
