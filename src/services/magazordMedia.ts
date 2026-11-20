@@ -49,3 +49,29 @@ export async function magazordMedia(
   throw new Error('Confirmação da imagem inválida. Não repita o envio.');
  return result as MediaResult;
 }
+
+/** Read-only lookup of a previously verified registration, no Magazord requests. */
+export async function lookupMagazordMedia(parentCode:string,childCode:string,user:User):
+ Promise<{registrationId:string;parentCode:string;childCode:string}>{
+ if(!user.active||!priceUuid(user.storeId)||!parentCode.trim()||!childCode.trim())
+  throw new Error('Informe os códigos Pai e Filho homologados.');
+ const {supabase}=await import('../lib/supabase');
+ const {data,error}=await supabase.auth.getSession();
+ if(error||data.session?.user.id!==user.id||!data.session.access_token)
+  throw new Error('Entre novamente para consultar o cadastro.');
+ const response=await fetch('/api/magazord/price?media=1',{
+  method:'POST',redirect:'error',credentials:'same-origin',cache:'no-store',
+  signal:AbortSignal.timeout(30000),
+  headers:{'Content-Type':'application/json','Authorization':'Bearer '+data.session.access_token,
+   'x-isbn-store-id':user.storeId},
+  body:JSON.stringify({action:'lookup',parentCode:parentCode.trim(),childCode:childCode.trim()})
+ });
+ let result:any;try{result=await response.json()}catch{throw new Error('Consulta do diário indisponível.');}
+ if(!response.ok)throw new Error(result?.code==='verified_media_registration_not_found'
+  ?'Cadastro não encontrado no diário de homologação desta conta.'
+  :'Não foi possível consultar o diário ISBN.');
+ if(result?.status!=='found'||!priceUuid(result.registrationId)||
+  result.parentCode!==parentCode.trim()||result.childCode!==childCode.trim())
+  throw new Error('Resposta inesperada do diário de cadastros.');
+ return result;
+}
