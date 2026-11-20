@@ -110,11 +110,25 @@ export function createMagazordMediaFunction({env=process.env,fetcher=fetch}:{env
    if(!priceUuid(actor))return fail('store_access_denied',403);
    if(!/^application\/json(?:;|$)/i.test(request.headers.get('content-type')||''))return fail('json_required',415);
    const body=await readLimitedJson(request.body,8192,AbortSignal.timeout(5000));
-   if(!body||!['prepare','upload','link','status'].includes(body.action)
-     || Object.keys(body).some((k:string)=>!['action','registrationId','position','reference','operationId'].includes(k))
+   if(!body||!['lookup','prepare','upload','link','status'].includes(body.action))
+     return fail('invalid_media_request',400);
+   const query=db(env,fetcher);
+   if(body.action==='lookup'){
+     const code=(value:unknown)=>typeof value==='string'&&/^[\\p{L}\\p{N}][\\p{L}\\p{N}._ -]{0,24}$/u.test(value)&&value.trim()===value;
+     if(Object.keys(body).some((k:string)=>!['action','parentCode','childCode'].includes(k))||
+       !code(body.parentCode)||!code(body.childCode)||body.parentCode===body.childCode)
+       return fail('invalid_media_request',400);
+     const registrations=await query('magazord_registration_jobs','GET',{
+       store_id:'eq.'+store,actor_id:'eq.'+actor,parent_code:'eq.'+body.parentCode,
+       child_code:'eq.'+body.childCode,stage:'eq.verified',
+       select:'id,parent_code,child_code,stage',limit:'2'});
+     if(registrations.length!==1)return fail('verified_media_registration_not_found',404);
+     return reply({status:'found',registrationId:registrations[0].id,
+       parentCode:registrations[0].parent_code,childCode:registrations[0].child_code});
+   }
+   if(Object.keys(body).some((k:string)=>!['action','registrationId','position','reference','operationId'].includes(k))
      || !priceUuid(body.registrationId)||!Number.isInteger(body.position)||body.position<0||body.position>19
      || !exactReference(body.reference))return fail('invalid_media_request',400);
-   const query=db(env,fetcher);
    const rows=await query('magazord_registration_jobs','GET',
      {id:'eq.'+body.registrationId,store_id:'eq.'+store,actor_id:'eq.'+actor,select:'id,store_id,actor_id,parent_code,child_code,stage',limit:'2'});
    const reg=rows[0];
