@@ -7,7 +7,13 @@ import { magazordMedia, type MediaResult, type MediaStage } from '../../services
 export default function MagazordMedia({ registrationId, childCode, references, user, onBusy }:{
  registrationId:string;childCode:string;references:string[];user:User;onBusy?:(busy:boolean)=>void;
 }){
- const images=imageReferences(references).slice(0,20);
+ // Google Books sometimes returns HTTP links for a service that supports HTTPS.
+ // Upgrade only this known provider; arbitrary HTTP image sources remain blocked.
+ const images=imageReferences(references).slice(0,20).map(ref=>{
+  const url=new URL(ref);
+  if(url.protocol==='http:'&&url.hostname==='books.google.com'){url.protocol='https:';return url.href;}
+  return ref;
+ });
  const frozenKey='isbn-magazord-media:v1:'+user.id+':'+user.storeId+':'+registrationId;
  const [frozen,setFrozen]=useState<string[]|null>(()=>{
   try{const saved=JSON.parse(sessionStorage.getItem(frozenKey)||'null');
