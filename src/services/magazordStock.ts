@@ -12,7 +12,7 @@ export async function magazordStock(action:'prepare'|'send'|'reconcile', registr
   const {data,error}=await supabase.auth.getSession();
   if (error || data.session?.user.id!==user.id || !data.session.access_token)
     throw new Error('Entre novamente para processar o estoque.');
-  const response=await fetch('/api/magazord/stock',{method:'POST',redirect:'error',credentials:'same-origin',cache:'no-store',
+  const response=await fetch('/api/magazord/price?stock=1',{method:'POST',redirect:'error',credentials:'same-origin',cache:'no-store',
     signal:AbortSignal.timeout(30000),headers:{'Content-Type':'application/json',
       Authorization:'Bearer '+data.session.access_token,'x-isbn-store-id':user.storeId},
     body:JSON.stringify({action,registrationId,quantity,...(action==='prepare'?{}:{operationId})})});
