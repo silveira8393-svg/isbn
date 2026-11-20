@@ -68,7 +68,7 @@ async function getImage(reference:string,actor:string,store:string,env:NodeJS.Pr
    if(!key)return fail('media_source_unavailable',503);
    const client=createClient(storageOrigin,key,{auth:{persistSession:false,autoRefreshToken:false},
      global:{fetch:fetcher}});
-   const result=await client.storage.from(BUCKET).download(parsed.slice(1).join('/').replace(/\/(jpg|png|webp)$/,''));
+   const result=await client.storage.from(BUCKET).download(parsed[1]+'/'+parsed[2]+'/'+parsed[3]+'.'+parsed[4]);
    // Use exact path, never signed/persisted URLs.
    if(result.error||!result.data)return fail('media_source_unavailable');
    bytes=new Uint8Array(await result.data.arrayBuffer());contentType=result.data.type;
