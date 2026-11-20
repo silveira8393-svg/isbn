@@ -1,6 +1,6 @@
 # ISBN → Magazord — Etapa 6: imagens (projeto seguro, sem escrita habilitada)
 
-Estado: levantamento técnico concluído parcialmente em 2026-11-19/20. **Não habilitar envios até confirmar o contrato de upload**.
+Estado: contrato de upload e de associação confirmado em 2026-11-20; helpers puros e fixtures incluídos. **Sem endpoint de escrita, sem upload real, sem mudança em produção**.
 
 ## Premissas homologadas
 - A confirmação de Pai e Filho já consta no journal `magazord_registration_jobs`: usar o `registrationId` e os códigos confirmados, sem novo GET de existência.
@@ -19,8 +19,8 @@ Estado: levantamento técnico concluído parcialmente em 2026-11-19/20. **Não h
 - Em `shared/magazordRegistration.ts`, as imagens ainda NÃO são incluídas na operação congelada do cadastro real. Incluir snapshot de referências/ordem antes do início da etapa 6; preservar compatibilidade com registros anteriores.
 
 ## API oficial, sem inferir corpo não documentado
-- `POST /v2/site/midia/upload`: cadastrar mídia; a página pública não expõe claramente o corpo de multipart/form-data, campos requeridos, tamanho ou forma do ID de retorno. **Pendente validar contrato**, não fabricar um payload.
-- `POST /v2/site/produto/{pai}/derivacao/{filho}/midia`: adicionar relação de mídia ao Produto Filho; documento da Magazord.
+- `POST /v2/site/midia/upload`: cadastrar mídia; o OpenAPI v1 detalha JSON com `tipo:6` (derivação), `plataforma:1` (todas), `tipoMidia:1` (imagem), `midiaFile` (Base64), `nomeArquivo` (com extensão). Resposta 201: `status: success`, `data.id` (texto numérico). Contrato puro em `shared/magazordMedia.ts`, teste em `tests/magazordMedia.test.mjs`.
+- `POST /v2/site/produto/{pai}/derivacao/{filho}/midia`: adicionar relação ao Filho com `{midiaId:[105,106]}`; documentação v1 confirma que POST preserva relações não informadas.
 - `PUT /v2/site/produto/{pai}/derivacao/{filho}/midia`: alterar relações; risco de substituição, NÃO usar como primeira opção.
 - `GET /v2/site/produto/{pai}/derivacao/{filho}/midia`: consulta disponível, mas NÃO deve ser exigida no fluxo normal.
 - Referências oficiais: https://docs-v2.api.magazord.com.br/api/post-midia/ , https://docs-v2.api.magazord.com.br/api/post-midia-relaciona-produto-yaml/ , https://docs-v2.api.magazord.com.br/api/put-midia-relaciona-produto-yaml/ .
@@ -34,10 +34,15 @@ Estado: levantamento técnico concluído parcialmente em 2026-11-19/20. **Não h
 6. Não incorporar nova função Vercel (limite Hobby 12 functions): reutilizar rota autenticada existente mediante despacho explícito e seguro.
 
 ## Bloqueadores antes de habilitar API
-1. Obter o contrato exato do upload (campos, MIME, resposta/ID), com referência oficial ou amostra sanitizada da homologação.
-2. Confirmar semântica do POST de relacionamento quanto a outras mídias existentes e ordem/capa principal.
+1. **Concluído para JSON**: contrato de upload/ID documentado na referência oficial v1; validar com fixtures antes da primeira escrita real.
+2. **Parcial**: POST é aditivo sem remover as mídias anteriores; ainda falta validar ordem/capa principal no painel para múltiplas imagens.
 3. Definir estratégia segura de imagens externas (origens autorizadas, proxy binário, não redirecionar para hosts privados, limites por arquivo).
 4. Journal persistente e testes de falha após chamada para garantir que cada escrita seja no máximo uma tentativa por etapa. Sem consulta redundante de Pai/Filho.
 5. Testes locais completos; só depois habilitar uma única operação real na homologação.
 
 Nenhuma etapa deste documento executa upload, associação, ativação ou qualquer ação em produção.
+
+## Evidência adicional
+- Fonte OpenAPI v1 pesquisável: https://docs-v1.api.magazord.com.br/ (Adicionar Mídia; Relacionar Mídias com Produto Derivação).
+- `shared/magazordMedia.ts` apenas constrói/valida payloads, não envia requests; `tests/magazordMedia.test.mjs` cobre contrato e campos inválidos.
+- Ainda não há journal de mídia, backend de envio nem acionamento pela UI. Não concluir que o fluxo está homologado.
