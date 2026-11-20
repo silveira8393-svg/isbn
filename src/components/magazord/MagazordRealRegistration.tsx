@@ -3,6 +3,8 @@ import type { RegistrationDraft, User } from '../../types';
 import { registrationInput, registrationPayload } from '../../../shared/magazordRegistration';
 import { submitMagazordRegistration } from '../../services/magazordRegistration';
 import MagazordPrice from './MagazordPrice';
+import MagazordMedia from './MagazordMedia';
+import { imageReferences } from '../../utils/imageUrls';
 import { PriceError, priceCents } from '../../../shared/magazordPrice';
 
 /** Separate action in the existing review; never invokes simulator callbacks or audit-as-simulation. */
@@ -12,7 +14,7 @@ export default function MagazordRealRegistration({ draft, user, onBusy, onStarte
   const identity = `${user?.id}:${user?.storeId}`;
   const currentIdentity = useRef(identity); currentIdentity.current = identity;
   const storageKey = `isbn-magazord-registration:v1:${identity}:${JSON.stringify([draft.parentCode, draft.childCode])}`;
-  type Operation = { id: string; input: ReturnType<typeof registrationInput>; identity: string; price?: string; quantity?: number };
+  type Operation = { id: string; input: ReturnType<typeof registrationInput>; identity: string; price?: string; quantity?: number; imageReferences?: string[] };
   const [saved] = useState<Operation | null>(() => {
     try {
       const value = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
@@ -35,12 +37,14 @@ export default function MagazordRealRegistration({ draft, user, onBusy, onStarte
       if (action === 'preview') {
         priceCents(draft.price);
         if (!Number.isSafeInteger(draft.quantity) || draft.quantity < 1 || draft.quantity > 100000) throw new Error('Quantidade inicial inválida.');
-        operation.current = { id: crypto.randomUUID(), input: registrationInput(draft, Number(brand), Number(channel)), identity, price: draft.price, quantity: draft.quantity };
+        operation.current = { id: crypto.randomUUID(), input: registrationInput(draft, Number(brand), Number(channel)), identity, price: draft.price, quantity: draft.quantity,
+          imageReferences: imageReferences([draft.mainImageUrl, ...draft.additionalImageUrls]).slice(0, 20) };
       }
       const op = operation.current;
       if (!op || op.identity !== identity) throw new Error('Usuário ou loja mudou. Retorne ao cadastro e confira a sessão.');
       if (action === 'create') {
-        if (!started) { priceCents(draft.price); op.price = draft.price; op.quantity = draft.quantity; }
+        if (!started) { priceCents(draft.price); op.price = draft.price; op.quantity = draft.quantity;
+          op.imageReferences = imageReferences([draft.mainImageUrl, ...draft.additionalImageUrls]).slice(0, 20); }
         if (!Number.isSafeInteger(op.quantity) || op.quantity < 1 || op.quantity > 100000)
           throw new Error('Quantidade inicial inválida ou ausente da operação preservada.');
         // Persist before sending, so a reload or lost response keeps the same operation and frozen payload.
@@ -73,6 +77,10 @@ export default function MagazordRealRegistration({ draft, user, onBusy, onStarte
     {verified && user && operation.current && operation.current.identity === identity && <MagazordPrice registrationId={operation.current.id}
       parentCode={operation.current.input.parentCode} childCode={operation.current.input.childCode} price={operation.current.price ?? ''} quantity={operation.current.quantity} user={user}
       onBusy={value => { setBusy(value); onBusy(value); }} />}
+    {verified && user && operation.current && operation.current.identity === identity &&
+      <MagazordMedia registrationId={operation.current.id} childCode={operation.current.input.childCode}
+        references={operation.current.imageReferences ?? imageReferences([draft.mainImageUrl, ...draft.additionalImageUrls])}
+        user={user} onBusy={value => { setBusy(value); onBusy(value); }} />}
     {verified && <button type="button" disabled={busy} onClick={onDone} className="rounded border px-4 py-2 text-sm">Continuar para outro livro</button>}
   </section>;
 }
