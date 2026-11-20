@@ -48,6 +48,7 @@ export default function MagazordExistingMedia({user,references,onBusy}:{
  async function lookup(){
   if(busy||!user.active)return;
   setBusy(true);onBusy?.(true);setMessage('');setFound(null);
+  setSelected([]);setExtraUrl('');clearPending();
   try{
    const result=await lookupMagazordMedia(parent,child,user);
    setFound(result);setMessage('Cadastro confirmado no diário ISBN. Selecione e prepare as imagens abaixo.');
@@ -80,7 +81,7 @@ export default function MagazordExistingMedia({user,references,onBusy}:{
     disabled={busy||!parent.trim()||!child.trim()} onClick={()=>void lookup()}>
     {busy?'Consultando o diário...':'Localizar cadastro homologado'}
    </button>:<button type="button" disabled={busy} className="rounded border px-3 py-2 text-sm"
-    onClick={()=>{setFound(null);setSelected([]);clearPending();setMessage('');}}>Selecionar outro cadastro</button>}
+    onClick={()=>{setFound(null);setSelected([]);setExtraUrl('');clearPending();setMessage('');}}>Selecionar outro cadastro</button>}
   {message&&<p className="text-sm" role="status">{message}</p>}
   {found&&<Fragment key={found.registrationId}>
    <p className="text-sm">Imagens disponíveis no formulário: {images.length}</p>
@@ -111,7 +112,8 @@ export default function MagazordExistingMedia({user,references,onBusy}:{
      </div>
     </div>}
     {localMessage&&<p role="status" className="text-sm">{localMessage}</p>}
-    <p className="text-xs text-amber-800">Atenção: a primeira imagem de LVP013 já possui uma operação incerta e não pode ser reenviada, mesmo com outro arquivo.</p>
+    {found.parentCode==='LVP013'&&found.childCode==='9788532530837'&&
+     <p className="text-xs text-amber-800">Atenção: a primeira imagem de LVP013 já possui uma operação incerta e não pode ser reenviada, mesmo com outro arquivo.</p>}
    </div>
    <MagazordMedia registrationId={found.registrationId}
      childCode={found.childCode} references={images} user={user} onBusy={onBusy}/>
