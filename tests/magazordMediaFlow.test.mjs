@@ -97,3 +97,18 @@ test('produção não pode enviar mídias',async()=>{
  const result=await handler(request('upload','44444444-4444-4444-8444-444444444444'));
  assert.equal(result.status,403);assert.equal(calls,0);
 });
+
+test('recupera cadastro homologado por Pai/Filho apenas no diário ISBN',async()=>{
+ const f=fixture();
+ const req=new Request('https://isbn.invalid/api/magazord/price?media=1',{
+  method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+mfaToken(actor),'x-isbn-store-id':store},
+  body:JSON.stringify({action:'lookup',parentCode:'LVP013',childCode:'9788532530837'})
+ });
+ const response=await f.handler(req);
+ assert.equal(response.status,200);
+ const data=await response.json();
+ assert.deepEqual({status:data.status,parentCode:data.parentCode,childCode:data.childCode,registrationId:data.registrationId},
+  {status:'found',parentCode:'LVP013',childCode:'9788532530837',registrationId});
+ assert.equal(f.uploads(),0);assert.equal(f.links(),0);
+ assert.equal(f.queries().filter(path=>path.startsWith('/api/v2/')).length,0);
+});
