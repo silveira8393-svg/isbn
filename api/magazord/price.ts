@@ -1,7 +1,14 @@
 import { createMagazordPriceFunction } from '../../server/magazordPrice.js';
 import { createMagazordStockFunction } from '../../server/magazordStock.js';
+import { createMagazordMediaFunction } from '../../server/magazordMedia.js';
 export const config = { maxDuration: 30 };
-// Same Vercel function, separate stock implementation. No additional serverless slot.
+// Share the existing Vercel slot (Hobby limit). Dispatch by an exact query only.
 const price = createMagazordPriceFunction();
 const stock = createMagazordStockFunction();
-export default { fetch: (request: Request) => new URL(request.url).search === '?stock=1' ? stock(request) : price(request) };
+const media = createMagazordMediaFunction();
+export default {
+  fetch: (request: Request) => {
+    const query = new URL(request.url).search;
+    return query === '?stock=1' ? stock(request) : query === '?media=1' ? media(request) : price(request);
+  }
+};
