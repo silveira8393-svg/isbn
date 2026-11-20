@@ -2,16 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import type { User } from '../../types';
 import { priceCents, priceUuid } from '../../../shared/magazordPrice';
 import { prepareMagazordPrice, submitMagazordPrice } from '../../services/magazordPrice';
+import MagazordStock from './MagazordStock';
 
-export default function MagazordPrice({ registrationId, parentCode, childCode, price, user, onBusy }: {
-  registrationId: string; parentCode: string; childCode: string; price: string; user: User; onBusy?: (busy: boolean) => void;
+export default function MagazordPrice({ registrationId, parentCode, childCode, price, quantity, user, onBusy }: {
+  registrationId: string; parentCode: string; childCode: string; price: string; quantity?: number; user: User; onBusy?: (busy: boolean) => void;
 }) {
   const identity = JSON.stringify([user.id, user.storeId, user.active, registrationId, parentCode, childCode, price]);
   const current = useRef(identity); current.current = identity;
   const lock = useRef(false);
   const attempted = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [view, setView] = useState<{ identity: string; message: string } | null>(null);
+  const [view, setView] = useState<{ identity: string; message: string; confirmed: boolean } | null>(null);
   const visible = view?.identity === identity ? view : null;
 
   async function process(reconcile = false) {
@@ -55,9 +56,9 @@ export default function MagazordPrice({ registrationId, parentCode, childCode, p
       const result = await submitMagazordPrice(registrationId, price, operationId, user, reconcile);
       if (result.childCode !== childCode || result.tableId !== 1 || result.cents !== cents)
         throw new Error('Preço não confirmado para este Filho e tabela Padrão.');
-      if (current.current === identity) setView({ identity, message: 'Preço confirmado na Magazord. Tabela Padrão (ID 1).' });
+      if (current.current === identity) setView({ identity, message: 'Preço confirmado na Magazord. Tabela Padrão (ID 1).', confirmed: true });
     } catch (error) {
-      if (current.current === identity) setView({ identity, message: error instanceof Error ? error.message : 'Preço não confirmado. Consulte o estado sem reenviar.' });
+      if (current.current === identity) setView({ identity, message: error instanceof Error ? error.message : 'Preço não confirmado. Consulte o estado sem reenviar.', confirmed: false });
     } finally { lock.current = false; setBusy(false); onBusy?.(false); }
   }
 
@@ -73,5 +74,7 @@ export default function MagazordPrice({ registrationId, parentCode, childCode, p
     <p>Filho: {childCode}. Preço informado: R$ {price || 'não informado'}. Tabela Padrão (ID 1).</p>
     <p role="status">{busy ? 'Processando e confirmando o preço...' : visible?.message}</p>
     <button type="button" disabled={busy || !user.active} onClick={() => void process(true)} className="rounded border px-3 py-2">Consultar estado do preço (sem reenvio)</button>
+    {visible?.confirmed && Number.isSafeInteger(quantity) && quantity! > 0 &&
+      <MagazordStock registrationId={registrationId} childCode={childCode} quantity={quantity!} user={user} onBusy={onBusy} />}
   </section>;
 }
