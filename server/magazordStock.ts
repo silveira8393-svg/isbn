@@ -68,7 +68,7 @@ export function createMagazordStockFunction(options: {env?: NodeJS.ProcessEnv; f
     try {
       if (request.method !== 'POST') return reply({code:'method_not_allowed'},405);
       const url = new URL(request.url);
-      if (url.pathname !== '/api/magazord/stock' || url.search) return fail('invalid_stock_request',400);
+      if (url.pathname !== '/api/magazord/price' || url.search !== '?stock=1') return fail('invalid_stock_request',400);
       if ((request.headers.get('origin') && request.headers.get('origin') !== url.origin) || request.headers.get('sec-fetch-site') === 'cross-site')
         return fail('origin_denied',403);
       if (resolveMagazordBaseUrl(env.MAGAZORD_BASE_URL) !== PRICE_HOMOLOGATION) return fail('homologation_only',403);
