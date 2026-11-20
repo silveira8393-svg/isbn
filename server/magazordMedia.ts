@@ -23,7 +23,11 @@ const exactReference=(v:unknown):v is string=>{
  if(typeof v!=='string'||v.length>2048)return false;
  try{const u=new URL(v);if(u.protocol!=='https:'||u.username||u.password||u.port||u.hash)return false;
    if(u.origin===storageOrigin)return !u.search&&STORAGE.test(u.pathname);
-   return !u.search&&EXTERNAL_HOSTS.has(u.hostname)&&u.pathname.length>1&&!u.pathname.endsWith('/');
+   if(!EXTERNAL_HOSTS.has(u.hostname)||u.pathname.length<2||u.pathname.endsWith('/'))return false;
+   if(!u.search)return true;
+   if(u.hostname!=='books.google.com'||u.pathname!=='/books/content')return false;
+   const keys=new Set(['id','printsec','img','zoom','edge','source','w','h']);
+   return [...u.searchParams.keys()].every(k=>keys.has(k))&&u.searchParams.has('id');
  }catch{return false}
 };
 function uuidFor(registrationId:string,position:number){
@@ -150,12 +154,14 @@ export function createMagazordMediaFunction({env=process.env,fetcher=fetch}:{env
      if(job.stage==='uploaded'||job.stage==='link_started')return reply({status:'uploaded',stage:job.stage,operationId:job.id,
        childCode:job.child_code,position:job.image_position});
      if(job.stage!=='prepared')return fail('media_outcome_uncertain');
+     // Fetch source before reserving the one-shot remote operation: a missing cover
+     // must not permanently block the book when no Magazord POST was attempted.
+     const image=await getImage(job.image_reference,actor,store,env,fetcher);
      found=await query('magazord_media_jobs','PATCH',{id:'eq.'+job.id,stage:'eq.prepared',fingerprint:'eq.'+fingerprint,
        store_id:'eq.'+store,actor_id:'eq.'+actor},{stage:'upload_started'});
      if(found.length!==1)return fail('media_operation_in_progress');
      // Outcome is permanently uncertain unless we can persist a positive ID.
      try{
-       const image=await getImage(job.image_reference,actor,store,env,fetcher);
        const resp=await fetcher(PRICE_HOMOLOGATION+'/v2/site/midia/upload',{method:'POST',redirect:'error',
          credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(20000),
          headers:{Authorization:'Basic '+Buffer.from(env.MAGAZORD_API_USER+':'+env.MAGAZORD_API_PASSWORD).toString('base64'),
