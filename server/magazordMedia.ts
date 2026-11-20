@@ -114,7 +114,7 @@ export function createMagazordMediaFunction({env=process.env,fetcher=fetch}:{env
      return fail('invalid_media_request',400);
    const query=db(env,fetcher);
    if(body.action==='lookup'){
-     const code=(value:unknown)=>typeof value==='string'&&/^[\\p{L}\\p{N}][\\p{L}\\p{N}._ -]{0,24}$/u.test(value)&&value.trim()===value;
+     const code=(value:unknown)=>typeof value==='string'&&/^[\p{L}\p{N}][\p{L}\p{N}._ -]{0,24}$/u.test(value)&&value.trim()===value;
      if(Object.keys(body).some((k:string)=>!['action','parentCode','childCode'].includes(k))||
        !code(body.parentCode)||!code(body.childCode)||body.parentCode===body.childCode)
        return fail('invalid_media_request',400);
