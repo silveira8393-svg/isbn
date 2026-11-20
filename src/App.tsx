@@ -16,6 +16,7 @@ import CameraScannerModal from './components/CameraScannerModal';
 import MagazordStatusCard from './components/magazord/MagazordStatusCard';
 import MagazordProductLookup from './components/magazord/MagazordProductLookup';
 import ProductRegistrationForm from './components/magazord/ProductRegistrationForm';
+import MagazordExistingMedia from './components/magazord/MagazordExistingMedia';
 import OwnerDashboard from './components/OwnerDashboard';
 import { useOperationAudit } from './hooks/useOperationAudit';
 import { useLocalHistory } from './hooks/useLocalHistory';
@@ -951,6 +952,11 @@ export default function App() {
         {/* ABA 2: CADASTRO MAGAZORD EM TELA ÚNICA */}
         {activeTab === 'cadastro' && (
           <div className="isbn-registration-view w-full mx-auto">
+            {!registrationDraft && (
+              <div className="mx-auto mb-6 max-w-3xl">
+                <MagazordExistingMedia user={currentUser} references={[]} />
+              </div>
+            )}
             {registrationDraft && foundBook ? (
               <ProductRegistrationForm
                 draft={registrationDraft}
