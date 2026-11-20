@@ -189,8 +189,10 @@ export function createMagazordMediaFunction({env=process.env,fetcher=fetch}:{env
          cache:'no-store',signal:AbortSignal.timeout(20000),
          headers:{Authorization:'Basic '+Buffer.from(env.MAGAZORD_API_USER+':'+env.MAGAZORD_API_PASSWORD).toString('base64'),
            Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify(relation.body)});
-       if(resp.status!==201){void resp.body?.cancel().catch(()=>{});return fail('media_outcome_uncertain')}
-       void resp.body?.cancel().catch(()=>{});
+       if(resp.status!==201||!/^application\/json(?:;|$)/i.test(resp.headers.get('content-type')||'')){
+         void resp.body?.cancel().catch(()=>{});return fail('media_outcome_uncertain')}
+       const linked=await readLimitedJson(resp.body,65536,AbortSignal.timeout(5000));
+       if(linked?.status!=='success')return fail('media_outcome_uncertain');
        found=await query('magazord_media_jobs','PATCH',{id:'eq.'+job.id,stage:'eq.link_started',fingerprint:'eq.'+fingerprint,
          store_id:'eq.'+store,actor_id:'eq.'+actor},{stage:'linked'});
        if(found.length!==1)return fail('media_outcome_uncertain');
