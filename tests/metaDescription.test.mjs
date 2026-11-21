@@ -307,6 +307,7 @@ test('Short commercial description is independent, source-grounded and keeps man
   const draft = api.createRegistrationDraft(source, 'usado');
   assert.equal(draft.shortDescription, source.synopsis);
   assert.equal(draft.shortDescriptionEdited, false);
+  assert.equal(api.createRegistrationSnapshot(draft, at).fields.shortDescription, source.synopsis);
   assert.doesNotMatch(draft.shortDescription, /capa rasgada|grifos/i);
   const edited = api.updateDraftWithMetaDescription(draft, { shortDescription: 'Resumo editado manualmente.' });
   assert.equal(edited.shortDescriptionEdited, true);
