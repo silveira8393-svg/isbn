@@ -88,3 +88,20 @@ test('client uses allowlisted messages and serializes the corrected fiscal origi
   assert.equal(calls[0].input.fiscalOrigin, 0);
   assert.equal(api.registrationValidationMessage(['unknown-secret-details', '__proto__']), undefined);
 });
+
+test('used books omit the commercial EAN while preserving bibliographic ISBN; new books retain EAN', () => {
+  const usedDraft = { ...draft, condition: 'usado', childCode: 'LVP018001', isbn13: '9788584390670', ean: '9788584390670',
+    usedBookConditionNotes: 'Bom estado de conservação.' };
+  const fromDraft = wireInput(usedDraft);
+  assert.equal(fromDraft.ean, '');
+  assert.equal(usedDraft.isbn13, '9788584390670');
+  const usedPayload = api.registrationPayload(fromDraft);
+  assert.equal(usedPayload.child.codigo, 'LVP018001');
+  assert.equal(Object.hasOwn(usedPayload.child, 'ean'), false);
+  assert.match(usedPayload.parent.produtoLoja[0].descricao, /<strong>Bom estado de conservação\.<\/strong>/);
+  // Server-side guard also covers legacy/frozen operations containing an ISBN in the used EAN input.
+  const legacyPayload = api.registrationPayload({ ...fromDraft, ean: '9788584390670' });
+  assert.equal(Object.hasOwn(legacyPayload.child, 'ean'), false);
+  const newPayload = api.registrationPayload(wireInput());
+  assert.equal(newPayload.child.ean, '9788584390670');
+});
