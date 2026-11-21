@@ -26,6 +26,7 @@ export function registrationConditionUpdates(draft: RegistrationDraft, condition
     ? isbnCode || draft.childCode
     : draft.childCode === isbnCode ? '' : draft.childCode);
   return { condition, registrationMode: registrationModeForCondition(condition), childCode, conditionChildCodes,
+    ean: condition === 'usado' ? '' : (draft.ean || draft.isbn13 || draft.isbn10 || ''),
     category: draft.category };
 }
 
@@ -39,7 +40,7 @@ export function registrationIdentifierUpdates(draft: RegistrationDraft, field: '
   const code = next.isbn13 || next.isbn10 || '';
   // Invalid edits stay visible for correction and never become commercial identifiers.
   if (code && !canonicalBookIsbn(code)) return updates;
-  if (!draft.ean || cleanIsbn(draft.ean) === prior) updates.ean = code;
+  if (draft.condition === 'novo' && (!draft.ean || cleanIsbn(draft.ean) === prior)) updates.ean = code;
   if (draft.condition === 'novo' && (!draft.childCode || cleanIsbn(draft.childCode) === prior)) updates.childCode = code;
   if (draft.conditionChildCodes?.novo && cleanIsbn(draft.conditionChildCodes.novo) === prior)
     updates.conditionChildCodes = { ...draft.conditionChildCodes, novo: code };
@@ -69,7 +70,7 @@ export function createRegistrationDraft(
 ): RegistrationDraft {
   const isbn13 = cleanIsbn(book.isbn13 || '');
   const isbn10 = cleanIsbn(book.isbn10 || '');
-  const ean = isbn13 || isbn10 || '';
+  const ean = initialCondition === 'usado' ? '' : (isbn13 || isbn10 || '');
 
   // Determina Código Filho conforme regra:
   // Se NOVO: pré-preenchido com ISBN-13
