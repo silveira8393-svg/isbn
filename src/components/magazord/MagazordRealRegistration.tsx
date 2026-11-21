@@ -5,6 +5,7 @@ import { submitMagazordRegistration } from '../../services/magazordRegistration'
 import MagazordPrice from './MagazordPrice';
 import MagazordMedia from './MagazordMedia';
 import MagazordExistingMedia from './MagazordExistingMedia';
+import MagazordSeoLookup from './MagazordSeoLookup';
 import { imageReferences } from '../../utils/imageUrls';
 import { PriceError, priceCents } from '../../../shared/magazordPrice';
 
@@ -83,6 +84,7 @@ export default function MagazordRealRegistration({ draft, user, onBusy, onStarte
         references={operation.current.imageReferences ?? imageReferences([draft.mainImageUrl, ...draft.additionalImageUrls])}
         user={user} onBusy={value => { setBusy(value); onBusy(value); }} />}
     {verified && <button type="button" disabled={busy} onClick={onDone} className="rounded border px-4 py-2 text-sm">Continuar para outro livro</button>}
+    {user && <MagazordSeoLookup user={user} initialChildCode={operation.current?.input.childCode ?? draft.childCode} />}
     {user && <MagazordExistingMedia user={user}
       references={imageReferences([draft.mainImageUrl, ...draft.additionalImageUrls])}
       onBusy={value => { setBusy(value); onBusy(value); }} />}
