@@ -4,7 +4,7 @@
  */
 
 import { BookInfo, BookCondition, RegistrationDraft, RegistrationMode } from '../types.js';
-import { generateMetaDescription } from './metaDescription.js';
+import { generateMetaDescription, generateShortDescription } from './metaDescription.js';
 import { sanitizeSynopsis } from './sanitizer.js';
 import { canonicalBookIsbn, cleanIsbn } from './isbn.js';
 import { imageReferences, isImageReference } from './imageUrls.js';
@@ -153,6 +153,8 @@ export function createRegistrationDraft(
   };
   draft.metaDescription = generateMetaDescription(draft);
   draft.metaDescriptionEdited = false;
+  draft.shortDescription = generateShortDescription(draft);
+  draft.shortDescriptionEdited = false;
   return draft;
 }
 
