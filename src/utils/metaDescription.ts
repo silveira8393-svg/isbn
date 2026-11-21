@@ -111,14 +111,27 @@ export function generateMetaDescription(book: SeoSource): string {
   return text;
 }
 
-/** An explicit edit (including clearing) takes precedence over all subsequent suggestions. */
+/** Independent, source-grounded commercial summary; never copy used-book condition notes. */
+export function generateShortDescription(book: SeoSource): string {
+  const sentences = synopsisSentences(book.synopsis);
+  const summary: string[] = [];
+  for (const sentence of sentences) {
+    const candidate = [...summary, sentence].join(' ');
+    if (candidate.length > 300) break;
+    summary.push(sentence);
+    if (summary.length >= 2) break;
+  }
+  return summary.join(' ') || generateMetaDescription(book);
+}
+
+/** Explicit edits (including clearing) take precedence over subsequent suggestions. */
 export function updateDraftWithMetaDescription(draft: RegistrationDraft, updates: Partial<RegistrationDraft>): RegistrationDraft {
   const next = { ...draft, ...updates };
-  if (Object.prototype.hasOwnProperty.call(updates, 'metaDescription')) {
-    return { ...next, metaDescriptionEdited: true };
-  }
-  if (next.metaDescriptionEdited === false && seoFields.some(key => Object.prototype.hasOwnProperty.call(updates, key))) {
-    next.metaDescription = generateMetaDescription(next);
+  if (Object.prototype.hasOwnProperty.call(updates, 'metaDescription')) next.metaDescriptionEdited = true;
+  if (Object.prototype.hasOwnProperty.call(updates, 'shortDescription')) next.shortDescriptionEdited = true;
+  if (seoFields.some(key => Object.prototype.hasOwnProperty.call(updates, key))) {
+    if (next.metaDescriptionEdited !== true) next.metaDescription = generateMetaDescription(next);
+    if (next.shortDescriptionEdited !== true) next.shortDescription = generateShortDescription(next);
   }
   return next;
 }
