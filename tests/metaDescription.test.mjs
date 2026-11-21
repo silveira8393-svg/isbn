@@ -300,3 +300,17 @@ test('New editorial ranking never replaces manual or historical SEO, including d
     assert.equal(api.updateDraftWithMetaDescription(historic, { synopsis }).metaDescription, manual);
   }
 });
+
+test('Short commercial description is independent, source-grounded and keeps manual edits', () => {
+  const source = { ...book, synopsis: 'A obra explora as relações entre memória e ciúme. O narrador investiga o passado.',
+    usedBookConditionNotes: 'Capa rasgada e folhas com grifos.' };
+  const draft = api.createRegistrationDraft(source, 'usado');
+  assert.equal(draft.shortDescription, source.synopsis);
+  assert.equal(draft.shortDescriptionEdited, false);
+  assert.doesNotMatch(draft.shortDescription, /capa rasgada|grifos/i);
+  const edited = api.updateDraftWithMetaDescription(draft, { shortDescription: 'Resumo editado manualmente.' });
+  assert.equal(edited.shortDescriptionEdited, true);
+  assert.equal(api.updateDraftWithMetaDescription(edited, { publisher: 'Outra Editora' }).shortDescription, 'Resumo editado manualmente.');
+  const cleared = api.updateDraftWithMetaDescription(edited, { shortDescription: '' });
+  assert.equal(api.updateDraftWithMetaDescription(cleared, { synopsis: 'Nova sinopse.' }).shortDescription, '');
+});
