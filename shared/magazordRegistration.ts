@@ -44,7 +44,9 @@ export function registrationInput(draft: RegistrationDraft, brandId: number, cha
   return { parentCode: draft.parentCode.trim(), childCode: draft.childCode.trim(), title: draft.title.trim(), condition: draft.condition,
     categoryId: draft.magazordCategoryId!, categoryStoreId: draft.magazordCategoryStoreId!, brandId, channelId,
     fiscalOrigin: Number(origin?.[1] ?? draft.fiscalOrigin), unit: draft.unit, ncm: normalizeNcm(draft.ncm) ?? draft.ncm,
-    description: buildFinalDescription(draft, 'html'), shortDescription: draft.shortDescription?.trim() || undefined, ean: draft.ean || draft.isbn13 || draft.isbn10 || '',
+    description: buildFinalDescription(draft, 'html'), shortDescription: draft.shortDescription?.trim() || undefined,
+    // Marcos's rule: USED keeps ISBN bibliographic, but its commercial derivation has no EAN.
+    ean: draft.condition === 'usado' ? '' : (draft.ean || draft.isbn13 || draft.isbn10 || ''),
     ...(draft.weight !== undefined ? { weight: draft.weightUnit === 'kg' ? draft.weight : draft.weight / 1000 } : {}),
     ...(draft.height !== undefined ? { height: draft.height } : {}),
     ...(draft.width !== undefined ? { width: draft.width } : {}),
@@ -87,6 +89,6 @@ export function registrationPayload(input: RegistrationInput) {
       ...(input.height !== undefined ? { altura: input.height } : {}),
       ...(input.width !== undefined ? { largura: input.width } : {}),
       ...(input.depth !== undefined ? { comprimento: input.depth } : {}),
-      ...(input.ean ? { ean: canonicalBookIsbn(input.ean)! } : {}) },
+      ...(input.condition === 'novo' && input.ean ? { ean: canonicalBookIsbn(input.ean)! } : {}) },
   };
 }
