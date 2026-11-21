@@ -8,7 +8,7 @@ export const registrationFields = {
   magazordCategoryStoreId: 'Loja da categoria Magazord', categorySource: 'Origem da categoria', year: 'Ano', edition: 'Edição', language: 'Idioma',
   pageCount: 'Páginas', format: 'Formato', weight: 'Peso', weightUnit: 'Unidade de peso', width: 'Largura (cm)',
   height: 'Altura (cm)', depth: 'Espessura (cm)', synopsis: 'Sinopse', usedBookConditionNotes: 'Observações do exemplar usado',
-  usedConditionTemplateId: 'Modelo de conservação selecionado (ID)', metaDescription: 'Meta Description',
+  usedConditionTemplateId: 'Modelo de conservação selecionado (ID)', shortDescription: 'Descrição resumida', metaDescription: 'Meta Description',
   description: 'Descrição final', price: 'Preço informado (R$)', quantity: 'Quantidade informada', location: 'Localização',
   mainImageUrl: 'URL da imagem principal', additionalImageUrls: 'URLs das imagens adicionais', ncm: 'NCM',
   fiscalOrigin: 'Origem fiscal', fiscalBenefitCode: 'Benefício Fiscal (cBenef)', unit: 'Unidade',
