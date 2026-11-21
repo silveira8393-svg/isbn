@@ -134,6 +134,8 @@ export interface RegistrationDraft {
   depth?: number; // em cm (espessura)
 
   // Conteúdo
+  shortDescription?: string;
+  shortDescriptionEdited?: boolean;
   metaDescription?: string;
   metaDescriptionEdited?: boolean;
   usedConditionTemplateId?: string;
