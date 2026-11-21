@@ -195,11 +195,12 @@ export default function ProductIdentitySection({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
         <div>
           <label className="block text-xs font-bold text-slate-700 mb-1.5">
-            EAN <span className="text-slate-400 font-normal font-mono">(ISBN-13)</span>
+            EAN <span className="text-slate-400 font-normal font-mono">{draft.condition === 'usado' ? '(não enviado à Magazord)' : '(ISBN-13)'}</span>
           </label>
           <input
             type="text"
-            value={draft.ean}
+            value={draft.condition === 'usado' ? '' : draft.ean}
+            disabled={draft.condition === 'usado'}
             data-registration-field="ean"
             onChange={(e) => {
               markSensitiveField('ean');
@@ -208,7 +209,7 @@ export default function ProductIdentitySection({
             placeholder="EAN do livro"
             className="w-full px-3.5 py-2 rounded-lg border border-slate-300 bg-white text-sm font-mono text-slate-900 focus:ring-2 focus:ring-blue-100 focus:border-blue-600 focus:outline-none"
           />
-          <span className="text-[10px] text-slate-400 block mt-0.5">Opcional para obras sem ISBN; não informe o código interno aqui.</span>
+          <span className="text-[10px] text-slate-400 block mt-0.5">{draft.condition === 'usado' ? 'Livro USADO: o EAN da derivação fica em branco. O ISBN permanece nos campos bibliográficos ao lado.' : 'Opcional para obras sem ISBN; não informe o código interno aqui.'}</span>
           {errors.ean && <p className="mt-1 text-xs font-medium text-red-600">{errors.ean}</p>}
         </div>
 
