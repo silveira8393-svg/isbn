@@ -130,8 +130,8 @@ export function updateDraftWithMetaDescription(draft: RegistrationDraft, updates
   if (Object.prototype.hasOwnProperty.call(updates, 'metaDescription')) next.metaDescriptionEdited = true;
   if (Object.prototype.hasOwnProperty.call(updates, 'shortDescription')) next.shortDescriptionEdited = true;
   if (seoFields.some(key => Object.prototype.hasOwnProperty.call(updates, key))) {
-    if (next.metaDescriptionEdited !== true) next.metaDescription = generateMetaDescription(next);
-    if (next.shortDescriptionEdited !== true) next.shortDescription = generateShortDescription(next);
+    if (next.metaDescriptionEdited === false) next.metaDescription = generateMetaDescription(next);
+    if (next.shortDescriptionEdited === false) next.shortDescription = generateShortDescription(next);
   }
   return next;
 }
