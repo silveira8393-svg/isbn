@@ -6,7 +6,7 @@ import { normalizeNcm } from './ncm.js';
 export interface RegistrationInput {
   parentCode: string; childCode: string; title: string; condition: 'novo' | 'usado';
   categoryId: number; categoryStoreId: string; brandId: number; channelId: number;
-  fiscalOrigin: number; unit: string; ncm: string; description: string; ean: string;
+  fiscalOrigin: number; unit: string; ncm: string; description: string; shortDescription?: string; ean: string;
   weight?: number; height?: number; width?: number; depth?: number;
 }
 export const registrationValidationMessages = {
@@ -23,6 +23,7 @@ export const registrationValidationMessages = {
   unit: 'Unidade inválida: use KG, L, M3, MI, MT, PC, PCT, RL ou UN.',
   ncm: 'NCM inválido: use oito dígitos ou o formato 4901.99.00, ou deixe vazio.',
   description: 'Descrição inválida: use texto com até 30.000 caracteres.',
+  shortDescription: 'Descrição resumida inválida: use texto com até 1.000 caracteres.',
   ean: 'EAN/ISBN inválido: informe um ISBN válido, com dígito verificador correto, ou deixe vazio.',
   dimensions: 'As medidas informadas devem ser números positivos e finitos.',
 } as const;
@@ -43,7 +44,7 @@ export function registrationInput(draft: RegistrationDraft, brandId: number, cha
   return { parentCode: draft.parentCode.trim(), childCode: draft.childCode.trim(), title: draft.title.trim(), condition: draft.condition,
     categoryId: draft.magazordCategoryId!, categoryStoreId: draft.magazordCategoryStoreId!, brandId, channelId,
     fiscalOrigin: Number(origin?.[1] ?? draft.fiscalOrigin), unit: draft.unit, ncm: normalizeNcm(draft.ncm) ?? draft.ncm,
-    description: buildFinalDescription(draft, 'html'), ean: draft.ean || draft.isbn13 || draft.isbn10 || '',
+    description: buildFinalDescription(draft, 'html'), shortDescription: draft.shortDescription?.trim() || undefined, ean: draft.ean || draft.isbn13 || draft.isbn10 || '',
     ...(draft.weight !== undefined ? { weight: draft.weightUnit === 'kg' ? draft.weight : draft.weight / 1000 } : {}),
     ...(draft.height !== undefined ? { height: draft.height } : {}),
     ...(draft.width !== undefined ? { width: draft.width } : {}),
@@ -68,6 +69,7 @@ export function registrationPayload(input: RegistrationInput) {
   invalid('unit', !['KG', 'L', 'M3', 'MI', 'MT', 'PC', 'PCT', 'RL', 'UN'].includes(input.unit));
   invalid('ncm', ncm === undefined);
   invalid('description', typeof input.description !== 'string' || input.description.length > 30000);
+  invalid('shortDescription', input.shortDescription !== undefined && (typeof input.shortDescription !== 'string' || input.shortDescription.length > 1000));
   invalid('ean', typeof input.ean !== 'string' || (input.ean !== '' && !canonicalBookIsbn(input.ean)));
   invalid('dimensions', [input.weight, input.height, input.width, input.depth].some(v => v !== undefined && (typeof v !== 'number' || !Number.isFinite(v) || v <= 0)));
   if (fields.length) throw new RegistrationValidationError(fields);
@@ -78,7 +80,8 @@ export function registrationPayload(input: RegistrationInput) {
       derivacoes: [] as number[], categorias: [input.categoryId],
       produtoLoja: [{ loja: input.channelId, titulo: input.title,
         // Only the formatting produced by our existing used-book composer is allowed.
-        descricao: input.description.replace(/<(?!strong>|\/strong>|br>)/g, '&lt;') }] },
+        descricao: input.description.replace(/<(?!strong>|\/strong>|br>)/g, '&lt;'),
+        ...(input.shortDescription ? { descricaoResumida: input.shortDescription.replace(/[<>]/g, '') } : {}) }] },
     child: { codigo: input.childCode, nome: input.title, ativo: false, derivacoes: [] as unknown[], lojas: [input.channelId],
       ...(input.weight !== undefined ? { peso: input.weight } : {}),
       ...(input.height !== undefined ? { altura: input.height } : {}),
