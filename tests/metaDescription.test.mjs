@@ -315,3 +315,16 @@ test('Short commercial description is independent, source-grounded and keeps man
   const cleared = api.updateDraftWithMetaDescription(edited, { shortDescription: '' });
   assert.equal(api.updateDraftWithMetaDescription(cleared, { synopsis: 'Nova sinopse.' }).shortDescription, '');
 });
+
+test('used draft keeps bibliographic ISBN but blanks commercial EAN across condition changes', () => {
+  const source = { ...book, isbn13: '9788584390670', isbn10: '' };
+  const used = api.createRegistrationDraft(source, 'usado');
+  assert.equal(used.ean, '');
+  assert.equal(used.isbn13, '9788584390670');
+  const toNew = api.registrationConditionUpdates(used, 'novo');
+  assert.equal(toNew.ean, '9788584390670');
+  const backToUsed = api.registrationConditionUpdates({ ...used, ...toNew }, 'usado');
+  assert.equal(backToUsed.ean, '');
+  const changedIsbn = api.registrationIdentifierUpdates(used, 'isbn13', '9788551003664');
+  assert.equal(changedIsbn.ean, undefined);
+});
